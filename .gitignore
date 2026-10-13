@@ -254,3 +254,25 @@ dist/
 data/raw/
 *.log
 *.pkl
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets and local config
+.env
+
+# Node
+node_modules/
+dist/
+
+# Data created by the legacy app
+*_ref.json
+
+# Editor / OS
+.vscode/
+.DS_Store
