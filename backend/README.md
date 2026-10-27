@@ -32,14 +32,17 @@ tests/
 
 1.
    ```bash
+   # Linux/WSL/macOS
    python -m venv .venv
+   source .venv/bin/activate
    # Windows PowerShell:
    .venv\\Scripts\\Activate.ps1
+
    pip install -e ".[dev]"
    ```
-2. Створити `.venv`:
+2. Створити `.env`:
    ```bash
-   copy .venv.example .venv
+   cp .env.example .env
    ```
 3. Запусти сервіси:
    ```bash
