@@ -28,6 +28,17 @@ alembic/                  # міграції (додати після створ
 tests/
 ```
 
+## Запуск усього стеку
+
+З кореня репозиторію:
+
+```bash
+docker compose up --build -d
+```
+
+Це піднімає PostgreSQL, Redis, Keycloak, FastAPI, Celery і frontend.
+Деталі та адреси сервісів — у [`../README.md`](../README.md).
+
 ## Запуск локально
 
 1.

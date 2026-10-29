@@ -11,3 +11,4 @@ dist/
 build/
 *.egg-info/
 uploads/
+docker-compose.keycloak.yml

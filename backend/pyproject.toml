@@ -25,3 +25,7 @@ line-length = 100
 target-version = "py312"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+  "integration: requires running external services (PostgreSQL); run with `pytest -m integration`",
+]
