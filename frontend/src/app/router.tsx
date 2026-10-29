@@ -64,6 +64,8 @@ export const router = createBrowserRouter([
           { path: 'exercises', element: <PatientExercisesPage /> },
           { path: 'exercises/:exerciseId/execute', element: <PatientExerciseExecutionPage /> },
         ],
+      },
+      {
         path: 'therapist/patients',
         element: (
           <RoleRoute allowedRoles={['therapist', 'admin']}>
