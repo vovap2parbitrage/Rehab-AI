@@ -30,9 +30,23 @@ export function Header() {
             Головна
           </NavLink>
           {authenticated && (
-            <NavLink to="/profile" className={navLinkClass}>
-              Профіль
-            </NavLink>
+            <>
+              <NavLink to="/patient" end className={navLinkClass}>
+                Кабінет
+              </NavLink>
+              <NavLink to="/profile" className={navLinkClass}>
+                Мій профіль
+              </NavLink>
+              <NavLink to="/patient/doctors" className={navLinkClass}>
+                Лікарі
+              </NavLink>
+              <NavLink to="/patient/invitations" className={navLinkClass}>
+                Запрошення
+              </NavLink>
+              <NavLink to="/patient/exercises" className={navLinkClass}>
+                Мій цикл вправ
+              </NavLink>
+            </>
           )}
         </nav>
 

@@ -5,6 +5,13 @@ import { ErrorPage } from '../pages/ErrorPage'
 import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/ProfilePage'
+import {
+  PatientDashboardPage,
+  PatientDoctorsPage,
+  PatientExercisesPage,
+  PatientInvitationsPage,
+} from '../pages/PatientWorkspacePages'
+import { PatientWorkspaceLayout } from '../pages/PatientWorkspaceLayout'
 import { RegisterPage } from '../pages/RegisterPage'
 
 export const router = createBrowserRouter([
@@ -37,6 +44,20 @@ export const router = createBrowserRouter([
             <ProfilePage />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: 'patient',
+        element: (
+          <ProtectedRoute>
+            <PatientWorkspaceLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <PatientDashboardPage /> },
+          { path: 'doctors', element: <PatientDoctorsPage /> },
+          { path: 'invitations', element: <PatientInvitationsPage /> },
+          { path: 'exercises', element: <PatientExercisesPage /> },
+        ],
       },
       {
         path: 'error',

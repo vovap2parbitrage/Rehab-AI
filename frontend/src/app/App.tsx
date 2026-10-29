@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Footer } from '../components/Footer'
 import { Header } from '../components/Header'
+import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
 
 export function App() {
   return (
@@ -12,7 +13,9 @@ export function App() {
       <Header />
 
       <main className="app-main" id="main-content">
-        <Outlet />
+        <PatientWorkspaceProvider>
+          <Outlet />
+        </PatientWorkspaceProvider>
       </main>
 
       <Footer />

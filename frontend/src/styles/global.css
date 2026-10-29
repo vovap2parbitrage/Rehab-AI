@@ -242,16 +242,26 @@ code {
 
 .site-nav {
   display: flex;
+  flex: 1;
   align-items: center;
+  min-width: 0;
+  overflow-x: auto;
   gap: 4px;
+  scrollbar-width: none;
+}
+
+.site-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .site-nav__link {
+  flex-shrink: 0;
   padding: 9px 14px;
   border-radius: 999px;
   color: var(--text-soft);
   font-size: 0.92rem;
   font-weight: 600;
+  white-space: nowrap;
   transition:
     color 0.18s ease,
     background-color 0.18s ease;
@@ -2067,17 +2077,11 @@ code {
 
 @media (max-width: 820px) {
   .site-header__inner {
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    padding: 10px 0;
+    gap: 10px;
   }
 
   .site-nav {
-    order: 3;
-    width: 100%;
-    justify-content: center;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
+    justify-content: flex-start;
   }
 
   .site-header__actions {
@@ -2250,7 +2254,509 @@ code {
   html {
     scroll-behavior: auto;
   }
+}
 
+/* ---------- Patient workspace ---------- */
+
+.patient-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: fade-up 0.35s ease both;
+}
+
+  .workspace-storage-error {
+    padding: 12px 16px;
+    margin: -12px 0 0;
+    border: 1px solid #f1d2a8;
+    border-radius: 12px;
+    color: var(--warning);
+    background: var(--warning-soft);
+    font-size: 0.84rem;
+  }
+
+  .workspace-page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .workspace-heading {
+    margin-bottom: 0;
+  }
+
+  .workspace-heading h1 {
+    margin-bottom: 10px;
+  }
+
+  .workspace-welcome {
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    padding: clamp(26px, 5vw, 48px);
+    background:
+      radial-gradient(circle at 90% 15%, rgba(14, 159, 143, 0.14), transparent 34%),
+      linear-gradient(120deg, #fff, #f1f8fb);
+  }
+
+  .workspace-welcome__copy {
+    position: relative;
+    z-index: 1;
+    max-width: 700px;
+  }
+
+  .workspace-welcome h2 {
+    margin-bottom: 12px;
+    font-size: clamp(1.5rem, 3vw, 2.15rem);
+  }
+
+  .workspace-welcome p:not(.eyebrow) {
+    max-width: 620px;
+    margin-bottom: 22px;
+    color: var(--text-soft);
+  }
+
+  .workspace-welcome__illustration {
+    display: grid;
+    flex-shrink: 0;
+    width: 116px;
+    height: 116px;
+    place-items: center;
+    border: 1px solid rgba(14, 159, 143, 0.16);
+    border-radius: 34px;
+    color: var(--teal-strong);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: var(--shadow-md);
+    font-size: 3.2rem;
+    transform: rotate(5deg);
+  }
+
+  .workspace-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .workspace-summary-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 230px;
+  }
+
+  .workspace-summary-card__icon {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 18px;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--primary);
+    background: var(--primary-soft);
+    font-size: 1.25rem;
+  }
+
+  .workspace-summary-card__icon--teal {
+    color: var(--teal-strong);
+    background: var(--teal-soft);
+  }
+
+  .workspace-summary-card .eyebrow {
+    margin-bottom: 6px;
+  }
+
+  .workspace-summary-card h2 {
+    margin: 0 0 6px;
+    font-size: 1.2rem;
+  }
+
+  .workspace-summary-card > p:not(.eyebrow) {
+    margin-bottom: 16px;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+  }
+
+  .workspace-summary-card .text-link {
+    margin-top: auto;
+  }
+
+  .workspace-progress {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    margin: 7px 0 14px;
+    border-radius: 999px;
+    background: var(--bg-strong);
+  }
+
+  .workspace-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--primary), var(--teal));
+    transition: width 0.25s ease;
+  }
+
+  .workspace-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .workspace-profile-card__avatar {
+    display: grid;
+    flex-shrink: 0;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border-radius: 17px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--primary), var(--teal));
+    font-weight: 750;
+  }
+
+  .workspace-profile-card h2 {
+    margin: 0 0 5px;
+    font-size: 1.12rem;
+  }
+
+  .workspace-profile-card p:not(.eyebrow) {
+    margin: 0;
+    color: var(--text-soft);
+    font-size: 0.88rem;
+  }
+
+  .workspace-profile-card .eyebrow {
+    margin-bottom: 5px;
+  }
+
+  .workspace-profile-card .button {
+    margin-left: auto;
+  }
+
+  .workspace-note {
+    margin-top: -6px;
+  }
+
+  .doctor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .doctor-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 24px;
+  }
+
+  .doctor-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .doctor-card h2 {
+    margin: 0 0 5px;
+    font-size: 1.2rem;
+  }
+
+  .doctor-card__specialty {
+    margin: 0 0 4px;
+    color: var(--primary-strong);
+    font-size: 0.87rem;
+    font-weight: 700;
+  }
+
+  .doctor-card__experience,
+  .doctor-card__description {
+    color: var(--text-soft);
+    font-size: 0.88rem;
+  }
+
+  .doctor-card__experience {
+    margin-bottom: 12px;
+  }
+
+  .doctor-card__description {
+    min-height: 68px;
+    margin-bottom: 22px;
+  }
+
+  .doctor-card__directory-label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 650;
+  }
+
+  .doctor-card .button {
+    margin-top: auto;
+    white-space: normal;
+  }
+
+  .workspace-demo-caption {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.79rem;
+    line-height: 1.55;
+  }
+
+  .invitation-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    max-width: 900px;
+    padding: 32px;
+  }
+
+  .invitation-card__icon,
+  .workspace-empty-state__icon {
+    display: grid;
+    flex-shrink: 0;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border-radius: 17px;
+    color: var(--warning);
+    background: var(--warning-soft);
+    font-size: 1.45rem;
+  }
+
+  .invitation-card__body {
+    min-width: 0;
+  }
+
+  .invitation-card h2 {
+    margin: 16px 0 8px;
+  }
+
+  .invitation-card__body > p {
+    color: var(--text-soft);
+  }
+
+  .invitation-card__specialty {
+    margin-bottom: 20px;
+    color: var(--primary-strong) !important;
+    font-weight: 700;
+  }
+
+  .invitation-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .workspace-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 680px;
+    padding: 36px;
+  }
+
+  .workspace-empty-state__icon {
+    margin-bottom: 20px;
+    color: var(--primary);
+    background: var(--primary-soft);
+  }
+
+  .workspace-empty-state h2 {
+    margin-bottom: 8px;
+  }
+
+  .workspace-empty-state p {
+    margin-bottom: 20px;
+    color: var(--text-soft);
+  }
+
+  .status-pill--pending {
+    border: 1px solid #f1d7ae;
+    color: var(--warning);
+    background: var(--warning-soft);
+  }
+
+  .exercise-cycle-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    background: linear-gradient(120deg, #fff, #f1f8fb);
+  }
+
+  .exercise-cycle-summary h2 {
+    margin: 0 0 8px;
+  }
+
+  .exercise-cycle-summary p:not(.eyebrow) {
+    max-width: 680px;
+    margin: 0;
+    color: var(--text-soft);
+  }
+
+  .exercise-cycle-summary__progress {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 108px;
+    height: 108px;
+    border: 8px solid var(--teal-soft);
+    border-radius: 50%;
+    color: var(--teal-strong);
+  }
+
+  .exercise-cycle-summary__progress strong {
+    font-size: 1.3rem;
+  }
+
+  .exercise-cycle-summary__progress span {
+    color: var(--text-soft);
+    font-size: 0.68rem;
+  }
+
+  .exercise-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .exercise-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 22px;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
+  }
+
+  .exercise-card--complete {
+    border-color: #bfe8d7;
+    background: linear-gradient(110deg, #fff, #f3fbf7);
+  }
+
+  .exercise-card__icon {
+    display: grid;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border-radius: 14px;
+    color: var(--primary);
+    background: var(--primary-soft);
+    font-size: 1.35rem;
+  }
+
+  .exercise-card__content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .exercise-card__title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+  }
+
+  .exercise-card h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .exercise-card__content > p {
+    margin: 0 0 9px;
+    color: var(--text-soft);
+    font-size: 0.87rem;
+  }
+
+  .exercise-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .exercise-card__action {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 900px) {
+    .doctor-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 680px) {
+    .patient-workspace {
+      gap: 20px;
+    }
+
+    .workspace-summary-grid,
+    .doctor-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .workspace-welcome__illustration {
+      display: none;
+    }
+
+    .workspace-profile-card {
+      flex-wrap: wrap;
+    }
+
+    .workspace-profile-card > div:nth-child(2) {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .workspace-profile-card .button {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .invitation-card {
+      padding: 24px;
+    }
+
+    .exercise-cycle-summary {
+      align-items: flex-start;
+      padding: 22px;
+    }
+
+    .exercise-cycle-summary__progress {
+      width: 82px;
+      height: 82px;
+      border-width: 6px;
+    }
+
+    .exercise-card {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding: 18px;
+    }
+
+    .exercise-card__content {
+      flex-basis: calc(100% - 70px);
+    }
+
+    .exercise-card__action {
+      width: 100%;
+    }
+  }
+
+@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
