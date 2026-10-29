@@ -31,7 +31,6 @@ class Assignment(Base):
     starts_on: Mapped[date] = mapped_column(Date, nullable=False)
     ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-
     status: Mapped[str] = mapped_column(
         String(20),
         default="active",
@@ -40,4 +39,7 @@ class Assignment(Base):
 
     patient = relationship("Patient", back_populates="assignments")
     exercise = relationship("Exercise", back_populates="assignments")
-    sessions = relationship("Session", back_populates="assignment",)
+    sessions = relationship(
+        "Session",
+        back_populates="assignment",
+    )
