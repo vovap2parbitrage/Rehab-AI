@@ -5,6 +5,14 @@ import { ErrorPage } from '../pages/ErrorPage'
 import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/ProfilePage'
+import {
+  PatientDashboardPage,
+  PatientDoctorsPage,
+  PatientExerciseExecutionPage,
+  PatientExercisesPage,
+  PatientInvitationsPage,
+} from '../pages/PatientWorkspacePages'
+import { PatientWorkspaceLayout } from '../pages/PatientWorkspaceLayout'
 import { RegisterPage } from '../pages/RegisterPage'
 import { RoleRoute } from '../auth/RoleRoute'
 import { TherapistPatientsPage } from '../pages/TherapistPatientsPage'
@@ -43,6 +51,19 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'patient',
+        element: (
+          <ProtectedRoute>
+            <PatientWorkspaceLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <PatientDashboardPage /> },
+          { path: 'doctors', element: <PatientDoctorsPage /> },
+          { path: 'invitations', element: <PatientInvitationsPage /> },
+          { path: 'exercises', element: <PatientExercisesPage /> },
+          { path: 'exercises/:exerciseId/execute', element: <PatientExerciseExecutionPage /> },
+        ],
         path: 'therapist/patients',
         element: (
           <RoleRoute allowedRoles={['therapist', 'admin']}>
