@@ -40,10 +40,14 @@ def calculate_angle(a, b, c) -> float:
     return float(np.degrees(np.arccos(cos)))
 
 
-def torso_tilt(points: np.ndarray) -> float:
-    """0 deg = upright, 90 = horizontal. Uses the shoulder-mid -> hip-mid line."""
-    shoulder_mid = (points[L_SHOULDER] + points[R_SHOULDER]) / 2
-    hip_mid = (points[L_HIP] + points[R_HIP]) / 2
+def torso_tilt(points: np.ndarray, visibility: np.ndarray | None = None) -> float:
+    """0 deg = upright, 90 = horizontal. Visibility-weighted shoulder/hip midpoints."""
+    if visibility is None:
+        visibility = np.ones(len(points))
+    eps = 1e-6  # avoids all-zero weights
+    s_idx, h_idx = [L_SHOULDER, R_SHOULDER], [L_HIP, R_HIP]
+    shoulder_mid = np.average(points[s_idx], axis=0, weights=visibility[s_idx] + eps)
+    hip_mid = np.average(points[h_idx], axis=0, weights=visibility[h_idx] + eps)
     up = hip_mid + np.array([0.0, -1.0])
     return calculate_angle(shoulder_mid, hip_mid, up)
 
@@ -60,12 +64,12 @@ def expand_body_parts(parts: list[str]) -> list[str]:
     return joints
 
 
-def frame_angles(points: np.ndarray, joints: list[str]) -> np.ndarray:
+def frame_angles(points: np.ndarray, joints: list[str], visibility=None) -> np.ndarray:
     """points: array (33, 2) in PIXELS. Returns one angle per requested joint."""
     result = []
     for joint in joints:
         if joint == TORSO_TILT:
-            result.append(torso_tilt(points))
+            result.append(torso_tilt(points, visibility))
         else:
             a, b, c = JOINT_TRIPLETS[joint]
             result.append(calculate_angle(points[a], points[b], points[c]))

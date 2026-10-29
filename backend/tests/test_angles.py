@@ -65,3 +65,39 @@ def test_frame_angles_mixed_joints():
     result = frame_angles(pts, ["torso_tilt", "l_knee"])
     assert result.shape == (2,)
     assert result[1] == pytest.approx(180)
+
+
+def test_torso_visibility_follows_reliable_side():
+    pts = _torso(0.0)
+    pts[R_SHOULDER] = [0.9, 0.3]  # bad guess for the occluded shoulder
+    vis = np.ones(33)
+    vis[R_SHOULDER] = 0.0  # not trusted
+    # right shoulder ignored -> shoulder_mid ~ (0.4, 0.3); hip_mid = (0.5, 0.6)
+    # vector to shoulders = (-0.1, -0.3), up = (0, -1)
+    expected = np.degrees(np.arctan2(0.1, 0.3))
+    assert torso_tilt(pts, vis) == pytest.approx(expected, abs=1e-3)
+
+
+def test_torso_equal_visibility_matches_default():
+    pts = _torso(0.3)
+    assert torso_tilt(pts, np.ones(33)) == pytest.approx(torso_tilt(pts))
+
+
+def test_torso_zero_visibility_does_not_crash():
+    vis = np.zeros(33)
+    result = torso_tilt(_torso(0.0), vis)
+    assert result == pytest.approx(0)  # eps weights -> plain average
+
+
+def test_frame_angles_passes_visibility():
+    pts = _torso(0.0)
+    pts[R_SHOULDER] = [0.9, 0.3]
+    vis = np.ones(33)
+    vis[R_SHOULDER] = 0.0
+    with_vis = frame_angles(pts, ["torso_tilt"], vis)[0]
+    without = frame_angles(pts, ["torso_tilt"])[0]
+    assert with_vis != pytest.approx(without)
+
+
+def test_torso_lean_direction_is_unsigned():
+    assert torso_tilt(_torso(0.3)) == pytest.approx(torso_tilt(_torso(-0.3)))

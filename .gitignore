@@ -222,3 +222,7 @@ __marimo__/
 rehab_ai_backend.egg-info
 .idea
 alembic
+
+# Videos for tests
+backend/tests/data/*.mp4
+backend/tests/data/*.mov
