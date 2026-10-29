@@ -45,13 +45,13 @@ export function TherapistPatientPage() {
   if (!patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
 
   return (
-    <div className="therapist-page">
+    <div className="workspace-page">
       <Link to="/therapist/patients" className="back-link"><ArrowRightIcon /> До всіх пацієнтів</Link>
-      <header className="page-heading">
+      <header className="page-heading workspace-heading">
         <div><p className="eyebrow">Профіль пацієнта</p><h1>{patient.full_name}</h1><p className="page-heading__lead">{patient.note || 'Персональний план реабілітації та активні призначення.'}</p></div>
       </header>
       {notice && <div className="success-message" role="status">{notice}</div>}
-      <div className="therapist-page__grid">
+      <div className="workspace-summary-grid therapist-page__grid">
         <section className="card">
           <div className="card__header"><div><h2>Призначити план</h2><p>Оберіть вправу та параметри занять.</p></div><span className="card__header-icon"><CalendarIcon /></span></div>
           <form className="therapist-form" onSubmit={handleSubmit}>

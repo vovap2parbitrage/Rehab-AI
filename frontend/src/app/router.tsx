@@ -2,7 +2,6 @@ import { createBrowserRouter } from 'react-router-dom'
 import { App } from './App'
 import { ProtectedRoute } from '../auth/ProtectedRoute'
 import { ErrorPage } from '../pages/ErrorPage'
-import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/ProfilePage'
 import {
@@ -18,6 +17,8 @@ import { RoleRoute } from '../auth/RoleRoute'
 import { TherapistPatientsPage } from '../pages/TherapistPatientsPage'
 import { TherapistPatientPage } from '../pages/TherapistPatientPage'
 import { TherapistExercisesPage } from '../pages/TherapistExercisesPage'
+import { StartPage } from '../pages/StartPage'
+import { TherapistWorkspaceLayout } from '../pages/TherapistWorkspaceLayout'
 
 export const router = createBrowserRouter([
   {
@@ -32,7 +33,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />,
+        element: <StartPage />,
       },
       {
         path: 'login',
@@ -53,9 +54,9 @@ export const router = createBrowserRouter([
       {
         path: 'patient',
         element: (
-          <ProtectedRoute>
+          <RoleRoute allowedRoles={['patient']}>
             <PatientWorkspaceLayout />
-          </ProtectedRoute>
+          </RoleRoute>
         ),
         children: [
           { index: true, element: <PatientDashboardPage /> },
@@ -66,28 +67,18 @@ export const router = createBrowserRouter([
         ],
       },
       {
-        path: 'therapist/patients',
+        path: 'therapist',
         element: (
           <RoleRoute allowedRoles={['therapist', 'admin']}>
-            <TherapistPatientsPage />
+            <TherapistWorkspaceLayout />
           </RoleRoute>
         ),
-      },
-      {
-        path: 'therapist/patients/:patientId',
-        element: (
-          <RoleRoute allowedRoles={['therapist', 'admin']}>
-            <TherapistPatientPage />
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'therapist/exercises',
-        element: (
-          <RoleRoute allowedRoles={['therapist', 'admin']}>
-            <TherapistExercisesPage />
-          </RoleRoute>
-        ),
+        children: [
+          { index: true, element: <TherapistPatientsPage /> },
+          { path: 'patients', element: <TherapistPatientsPage /> },
+          { path: 'patients/:patientId', element: <TherapistPatientPage /> },
+          { path: 'exercises', element: <TherapistExercisesPage /> },
+        ],
       },
       {
         path: 'error',

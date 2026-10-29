@@ -97,8 +97,29 @@ export function ProfilePage() {
   useEffect(() => {
     const controller = new AbortController()
 
-    fetchCurrentUser({ signal: controller.signal })
-      .then((user) => {
+    const loadProfile = async () => {
+      try {
+        let user: UserProfile
+
+        try {
+          user = await fetchCurrentUser({ signal: controller.signal })
+        } catch (caught: unknown) {
+          const firstError = asApiError(caught)
+          const canRetry =
+            firstError.kind === 'network' ||
+            firstError.kind === 'session' ||
+            firstError.kind === 'unauthorized' ||
+            firstError.kind === 'unavailable'
+
+          if (!canRetry || controller.signal.aborted) {
+            throw caught
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 400))
+          if (controller.signal.aborted) return
+          user = await fetchCurrentUser({ signal: controller.signal })
+        }
+
         if (controller.signal.aborted) {
           return
         }
@@ -122,7 +143,7 @@ export function ProfilePage() {
         setRoleRequestError(null)
         setRoleRequestSuccess(null)
 
-        requestTherapistRole()
+        await requestTherapistRole()
           .then((updated) => {
             if (controller.signal.aborted) {
               return
@@ -143,17 +164,18 @@ export function ProfilePage() {
               setIsRequestingRole(false)
             }
           })
-      })
-      .catch((caught: unknown) => {
+      } catch (caught: unknown) {
         if (!controller.signal.aborted) {
           setError(asApiError(caught))
         }
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false)
         }
-      })
+      }
+    }
+
+    void loadProfile()
 
     return () => controller.abort()
   }, [reloadKey])
@@ -472,9 +494,9 @@ export function ProfilePage() {
               <div>
                 <h2 id="meta-title">Доступ до даних</h2>
                 <p>
-                  Ваші реабілітаційні дані доступні лише вам, призначеному терапевту та
-                  адміністраторам відповідно до ролі. Для зміни ролі зверніться до адміністратора
-                  закладу.
+                  {profile.role === 'therapist'
+                    ? 'Ваші реабілітаційні дані доступні лише вам та адміністраторам відповідно до ролі. Для зміни ролі зверніться до адміністратора закладу.'
+                    : 'Ваші реабілітаційні дані доступні лише вам, призначеному терапевту та адміністраторам відповідно до ролі. Для зміни ролі зверніться до адміністратора закладу.'}
                 </p>
               </div>
             </section>
