@@ -1,29 +1,18 @@
-from datetime import datetime
-from uuid import UUID
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
 
 class SessionCreate(BaseModel):
-    patient_id: UUID
     assignment_id: UUID
-    pain_score: int = Field(ge=0, le=10)
+    pain_score: int | None = Field(default=None, ge=0, le=10)
+    completed_at: datetime | None = None
 
-class SessionResult(BaseModel):
-    score: float = Field(ge=0, le=100)
-    joint_deviations: dict[str, float]
-    skeleton_snapshot_key: str | None = Field(
-        default=None,
-        max_length=500,
-    )
 
-class SessionRead(BaseModel):
-    id: UUID
-    patient_id: UUID
-    assignment_id: UUID
-    score: float | None = None
-    joint_deviations: dict[str, float] | None = None
-    pain_score: int
-    skeleton_snapshot_key: str | None = None
-    status: str
-    created_at: datetime
+class SessionRead(SessionCreate):
+    id: UUID = Field(default_factory=uuid4)
+    score: float | None = Field(default=None, ge=0, le=100)
+    joint_deviations: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

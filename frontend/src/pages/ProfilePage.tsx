@@ -110,7 +110,7 @@ export function ProfilePage() {
         const intent = consumeRegistrationRole()
 
         if (
-          !intent ||
+          intent !== 'therapist' ||
           user.role !== 'patient' ||
           user.pending_role !== null ||
           !user.is_active

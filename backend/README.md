@@ -43,14 +43,17 @@ docker compose up --build -d
 
 1.
    ```bash
+   # Linux/WSL/macOS
    python -m venv .venv
+   source .venv/bin/activate
    # Windows PowerShell:
    .venv\\Scripts\\Activate.ps1
+
    pip install -e ".[dev]"
    ```
 2. Створити `.env`:
    ```bash
-   copy .env.example .env
+   cp .env.example .env
    ```
 3. Запусти сервіси:
    ```bash

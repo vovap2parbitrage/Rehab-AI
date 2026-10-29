@@ -1,5 +1,3 @@
-# app/core/security.py
-
 import time
 from typing import Any
 
@@ -27,15 +25,6 @@ def unauthorized(detail: str = "Invalid authentication credentials") -> HTTPExce
         detail=detail,
         headers={"WWW-Authenticate": "Bearer"},
     )
-
-
-def get_bearer_token(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> str:
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise unauthorized("Bearer token required")
-
-    return credentials.credentials
 
 
 def fetch_jwks(*, force_refresh: bool = False) -> list[dict[str, Any]]:
@@ -155,17 +144,6 @@ def get_current_claims(
 
     return verify_token(credentials.credentials)
 
-def get_optional_claims(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> dict[str, Any] | None:
-    if credentials is None:
-        return None
-
-    if credentials.scheme.lower() != "bearer":
-        raise unauthorized()
-
-    return verify_token(credentials.credentials)
-
 
 def extract_roles(claims: dict[str, Any]) -> set[str]:
     roles: set[str] = set()
@@ -276,23 +254,3 @@ def get_current_user(
         return _provision_user(db, claims)
 
     return _ensure_active(user)
-
-
-def require_roles(*allowed_roles: Role | str):
-    allowed = {
-        role.value if isinstance(role, Role) else role
-        for role in allowed_roles
-    }
-
-    def dependency(
-        claims: dict[str, Any] = Depends(get_current_claims),
-    ) -> dict[str, Any]:
-        if not allowed.intersection(extract_roles(claims)):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
-            )
-
-        return claims
-
-    return dependency
