@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -18,7 +20,12 @@ def test_patients_with_bypass_allows_for_admin() -> None:
 def test_create_patient_requires_admin_or_therapist() -> None:
     response = client.post(
         "/api/v1/patients/",
-        json={"full_name": "Test", "phone": "+380000000000"},
+        json={
+            "user_id": str(uuid.uuid4()),
+            "therapist_id": str(uuid.uuid4()),
+            "first_name": "Test",
+            "last_name": "Patient",
+        },
         headers={"X-Test-Auth": "bypass"},
     )
     assert response.status_code == 201
