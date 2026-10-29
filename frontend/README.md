@@ -7,8 +7,11 @@ React + TypeScript + Vite застосунок для пацієнтів і те
 ## Вимоги
 
 - Node.js 20+ (перевірено на Node 24)
-- Запущений Keycloak із realm `rehab-ai` (http://localhost:8080)
-- Запущений FastAPI backend (http://localhost:8000)
+- Запущений Keycloak із realm `rehab-ai` (http://localhost:8081 у Docker-стеку)
+- Запущений FastAPI backend (http://localhost:8001 у Docker-стеку)
+
+Найпростіший спосіб підняти все разом — `docker compose up --build -d` з кореня
+репозиторію (див. [`../README.md`](../README.md)).
 
 ## Команди
 
@@ -29,10 +32,10 @@ npm run preview    # http://localhost:4173
 Створіть `frontend/.env` (усі значення мають робочі типові значення за замовчуванням):
 
 ```dotenv
-VITE_KEYCLOAK_URL=http://localhost:8080
+VITE_KEYCLOAK_URL=http://localhost:8081
 VITE_KEYCLOAK_REALM=rehab-ai
 VITE_KEYCLOAK_CLIENT_ID=rehab-ai-web
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8001
 ```
 
 | Змінна | Призначення |
@@ -46,8 +49,9 @@ Vite вбудовує ці значення під час збірки, тому
 
 ## Налаштування Keycloak
 
-Клієнт `rehab-ai-web` уже описаний у `keycloak-realm-config.json`. Його можна створити
-вручну в Admin Console (`http://localhost:8080/admin`, realm `rehab-ai`):
+Клієнт `rehab-ai-web` уже описаний у [`keycloak/realm-export.json`](../keycloak/realm-export.json)
+і імпортується автоматично Docker Compose. Для ручного налаштування в Admin Console
+(`http://localhost:8081/admin`, realm `rehab-ai`):
 
 1. **Clients → Create client**
    - Client ID: `rehab-ai-web`
@@ -58,13 +62,14 @@ Vite вбудовує ці значення під час збірки, тому
    - Direct access grants: `Off`
    - Implicit flow: `Off`
    - Valid redirect URIs:
-     - `http://localhost:5173/*`
-     - `http://127.0.0.1:5173/*`
-     - `http://localhost:4173/*`
-     - `http://127.0.0.1:4173/*` (і `preview`)
+     - `http://localhost:3000/*`
+     - `http://127.0.0.1:3000/*`
+     - `http://localhost:5173/*` (Vite dev)
+     - `http://127.0.0.1:5173/*` (Vite dev)
+     - `http://localhost:4173/*` (preview)
+     - `http://127.0.0.1:4173/*` (preview)
    - Valid post logout redirect URIs: `+`
-   - Web origins: `http://localhost:5173`, `http://127.0.0.1:5173`,
-     `http://localhost:4173`, `http://127.0.0.1:4173`
+   - Web origins: `+`
 3. **Advanced → Proof Key for Code Exchange Code Challenge Method**: `S256`
 4. **Client scopes → Add mapper → By configuration → Audience**
    - Name: `rehab-ai-backend audience`
@@ -106,7 +111,8 @@ Vite вбудовує ці значення під час збірки, тому
 ## Backend
 
 Застосунок звертається до API з іншого origin, тому backend має дозволяти CORS для
-`http://localhost:5173` і `http://localhost:4173` (див. `CORS_ORIGINS` у `backend/.env.example`).
+`http://localhost:3000`, `http://localhost:5173` і `http://localhost:4173`
+(див. `CORS_ORIGINS` у `backend/.env.example`).
 Авторизація використовує заголовок `Authorization: Bearer …`, cookie не застосовуються.
 
 ## Відомі обмеження

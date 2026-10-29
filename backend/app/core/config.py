@@ -14,12 +14,19 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     cors_origins: str = (
-        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001,"
+        "http://localhost:5173,http://127.0.0.1:5173,"
         "http://localhost:4173,http://127.0.0.1:4173"
     )
 
     keycloak_enabled: bool = True
+    # Internal URL used by the backend to reach Keycloak (JWKS, Admin API).
     keycloak_server_url: str = "http://localhost:8080"
+    # Public URL used as the token issuer. Defaults to keycloak_server_url, which is
+    # correct for local development. In Docker the backend reaches Keycloak over the
+    # compose network while browsers use a different host/port, so set this explicitly.
+    keycloak_issuer_url: str | None = None
     keycloak_realm: str = "rehab-ai"
     keycloak_client_id: str = "rehab-ai-backend"
     keycloak_audience: str | None = None
@@ -33,19 +40,29 @@ class Settings(BaseSettings):
 
     @property
     def keycloak_issuer(self) -> str:
-        return f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
+        base_url = self.keycloak_issuer_url or self.keycloak_server_url
+        return f"{base_url.rstrip('/')}/realms/{self.keycloak_realm}"
 
     @property
     def keycloak_jwks_url(self) -> str:
-        return f"{self.keycloak_issuer}/protocol/openid-connect/certs"
+        return (
+            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
+            "/protocol/openid-connect/certs"
+        )
 
     @property
     def keycloak_token_url(self) -> str:
-        return f"{self.keycloak_issuer}/protocol/openid-connect/token"
+        return (
+            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
+            "/protocol/openid-connect/token"
+        )
 
     @property
     def keycloak_auth_url(self) -> str:
-        return f"{self.keycloak_issuer}/protocol/openid-connect/auth"
+        return (
+            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
+            "/protocol/openid-connect/auth"
+        )
 
     model_config = SettingsConfigDict(
         env_file=".env",

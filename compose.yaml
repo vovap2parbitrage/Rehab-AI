@@ -1,0 +1,176 @@
+﻿name: rehab-ai
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rehab_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-rehab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rehab}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rehab} -d ${POSTGRES_DB:-rehab_ai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8081}:8080"
+      - "${KEYCLOAK_MANAGEMENT_PORT:-9001}:9000"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/rehab-ai-realm.json:ro
+      - keycloak_data:/opt/keycloak/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' && bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # Keycloak imports the realm file before custom roles can be added to the
+  # built-in default role, so a one-shot job adds `patient` for new sign-ups.
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.4
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        KCADM=/opt/keycloak/bin/kcadm.sh
+        $$KCADM config credentials \
+          --server http://keycloak:8080 \
+          --realm master \
+          --user "$$KEYCLOAK_ADMIN_USERNAME" \
+          --password "$$KEYCLOAK_ADMIN_PASSWORD"
+        if ! $$KCADM get-roles -r rehab-ai --rname default-roles-rehab-ai | grep -q '"patient"'; then
+          $$KCADM add-roles -r rehab-ai --rname default-roles-rehab-ai --rolename patient
+        fi
+    environment:
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: Rehab AI API
+      ENVIRONMENT: local
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-me-0123456789abcdef}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rehab}:${POSTGRES_PASSWORD:-rehab}@db:5432/${POSTGRES_DB:-rehab_ai}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001}
+      KEYCLOAK_ENABLED: "true"
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KEYCLOAK_REALM: rehab-ai
+      KEYCLOAK_CLIENT_ID: rehab-ai-backend
+      KEYCLOAK_AUDIENCE: rehab-ai-backend
+      KEYCLOAK_VERIFY_AUDIENCE: "true"
+      KEYCLOAK_ADMIN_CLIENT_ID: rehab-ai-admin
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-rehab-ai-admin-dev-secret}
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  celery-worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command: ["celery", "-A", "app.tasks.celery_app.celery_app", "worker", "--loglevel=info"]
+    environment:
+      APP_NAME: Rehab AI API
+      ENVIRONMENT: local
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-me-0123456789abcdef}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rehab}:${POSTGRES_PASSWORD:-rehab}@db:5432/${POSTGRES_DB:-rehab_ai}
+      REDIS_URL: redis://redis:6379/0
+      KEYCLOAK_ENABLED: "true"
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KEYCLOAK_REALM: rehab-ai
+      KEYCLOAK_CLIENT_ID: rehab-ai-backend
+      KEYCLOAK_AUDIENCE: rehab-ai-backend
+      KEYCLOAK_ADMIN_CLIENT_ID: rehab-ai-admin
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-rehab-ai-admin-dev-secret}
+      SKIP_DB_INIT: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8001}
+        VITE_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+        VITE_KEYCLOAK_REALM: rehab-ai
+        VITE_KEYCLOAK_CLIENT_ID: rehab-ai-web
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      keycloak-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  redis_data:
+  keycloak_data:
+

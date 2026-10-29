@@ -1,0 +1,181 @@
+{
+  "realm": "rehab-ai",
+  "enabled": true,
+  "displayName": "Rehab AI",
+  "displayNameHtml": "<strong>Rehab AI</strong>",
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["uk", "en"],
+  "defaultLocale": "uk",
+  "roles": {
+    "realm": [
+      {
+        "name": "patient",
+        "description": "Patient access to their own rehabilitation data"
+      },
+      {
+        "name": "therapist",
+        "description": "Therapist access to assigned patients and exercises"
+      },
+      {
+        "name": "admin",
+        "description": "Administrator access to users, roles and the platform"
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-rehab-ai",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "composites": {
+      "realm": ["offline_access", "uma_authorization", "patient"],
+      "client": {
+        "account": ["manage-account", "view-profile"]
+      }
+    },
+    "clientRole": false
+  },
+  "clients": [
+    {
+      "clientId": "rehab-ai-web",
+      "name": "Rehab AI Web",
+      "description": "Public browser client used by the React application",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:3000",
+      "baseUrl": "http://localhost:3000",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+        "http://localhost:3001/*",
+        "http://127.0.0.1:3001/*",
+        "http://localhost:4173/*",
+        "http://127.0.0.1:4173/*",
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://127.0.0.1:3000/*##http://localhost:3001/*##http://127.0.0.1:3001/*##http://localhost:4173/*##http://127.0.0.1:4173/*##http://localhost:5173/*##http://127.0.0.1:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "rehab-ai-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "rehab-ai-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "rehab-ai-backend",
+      "name": "Rehab AI Backend",
+      "description": "Audience used by the FastAPI resource server",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "rehab-ai-admin",
+      "name": "Rehab AI Admin",
+      "description": "Confidential service account used by the backend to assign roles",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "rehab-ai-admin-dev-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@rehab.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Rehab",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Rehab123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"],
+      "requiredActions": []
+    },
+    {
+      "username": "therapist",
+      "enabled": true,
+      "email": "therapist@rehab.local",
+      "emailVerified": true,
+      "firstName": "Тетяна",
+      "lastName": "Лікар",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Rehab123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["therapist"],
+      "requiredActions": []
+    },
+    {
+      "username": "patient",
+      "enabled": true,
+      "email": "patient@rehab.local",
+      "emailVerified": true,
+      "firstName": "Павло",
+      "lastName": "Пацієнт",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Rehab123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["patient"],
+      "requiredActions": []
+    },
+    {
+      "username": "service-account-rehab-ai-admin",
+      "enabled": true,
+      "serviceAccountClientId": "rehab-ai-admin",
+      "clientRoles": {
+        "realm-management": ["view-realm", "view-users", "manage-users"]
+      }
+    }
+  ]
+}

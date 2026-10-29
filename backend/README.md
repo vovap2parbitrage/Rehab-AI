@@ -28,6 +28,17 @@ alembic/                  # міграції (додати після створ
 tests/
 ```
 
+## Запуск усього стеку
+
+З кореня репозиторію:
+
+```bash
+docker compose up --build -d
+```
+
+Це піднімає PostgreSQL, Redis, Keycloak, FastAPI, Celery і frontend.
+Деталі та адреси сервісів — у [`../README.md`](../README.md).
+
 ## Запуск локально
 
 1.
@@ -37,9 +48,9 @@ tests/
    .venv\\Scripts\\Activate.ps1
    pip install -e ".[dev]"
    ```
-2. Створити `.venv`:
+2. Створити `.env`:
    ```bash
-   copy .venv.example .venv
+   copy .env.example .env
    ```
 3. Запусти сервіси:
    ```bash

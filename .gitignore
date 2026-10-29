@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -222,3 +222,8 @@ __marimo__/
 rehab_ai_backend.egg-info
 .idea
 alembic
+# Local Docker Compose overrides
+.env
+
+# Frontend source libraries (the Python-oriented 'lib/' rule above would hide them)
+!frontend/src/lib/
