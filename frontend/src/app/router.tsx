@@ -6,6 +6,10 @@ import { HomePage } from '../pages/HomePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/ProfilePage'
 import { RegisterPage } from '../pages/RegisterPage'
+import { RoleRoute } from '../auth/RoleRoute'
+import { TherapistPatientsPage } from '../pages/TherapistPatientsPage'
+import { TherapistPatientPage } from '../pages/TherapistPatientPage'
+import { TherapistExercisesPage } from '../pages/TherapistExercisesPage'
 
 export const router = createBrowserRouter([
   {
@@ -36,6 +40,30 @@ export const router = createBrowserRouter([
           <ProtectedRoute>
             <ProfilePage />
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'therapist/patients',
+        element: (
+          <RoleRoute allowedRoles={['therapist', 'admin']}>
+            <TherapistPatientsPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'therapist/patients/:patientId',
+        element: (
+          <RoleRoute allowedRoles={['therapist', 'admin']}>
+            <TherapistPatientPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'therapist/exercises',
+        element: (
+          <RoleRoute allowedRoles={['therapist', 'admin']}>
+            <TherapistExercisesPage />
+          </RoleRoute>
         ),
       },
       {

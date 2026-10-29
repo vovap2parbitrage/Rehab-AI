@@ -11,6 +11,10 @@ export function Header() {
   const { initialized, authenticated, tokenParsed, initError } = useAuth()
   const displayName = getDisplayName(tokenParsed)
   const initials = getInitials(displayName)
+  const realmRoles = tokenParsed?.realm_access?.roles
+  const istherapist =
+    Array.isArray(realmRoles) &&
+    (realmRoles.includes('therapist') || realmRoles.includes('admin'))
 
   return (
     <header className="site-header">
@@ -32,6 +36,16 @@ export function Header() {
           {authenticated && (
             <NavLink to="/profile" className={navLinkClass}>
               Профіль
+            </NavLink>
+          )}
+          {authenticated && istherapist && (
+            <NavLink to="/therapist/patients" className={navLinkClass}>
+              Пацієнти
+            </NavLink>
+          )}
+          {authenticated && istherapist && (
+            <NavLink to="/therapist/exercises" className={navLinkClass}>
+              Вправи
             </NavLink>
           )}
         </nav>
