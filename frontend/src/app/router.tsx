@@ -8,6 +8,7 @@ import { ProfilePage } from '../pages/ProfilePage'
 import {
   PatientDashboardPage,
   PatientDoctorsPage,
+  PatientExerciseExecutionPage,
   PatientExercisesPage,
   PatientInvitationsPage,
 } from '../pages/PatientWorkspacePages'
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
           { path: 'doctors', element: <PatientDoctorsPage /> },
           { path: 'invitations', element: <PatientInvitationsPage /> },
           { path: 'exercises', element: <PatientExercisesPage /> },
+          { path: 'exercises/:exerciseId/execute', element: <PatientExerciseExecutionPage /> },
         ],
       },
       {

@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
 import { DOCTORS, EXERCISES, usePatientWorkspace } from '../lib/patientWorkspace'
@@ -241,7 +242,7 @@ export function PatientInvitationsPage() {
 }
 
 export function PatientExercisesPage() {
-  const { state, toggleExercise } = usePatientWorkspace()
+  const { state } = usePatientWorkspace()
   const selectedDoctor =
     state.invitationStatus === 'accepted'
       ? DOCTORS.find((doctor) => doctor.id === state.invitationDoctorId)
@@ -254,7 +255,7 @@ export function PatientExercisesPage() {
       <PageHeading
         eyebrow="План відновлення"
         title="Мій цикл вправ"
-        lead="Позначайте виконані вправи, щоб відстежувати свій прогрес."
+        lead="Відкрийте вправу, завантажте відео виконання та завершіть сесію."
       />
 
       {!selectedDoctor ? (
@@ -318,18 +319,17 @@ export function PatientExercisesPage() {
                       <span>{exercise.duration}</span>
                     </div>
                   </div>
-                  <button
-                    type="button"
+                  <Link
+                    to={`/patient/exercises/${exercise.id}/execute`}
                     className={
                       completed
                         ? 'button button--ghost exercise-card__action'
                         : 'button button--primary exercise-card__action'
                     }
-                    onClick={() => toggleExercise(exercise.id)}
-                    aria-pressed={completed}
                   >
-                    {completed ? 'Скасувати' : 'Позначити виконаною'}
-                  </button>
+                    {completed ? 'Повторити вправу' : 'Виконати вправу'}
+                    <ArrowRightIcon aria-hidden="true" />
+                  </Link>
                 </article>
               )
             })}
@@ -339,6 +339,149 @@ export function PatientExercisesPage() {
             вправи, погоджені з вашим фахівцем.
           </p>
         </>
+      )}
+    </div>
+  )
+}
+
+export function PatientExerciseExecutionPage() {
+  const { exerciseId } = useParams()
+  const { state, completeExercise } = usePatientWorkspace()
+  const [selectedVideo, setSelectedVideo] = useState<{ file: File; url: string } | null>(null)
+  const [fileError, setFileError] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const exercise = EXERCISES.find((item) => item.id === exerciseId)
+  const isPatientReady = state.invitationStatus === 'accepted'
+
+  useEffect(() => {
+    if (!selectedVideo) return
+    return () => URL.revokeObjectURL(selectedVideo.url)
+  }, [selectedVideo])
+
+  if (!exercise || !isPatientReady) {
+    return <Navigate to="/patient/exercises" replace />
+  }
+
+  const handleVideoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedVideo = event.currentTarget.files?.[0] ?? null
+    event.currentTarget.value = ''
+
+    if (!selectedVideo) return
+
+    if (!selectedVideo.type.startsWith('video/')) {
+      setSelectedVideo(null)
+      setFileError('Оберіть відеофайл, наприклад MP4, MOV або WebM.')
+      setSubmitted(false)
+      return
+    }
+
+    setSelectedVideo({
+      file: selectedVideo,
+      url: URL.createObjectURL(selectedVideo),
+    })
+    setFileError('')
+    setSubmitted(false)
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedVideo) {
+      setFileError('Спочатку оберіть відео виконання.')
+      return
+    }
+
+    completeExercise(exercise.id)
+    setSubmitted(true)
+  }
+
+  const formattedVideoSize = selectedVideo
+    ? `${(selectedVideo.file.size / (1024 * 1024)).toLocaleString('uk-UA', {
+        maximumFractionDigits: 1,
+      })} МБ`
+    : ''
+
+  return (
+    <div className="workspace-page">
+      <Link to="/patient/exercises" className="text-link exercise-execution__back">
+        ← Повернутися до циклу вправ
+      </Link>
+
+      <PageHeading
+        eyebrow="Виконання вправи"
+        title={exercise.title}
+        lead="Виконайте вправу за рекомендацією фахівця, додайте відео та завершіть сесію."
+      />
+
+      <section className="card exercise-execution__details" aria-labelledby="execution-instructions">
+        <div>
+          <p className="eyebrow">Інструкція</p>
+          <h2 id="execution-instructions">{exercise.prescription}</h2>
+          <p>{exercise.description}</p>
+        </div>
+        <span className="exercise-execution__duration">
+          <ClockIcon aria-hidden="true" />
+          {exercise.duration}
+        </span>
+      </section>
+
+      {submitted ? (
+        <section className="card exercise-execution__success" role="status">
+          <span className="workspace-empty-state__icon" aria-hidden="true">
+            <CheckIcon />
+          </span>
+          <div>
+            <p className="eyebrow">Сесію завершено</p>
+            <h2>Вправу позначено виконаною</h2>
+            <p>
+              Відео «{selectedVideo?.file.name}» вибране для цієї демо-сесії. Воно не надсилалося на
+              сервер і залишилося на вашому пристрої.
+            </p>
+            <Link to="/patient/exercises" className="button button--primary">
+              Повернутися до циклу <ArrowRightIcon aria-hidden="true" />
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <form className="card exercise-upload" onSubmit={handleSubmit}>
+          <div>
+            <p className="eyebrow">Крок 1 · Відео</p>
+            <h2>Додайте відео виконання</h2>
+            <p className="exercise-upload__description">
+              Оберіть запис із пристрою, щоб переглянути його перед завершенням вправи.
+            </p>
+          </div>
+
+          <label className="exercise-upload__field">
+            <span>Відеофайл</span>
+            <input type="file" accept="video/*" onChange={handleVideoChange} />
+          </label>
+
+          {fileError && (
+            <p className="exercise-upload__error" role="alert">
+              {fileError}
+            </p>
+          )}
+
+          {selectedVideo && (
+            <div className="exercise-upload__preview">
+              <video src={selectedVideo.url} controls preload="metadata">
+                Ваш браузер не підтримує відтворення відео.
+              </video>
+              <p>
+                {selectedVideo.file.name} · {formattedVideoSize}
+              </p>
+            </div>
+          )}
+
+          <p className="exercise-upload__notice" role="note">
+            Демо-режим: відео лише відкривається у браузері для попереднього перегляду. Воно не
+            завантажується на сервер і не передається на аналіз.
+          </p>
+
+          <button type="submit" className="button button--primary" disabled={!selectedVideo}>
+            Завершити виконання <CheckIcon aria-hidden="true" />
+          </button>
+        </form>
       )}
     </div>
   )

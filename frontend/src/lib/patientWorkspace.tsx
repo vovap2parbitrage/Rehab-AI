@@ -73,7 +73,7 @@ interface PatientWorkspaceContextValue {
   storageError: string | null
   acceptInvitation: () => void
   declineInvitation: () => void
-  toggleExercise: (exerciseId: ExerciseId) => void
+  completeExercise: (exerciseId: ExerciseId) => void
 }
 
 const STORAGE_KEY = 'airehab.patient-workspace.v2'
@@ -160,11 +160,10 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       if (state.invitationStatus !== 'pending') return
       save({ ...state, invitationStatus: 'declined' })
     },
-    toggleExercise: (exerciseId) => {
+    completeExercise: (exerciseId) => {
       if (state.invitationStatus !== 'accepted') return
-      const completedExerciseIds = state.completedExerciseIds.includes(exerciseId)
-        ? state.completedExerciseIds.filter((id) => id !== exerciseId)
-        : [...state.completedExerciseIds, exerciseId]
+      if (state.completedExerciseIds.includes(exerciseId)) return
+      const completedExerciseIds = [...state.completedExerciseIds, exerciseId]
       save({ ...state, completedExerciseIds })
     },
   }
