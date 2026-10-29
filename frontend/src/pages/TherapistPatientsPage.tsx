@@ -32,8 +32,8 @@ export function TherapistPatientsPage() {
   }
 
   return (
-    <div className="therapist-page">
-      <header className="page-heading">
+    <div className="workspace-page">
+      <header className="page-heading workspace-heading">
         <div>
           <p className="eyebrow">Кабінет лікаря</p>
           <h1>Мої пацієнти</h1>
@@ -43,7 +43,7 @@ export function TherapistPatientsPage() {
 
       {notice && <div className="success-message" role="status">{notice}</div>}
 
-      <div className="therapist-page__grid">
+      <div className="workspace-summary-grid therapist-page__grid">
         <section className="card">
           <div className="card__header">
             <div><h2>Пацієнти ({patients.length})</h2><p>Натисніть на пацієнта, щоб призначити план.</p></div>

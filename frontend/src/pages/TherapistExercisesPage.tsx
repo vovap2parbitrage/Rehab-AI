@@ -31,11 +31,11 @@ export function TherapistExercisesPage() {
   }
 
   return (
-    <div className="therapist-page">
+    <div className="workspace-page">
       <Link to="/therapist/patients" className="back-link"><ArrowRightIcon /> До пацієнтів</Link>
-      <header className="page-heading"><div><p className="eyebrow">Кабінет лікаря</p><h1>Бібліотека вправ</h1><p className="page-heading__lead">Створюйте та переглядайте вправи для планів пацієнтів.</p></div></header>
+      <header className="page-heading workspace-heading"><div><p className="eyebrow">Кабінет лікаря</p><h1>Бібліотека вправ</h1><p className="page-heading__lead">Створюйте та переглядайте вправи для планів пацієнтів.</p></div></header>
       {notice && <div className="success-message" role="status">{notice}</div>}
-      <div className="therapist-page__grid">
+      <div className="workspace-summary-grid therapist-page__grid">
         <section className="card"><div className="card__header"><div><h2>Нова вправа</h2><p>Відео поки зберігається як UI-заглушка.</p></div><span className="card__header-icon"><CheckIcon /></span></div>
           <form className="therapist-form" onSubmit={handleSubmit}>
             <label className="therapist-form__field"><span>Назва *</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required minLength={2} /></label>
