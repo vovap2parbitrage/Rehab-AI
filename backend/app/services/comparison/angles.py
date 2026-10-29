@@ -28,9 +28,7 @@ BODY_PARTS = {
     "torso": [TORSO_TILT, "l_hip", "r_hip"],
 }
 
-
 def calculate_angle(a, b, c) -> float:
-    """Angle in degrees (0..180) at point b between rays b->a and b->c."""
     a, b, c = (np.asarray(p, dtype=float) for p in (a, b, c))
     ba, bc = a - b, c - b
     norm = np.linalg.norm(ba) * np.linalg.norm(bc)
@@ -39,17 +37,13 @@ def calculate_angle(a, b, c) -> float:
     cos = np.clip(np.dot(ba, bc) / norm, -1.0, 1.0)
     return float(np.degrees(np.arccos(cos)))
 
-
-def torso_tilt(points: np.ndarray) -> float:
-    """0 deg = upright, 90 = horizontal. Uses the shoulder-mid -> hip-mid line."""
+def torso_tilt(points: np.array) -> float:
     shoulder_mid = (points[L_SHOULDER] + points[R_SHOULDER]) / 2
     hip_mid = (points[L_HIP] + points[R_HIP]) / 2
     up = hip_mid + np.array([0.0, -1.0])
     return calculate_angle(shoulder_mid, hip_mid, up)
 
-
 def expand_body_parts(parts: list[str]) -> list[str]:
-    """['right_leg'] -> ['r_hip', 'r_knee']; removes duplicates, keeps order."""
     joints: list[str] = []
     for part in parts:
         if part not in BODY_PARTS:
@@ -59,9 +53,7 @@ def expand_body_parts(parts: list[str]) -> list[str]:
                 joints.append(joint)
     return joints
 
-
-def frame_angles(points: np.ndarray, joints: list[str]) -> np.ndarray:
-    """points: array (33, 2) in PIXELS. Returns one angle per requested joint."""
+def frame_angles(points: list[float], joints: list[str]) -> np.ndarray:
     result = []
     for joint in joints:
         if joint == TORSO_TILT:

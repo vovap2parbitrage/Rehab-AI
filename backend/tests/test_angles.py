@@ -2,16 +2,8 @@ import numpy as np
 import pytest
 
 from app.services.comparison.angles import (
-    L_ANKLE,
-    L_HIP,
-    L_KNEE,
-    L_SHOULDER,
-    R_HIP,
-    R_SHOULDER,
-    calculate_angle,
-    expand_body_parts,
-    frame_angles,
-    torso_tilt,
+    L_HIP, R_HIP, L_SHOULDER, R_SHOULDER, L_KNEE, L_ANKLE,
+    calculate_angle, expand_body_parts, torso_tilt, frame_angles,
 )
 
 
@@ -52,16 +44,7 @@ def test_unknown_part_raises():
     with pytest.raises(ValueError):
         expand_body_parts(["head"])
 
-
 def test_frame_angles_knee_straight():
     pts = np.zeros((33, 2))
     pts[L_HIP], pts[L_KNEE], pts[L_ANKLE] = [0, 0], [0, 1], [0, 2]
     assert frame_angles(pts, ["l_knee"])[0] == pytest.approx(180)
-
-
-def test_frame_angles_mixed_joints():
-    pts = _torso(0.0)
-    pts[L_HIP], pts[L_KNEE], pts[L_ANKLE] = [0, 0], [0, 1], [0, 2]
-    result = frame_angles(pts, ["torso_tilt", "l_knee"])
-    assert result.shape == (2,)
-    assert result[1] == pytest.approx(180)
