@@ -101,3 +101,6 @@ def test_frame_angles_passes_visibility():
 
 def test_torso_lean_direction_is_unsigned():
     assert torso_tilt(_torso(0.3)) == pytest.approx(torso_tilt(_torso(-0.3)))
+
+def test_expand_body_parts_dedupes():
+    assert expand_body_parts(["torso", "left_leg"]) == ["torso_tilt", "l_hip", "l_knee"]

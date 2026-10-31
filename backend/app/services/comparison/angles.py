@@ -25,7 +25,7 @@ BODY_PARTS = {
     "right_arm": ["r_shoulder", "r_elbow"],
     "left_leg": ["l_hip", "l_knee"],
     "right_leg": ["r_hip", "r_knee"],
-    "torso": [TORSO_TILT, "l_hip", "r_hip"],
+    "torso": [TORSO_TILT],
 }
 
 
