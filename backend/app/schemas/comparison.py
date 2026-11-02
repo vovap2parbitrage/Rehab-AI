@@ -14,10 +14,10 @@ class BodyPart(str, Enum):
 class ComparisonRequest(BaseModel):
     reference_url: HttpUrl
     patient_url: HttpUrl
-    body_part: list[BodyPart] = Field(min_length=1)
+    body_parts: list[BodyPart] = Field(min_length=1)
     tolerances_deg: dict[str, float] = Field(default_factory=dict)
 
-    @field_validator
+    @field_validator("tolerances_deg")
     @classmethod
     def tolerance_positive(cls, v: dict[str, float]) -> dict[str, float]:
         if any(t <= 0 for t in v.values()):
