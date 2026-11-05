@@ -91,3 +91,16 @@ docker compose -f compose.yaml -f compose.s3.yaml up -d
 
 Authentication: `app/api/comparison_auth.py` rejects every request until it is connected to
 the real auth dependency (see the docstring there).
+
+### After merging `main`: wiring checklist
+
+- Root `compose.yaml`: add to both `backend` and `celery-worker` the variables
+  `S3_ENDPOINT_URL`, `S3_PUBLIC_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`,
+  `S3_REGION` (the worker downloads from storage, the API signs upload links), and add the
+  services from `backend/compose.s3.yaml` (or point at a real bucket).
+- Dockerfile: keep `main`'s version and keep the `apt-get install libgl1 libglib2.0-0` step
+  (without it `import mediapipe` fails in `python:3.12-slim`).
+- `app/api/comparison_auth.py`: make `require_user_id` return `str(user.id)` from
+  `get_current_active_user`.
+- `app/api/v1/endpoints/comparisons.py`: take the reference video from the assigned exercise
+  and check the user may access that patient (see the TODO there).
