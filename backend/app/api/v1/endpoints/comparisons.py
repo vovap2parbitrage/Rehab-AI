@@ -8,13 +8,13 @@ from app.schemas.comparison import (
     UploadRequest,
     UploadTarget,
 )
-from app.services import storage, video_service
+from app.services import comparison_service, storage
 
 router = APIRouter()
 
 
-def get_video_service():
-    return video_service
+def get_comparison_service():
+    return comparison_service
 
 
 def get_storage():
@@ -35,7 +35,7 @@ def create_upload(
 def create_comparison(
     req: ComparisonRequest,
     user_id: str = Depends(require_user_id),
-    svc=Depends(get_video_service),
+    svc=Depends(get_comparison_service),
 ):
     # TODO(after merging main): resolve the reference video from the assigned exercise
     # and check the user may access that patient; for now both videos must be the caller's.
@@ -49,7 +49,7 @@ def create_comparison(
 def read_comparison(
     task_id: str,
     user_id: str = Depends(require_user_id),
-    svc=Depends(get_video_service),
+    svc=Depends(get_comparison_service),
 ):
     result = svc.get_comparison(task_id, user_id)
     if result is None:

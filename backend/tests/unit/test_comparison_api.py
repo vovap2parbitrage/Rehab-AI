@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.comparison_auth import require_user_id
-from app.api.v1.endpoints.comparisons import get_storage, get_video_service
+from app.api.v1.endpoints.comparisons import get_comparison_service, get_storage
 from app.main import app
 
 USER = "user1"
@@ -32,7 +32,7 @@ class FakeStorage:
 
 @pytest.fixture
 def client():
-    app.dependency_overrides[get_video_service] = lambda: FakeService()
+    app.dependency_overrides[get_comparison_service] = lambda: FakeService()
     app.dependency_overrides[get_storage] = lambda: FakeStorage()
     app.dependency_overrides[require_user_id] = lambda: USER
     yield TestClient(app)
@@ -41,7 +41,7 @@ def client():
 
 @pytest.fixture
 def anonymous_client():
-    app.dependency_overrides[get_video_service] = lambda: FakeService()
+    app.dependency_overrides[get_comparison_service] = lambda: FakeService()
     app.dependency_overrides[get_storage] = lambda: FakeStorage()
     yield TestClient(app)
     app.dependency_overrides.clear()
