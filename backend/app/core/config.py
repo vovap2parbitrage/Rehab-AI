@@ -13,6 +13,18 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://rehab:rehab@localhost:5432/rehab_ai"
     redis_url: str = "redis://localhost:6379/0"
 
+    # S3-compatible video storage (any S3-compatible service).
+    s3_endpoint_url: str = "http://localhost:9000"
+    # Address clients use to reach storage; defaults to s3_endpoint_url.
+    s3_public_endpoint_url: str | None = None
+    s3_bucket: str = "rehab-videos"
+    s3_access_key: str = "minioadmin"
+    s3_secret_key: str = "minioadmin"
+    s3_region: str = "us-east-1"
+    upload_url_expire_seconds: int = 600
+    max_video_mb: int = 100
+    max_video_seconds: int = 120
+
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:3001,http://127.0.0.1:3001,"

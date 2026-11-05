@@ -104,6 +104,11 @@ services:
       KEYCLOAK_VERIFY_AUDIENCE: "true"
       KEYCLOAK_ADMIN_CLIENT_ID: rehab-ai-admin
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-rehab-ai-admin-dev-secret}
+      S3_ENDPOINT_URL: http://s3:9000
+      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
+      S3_BUCKET: ${S3_BUCKET:-rehab-videos}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     depends_on:
@@ -143,6 +148,11 @@ services:
       KEYCLOAK_AUDIENCE: rehab-ai-backend
       KEYCLOAK_ADMIN_CLIENT_ID: rehab-ai-admin
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-rehab-ai-admin-dev-secret}
+      S3_ENDPOINT_URL: http://s3:9000
+      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
+      S3_BUCKET: ${S3_BUCKET:-rehab-videos}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       SKIP_DB_INIT: "1"
     depends_on:
       backend:
@@ -169,8 +179,38 @@ services:
       keycloak-init:
         condition: service_completed_successfully
 
+  s3:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+    command: /data
+    ports:
+      - "${S3_PORT:-9000}:9000"
+    volumes:
+      - s3_data:/data
+
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - s3
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        aws --endpoint-url http://s3:9000 s3 mb s3://${S3_BUCKET:-rehab-videos} && exit 0;
+        aws --endpoint-url http://s3:9000 s3api head-bucket --bucket ${S3_BUCKET:-rehab-videos} && exit 0;
+        sleep 2;
+      done; exit 1
+      "
+
 volumes:
   postgres_data:
   redis_data:
   keycloak_data:
+  s3_data:
 

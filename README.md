@@ -18,6 +18,7 @@ docker compose up --build -d
 | Keycloak Admin Console | http://localhost:8081/admin |
 | PostgreSQL | `localhost:5433` |
 | Redis | `localhost:6380` |
+| S3-сховище відео (RustFS) | `localhost:9000` |
 
 Перевірити стан контейнерів:
 
@@ -60,6 +61,7 @@ Realm `rehab-ai` імпортується автоматично під час �
 - `celery-worker` — фоновий воркер для аналізу відео.
 - `db` — PostgreSQL 16.
 - `redis` — Redis 7 (брокер Celery).
+- `s3` — S3-сумісне сховище відео (RustFS); `s3-init` створює бакет `rehab-videos`.
 - `keycloak` — Keycloak 26 з імпортом realm `rehab-ai`.
 - `keycloak-init` — одноразова задача, яка додає роль `patient` до стандартної
   ролі нових користувачів.
