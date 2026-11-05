@@ -10,9 +10,9 @@ class AssignmentCreate(BaseModel):
     sessions_per_week: int = Field(ge=1, le=14)
     repetitions: int = Field(ge=1, le=500)
     starts_on: date
-    ends_on: date
+    ends_on: date | None = None
 
 
 class AssignmentRead(AssignmentCreate):
     id: UUID = Field(default_factory=uuid4)
-    is_active: bool = True
+    status: str = Field(default="active", max_length=20)

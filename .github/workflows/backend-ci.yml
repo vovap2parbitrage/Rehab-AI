@@ -40,5 +40,6 @@ jobs:
         run: ruff check .
       - name: Test
         env:
+          ENVIRONMENT: test
           SECRET_KEY: ci-only-secret-key-0123456789abcdefghij
         run: pytest -q

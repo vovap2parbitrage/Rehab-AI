@@ -13,3 +13,4 @@ build/
 uploads/
 
 tests/data/*
+docker-compose.keycloak.yml

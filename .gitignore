@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+﻿# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -226,3 +226,8 @@ alembic
 # Videos for tests
 backend/tests/data/*.mp4
 backend/tests/data/*.mov
+# Local Docker Compose overrides
+.env
+
+# Frontend source libraries (the Python-oriented 'lib/' rule above would hide them)
+!frontend/src/lib/

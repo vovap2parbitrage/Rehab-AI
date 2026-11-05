@@ -40,4 +40,4 @@ class Assignment(Base):
 
     patient = relationship("Patient", back_populates="assignments")
     exercise = relationship("Exercise", back_populates="assignments")
-    sessions = relationship("Session", back_populates="assignment",)
+    sessions = relationship("TrainingSession", back_populates="assignment")

@@ -4,7 +4,7 @@ from app.models import (
     Assignment,
     Exercise,
     Patient,
-    Session,
+    TrainingSession,
     User,
 )
 
@@ -16,4 +16,5 @@ def test_models_relationships_configure():
     assert Patient is not None
     assert Exercise is not None
     assert Assignment is not None
-    assert Session is not None
+    assert TrainingSession is not None
+    assert TrainingSession.__tablename__ == "sessions"

@@ -6,8 +6,6 @@ from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.exercise import Exercise
-from app.models.patient import Patient
 
 
 class User(Base):
@@ -25,15 +23,28 @@ class User(Base):
         nullable=False,
     )
 
-    hashed_password: Mapped[str] = mapped_column(
+    hashed_password: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
+    )
+
+    keycloak_sub: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True,
     )
 
     role: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default="patient",
+    )
+
+    # Role requested from the mobile app that still awaits an admin decision.
+    pending_role: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
     )
 
     is_active: Mapped[bool] = mapped_column(
