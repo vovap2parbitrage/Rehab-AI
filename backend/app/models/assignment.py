@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -9,6 +9,20 @@ from app.db.base import Base
 
 class Assignment(Base):
     __tablename__ = "assignments"
+    __table_args__ = (
+        CheckConstraint(
+            "repetitions BETWEEN 1 AND 500",
+            name="ck_assignments_repetitions_range",
+        ),
+        CheckConstraint(
+            "sessions_per_week BETWEEN 1 AND 14",
+            name="ck_assignments_sessions_per_week_range",
+        ),
+        CheckConstraint(
+            "ends_on IS NULL OR ends_on >= starts_on",
+            name="ck_assignments_date_range",
+        )
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,

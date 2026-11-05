@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, func
+from sqlalchemy import CheckConstraint, JSON, DateTime, Float, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,6 +11,16 @@ from app.db.base import Base
 
 class TrainingSession(Base):
     __tablename__ = "sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "score IS NULL OR score BETWEEN 0 AND 100",
+            name="ck_sessions_score_range",
+        ),
+        CheckConstraint(
+            "pain_score IS NULL OR pain_score BETWEEN 0 AND 10",
+            name="ck_sessions_pain_score_range",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
