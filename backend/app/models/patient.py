@@ -2,7 +2,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -10,6 +10,20 @@ from app.db.base import Base
 
 class Patient(Base):
     __tablename__ = "patients"
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(first_name)) >= 1",
+            name="ck_patients_first_name_not_blank",
+        ),
+        CheckConstraint(
+            "length(trim(last_name)) >= 1",
+            name="ck_patients_last_name_not_blank",
+        ),
+        CheckConstraint(
+            "notes IS NULL OR length(notes) <= 4000",
+            name="ck_patients_notes_length",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,

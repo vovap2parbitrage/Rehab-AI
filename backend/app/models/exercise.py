@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -9,6 +9,16 @@ from app.db.base import Base
 
 class Exercise(Base):
     __tablename__ = "exercises"
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(name)) >= 2",
+            name="ck_exercises_name_length",
+        ),
+        CheckConstraint(
+            "description IS NULL OR length(description) <= 4000",
+            name="ck_exercises_description_length",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
