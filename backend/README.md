@@ -83,10 +83,10 @@ Users never send URLs, so the server never fetches user-supplied addresses.
 Limits: `MAX_VIDEO_MB` (100) and `MAX_VIDEO_SECONDS` (120); only mp4 and mov.
 
 Storage is any S3-compatible service configured with the `S3_*` variables in `.env.example`.
-Local development uses MinIO:
+Local development uses a local S3 (RustFS):
 
 ```bash
-docker compose -f compose.yaml -f compose.minio.yaml up -d   # console: http://localhost:9001
+docker compose -f compose.yaml -f compose.s3.yaml up -d
 ```
 
 Authentication: `app/api/comparison_auth.py` rejects every request until it is connected to
