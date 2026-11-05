@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 
 from app.services.comparison.dtw import dtw_path
@@ -26,5 +28,5 @@ def test_path_starts_and_ends_at_corners():
 def test_path_is_monotonic():
     a, b = np.random.rand(10, 1), np.random.rand(12, 1)
     path = dtw_path(a, b)
-    for (i1, j1), (i2, j2) in zip(path[:-1], path[1:]):
+    for (i1, j1), (i2, j2) in itertools.pairwise(path):
         assert i2 >= i1 and j2 >= j1

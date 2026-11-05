@@ -2,7 +2,10 @@ import numpy as np
 
 from app.services.comparison.angles import (
     JOINT_TRIPLETS,
-    L_HIP, R_HIP, L_SHOULDER, R_SHOULDER,
+    L_HIP,
+    L_SHOULDER,
+    R_HIP,
+    R_SHOULDER,
     TORSO_TILT,
     expand_body_parts,
     frame_angles,

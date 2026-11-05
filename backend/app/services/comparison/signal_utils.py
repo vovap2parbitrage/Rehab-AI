@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.signal import medfilt, savgol_filter
 
+
 def fill_nans(x: np.ndarray) -> np.ndarray:
     """Linear interpolation over NaNs gaps."""
     x = x.copy()

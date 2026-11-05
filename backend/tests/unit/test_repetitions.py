@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 
 from app.services.comparison.repetitions import split_repetitions
@@ -36,5 +38,5 @@ def test_segments_cover_whole_signal_without_gaps():
     segs = split_repetitions(sig, FPS)
     assert segs[0][0] == 0
     assert segs[-1][1] == len(sig) - 1
-    for (_, end), (start, _) in zip(segs[:-1], segs[1:]):
+    for (_, end), (start, _) in itertools.pairwise(segs):
         assert end == start

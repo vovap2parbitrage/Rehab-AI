@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def dtw_path(patient: np.ndarray, reference: np.ndarray) -> list[tuple[int, int]]:
     """Align two sequences of shape(frames, joints)"""
 

@@ -63,3 +63,31 @@ tests/
 - `POST /api/v1/exercises` — заглушка створення вправи з назвою та описом.
 - `POST /api/v1/assignments` — заглушка призначення вправи пацієнту.
 - `POST /api/v1/sessions` — приймає метадані результату сесії; аналіз відео ще не реалізований.
+## Video comparison service
+
+Compares a patient's exercise video with the therapist's reference video and returns a
+score (0-10), per-joint scores and error segments.
+
+Flow (the mobile app does these steps automatically; the user only records or picks a video):
+
+1. `POST /api/v1/comparisons/uploads` with `{"content_type": "video/mp4"}` returns a
+   short-lived presigned upload target `{key, url, fields}`.
+2. The app uploads the video straight to the S3 bucket (multipart POST to `url` with `fields`
+   plus the file). Repeat for the second video.
+3. `POST /api/v1/comparisons` with `{reference_key, patient_key, body_parts, tolerances_deg}`
+   queues the analysis (Celery) and returns `{task_id}` (202).
+4. `GET /api/v1/comparisons/{task_id}` returns `pending`, `done`, `rerecord`,
+   `no_repetitions` or `failed`. Only the user who started the task can read it.
+
+Users never send URLs, so the server never fetches user-supplied addresses.
+Limits: `MAX_VIDEO_MB` (100) and `MAX_VIDEO_SECONDS` (120); only mp4 and mov.
+
+Storage is any S3-compatible service configured with the `S3_*` variables in `.env.example`.
+Local development uses MinIO:
+
+```bash
+docker compose -f compose.yaml -f compose.minio.yaml up -d   # console: http://localhost:9001
+```
+
+Authentication: `app/api/comparison_auth.py` rejects every request until it is connected to
+the real auth dependency (see the docstring there).

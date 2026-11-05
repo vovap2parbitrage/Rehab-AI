@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 from scipy.signal import find_peaks
 
@@ -14,5 +16,5 @@ def split_repetitions(signal: np.ndarray, fps: float, min_depth: float = 25.0):
     if len(valleys) == 0:
         return []
 
-    cuts = [0] + [(a + b) // 2 for a, b in zip(valleys[:-1], valleys[1:])] + [len(signal) - 1]
-    return list(zip(cuts[:-1], cuts[1:]))
+    cuts = [0] + [(a + b) // 2 for a, b in itertools.pairwise(valleys)] + [len(signal) - 1]
+    return list(itertools.pairwise(cuts))

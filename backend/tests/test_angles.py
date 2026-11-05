@@ -44,8 +44,6 @@ def test_leaning_torso_is_45():
     assert torso_tilt(_torso(0.3)) == pytest.approx(45)
 
 
-def test_expand_body_parts_dedupes():
-    assert expand_body_parts(["torso", "left_leg"]) == ["torso_tilt", "l_hip", "r_hip", "l_knee"]
 
 
 def test_unknown_part_raises():

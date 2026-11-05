@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import assignments, exercises, patients, sessions, comparisons
+from app.api.v1.endpoints import assignments, comparisons, exercises, patients, sessions
 
 api_router = APIRouter()
 api_router.include_router(patients.router, prefix="/patients", tags=["patients"])
