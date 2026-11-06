@@ -1,180 +1,155 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import {
+  completePatientAssignment,
+  listPatientAssignments,
+  listPatientDoctors,
+  listPatientInvitations,
+  respondToPatientInvitation,
+  type PatientAssignment,
+  type PatientDoctor,
+  type PatientInvitation,
+  type PatientSession,
+} from '../api/patient'
+import { ApiError } from '../api/client'
+import { useAuth } from '../auth/useAuth'
+import { PatientWorkspaceContext } from './patientWorkspaceContext'
 
-export const DOCTORS = [
-  {
-    id: 'olena-koval',
-    name: 'Олена Коваль',
-    specialty: 'Фізична терапія',
-    experience: '8 років досвіду',
-    description: 'Допомагає відновити рухливість і силу після травм та операцій.',
-    initials: 'ОК',
-  },
-  {
-    id: 'andrii-melnyk',
-    name: 'Андрій Мельник',
-    specialty: 'Неврологічна реабілітація',
-    experience: '11 років досвіду',
-    description: 'Працює з відновленням координації, балансу та ходи.',
-    initials: 'АМ',
-  },
-  {
-    id: 'maria-shevchenko',
-    name: 'Марія Шевченко',
-    specialty: 'Реабілітація опорно-рухового апарату',
-    experience: '6 років досвіду',
-    description: 'Складає поступові програми відновлення з урахуванням вашого темпу.',
-    initials: 'МШ',
-  },
-] as const
-
-export const EXERCISES = [
-  {
-    id: 'ankle-mobility',
-    title: 'Рухливість гомілковостопного суглоба',
-    description: 'Повільно тягніть стопу на себе та від себе, не затримуючи дихання.',
-    prescription: '2 підходи · 10 повторень',
-    duration: '5 хв',
-  },
-  {
-    id: 'seated-knee-extension',
-    title: 'Розгинання ноги сидячи',
-    description: 'Розігніть ногу до комфортного положення та повільно поверніть назад.',
-    prescription: '3 підходи · 8 повторень',
-    duration: '7 хв',
-  },
-  {
-    id: 'supported-heel-raise',
-    title: 'Підйом на носки з опорою',
-    description: 'Тримайтеся за стійку опору та піднімайте п’яти без різких рухів.',
-    prescription: '2 підходи · 10 повторень',
-    duration: '5 хв',
-  },
-  {
-    id: 'breathing',
-    title: 'Спокійне діафрагмальне дихання',
-    description: 'Зробіть повільний вдих носом і довший видих через злегка стиснуті губи.',
-    prescription: '2 підходи · 6 циклів',
-    duration: '4 хв',
-  },
-] as const
-
-export type DoctorId = (typeof DOCTORS)[number]['id']
-export type ExerciseId = (typeof EXERCISES)[number]['id']
-export type InvitationStatus = 'pending' | 'accepted' | 'declined'
-
-interface PatientWorkspaceState {
-  invitationDoctorId: DoctorId | null
-  invitationStatus: InvitationStatus | null
-  completedExerciseIds: ExerciseId[]
-}
-
-interface PatientWorkspaceContextValue {
-  state: PatientWorkspaceState
-  storageError: string | null
-  acceptInvitation: () => void
-  declineInvitation: () => void
-  completeExercise: (exerciseId: ExerciseId) => void
-}
-
-const STORAGE_KEY = 'airehab.patient-workspace.v2'
-const DEMO_INVITATION: PatientWorkspaceState = {
-  invitationDoctorId: 'olena-koval',
-  invitationStatus: 'pending',
-  completedExerciseIds: [],
-}
-
-const PatientWorkspaceContext = createContext<PatientWorkspaceContextValue | null>(null)
-
-function isDoctorId(value: unknown): value is DoctorId {
-  return DOCTORS.some((doctor) => doctor.id === value)
-}
-
-function isExerciseId(value: unknown): value is ExerciseId {
-  return EXERCISES.some((exercise) => exercise.id === value)
-}
-
-function isInvitationStatus(value: unknown): value is InvitationStatus {
-  return value === 'pending' || value === 'accepted' || value === 'declined'
-}
-
-function loadWorkspace(): { state: PatientWorkspaceState; error: string | null } {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { state: DEMO_INVITATION, error: null }
-
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) {
-      throw new Error('Invalid local workspace data')
-    }
-
-    const stored = parsed as Record<string, unknown>
-    const invitationDoctorId = isDoctorId(stored.invitationDoctorId)
-      ? stored.invitationDoctorId
-      : null
-    const invitationStatus =
-      invitationDoctorId && isInvitationStatus(stored.invitationStatus)
-        ? stored.invitationStatus
-        : null
-    const completedExerciseIds = Array.isArray(stored.completedExerciseIds)
-      ? stored.completedExerciseIds.filter(isExerciseId)
-      : []
-
-    return {
-      state: { invitationDoctorId, invitationStatus, completedExerciseIds },
-      error: null,
-    }
-  } catch {
-    return {
-      state: DEMO_INVITATION,
-      error:
-        'Не вдалося прочитати демо-дані з браузера. Зміни працюватимуть лише до перезавантаження.',
-    }
-  }
+function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.detail ?? error.message
+  if (error instanceof Error) return error.message
+  return 'Не вдалося завантажити дані кабінету пацієнта.'
 }
 
 export function PatientWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [initial] = useState(loadWorkspace)
-  const [state, setState] = useState(initial.state)
-  const [storageError, setStorageError] = useState(initial.error)
+  const { authenticated, initialized } = useAuth()
+  const [doctors, setDoctors] = useState<PatientDoctor[]>([])
+  const [invitations, setInvitations] = useState<PatientInvitation[]>([])
+  const [assignments, setAssignments] = useState<PatientAssignment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionPending, setActionPending] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const save = (next: PatientWorkspaceState) => {
-    setState(next)
+  const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-      setStorageError(null)
-    } catch {
-      setStorageError(
-        'Браузер не зберіг демо-дані. Після перезавантаження сторінки зміни можуть зникнути.',
-      )
-    }
-  }
+      const [doctorsResult, invitationsResult, assignmentsResult] = await Promise.allSettled([
+        listPatientDoctors({ signal }),
+        listPatientInvitations({ signal }),
+        listPatientAssignments({ signal }),
+      ])
+      if (signal?.aborted) return
 
-  const value: PatientWorkspaceContextValue = {
-    state,
-    storageError,
-    acceptInvitation: () => {
-      if (state.invitationStatus !== 'pending') return
-      save({ ...state, invitationStatus: 'accepted' })
+      const failures: string[] = []
+      if (doctorsResult.status === 'fulfilled') {
+        setDoctors(doctorsResult.value)
+      } else {
+        failures.push(getErrorMessage(doctorsResult.reason))
+      }
+      if (invitationsResult.status === 'fulfilled') {
+        setInvitations(invitationsResult.value)
+      } else {
+        failures.push(getErrorMessage(invitationsResult.reason))
+      }
+      if (assignmentsResult.status === 'fulfilled') {
+        setAssignments(assignmentsResult.value)
+      } else {
+        failures.push(getErrorMessage(assignmentsResult.reason))
+      }
+      setError(failures[0] ?? null)
+    } finally {
+      if (!signal?.aborted) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!initialized || !authenticated) return
+    const controller = new AbortController()
+    queueMicrotask(() => {
+      void loadWorkspace(controller.signal)
+    })
+    return () => controller.abort()
+  }, [authenticated, initialized, loadWorkspace])
+
+  const refresh = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    void loadWorkspace()
+  }, [loadWorkspace])
+
+  const respond = useCallback(
+    async (invitationId: string, status: 'accepted' | 'declined') => {
+      setActionPending(invitationId)
+      setError(null)
+      try {
+        const updated = await respondToPatientInvitation(invitationId, status)
+        setInvitations((current) =>
+          current.map((invitation) => (invitation.id === updated.id ? updated : invitation)),
+        )
+        await loadWorkspace()
+      } catch (caught) {
+        setError(getErrorMessage(caught))
+      } finally {
+        setActionPending(null)
+      }
     },
-    declineInvitation: () => {
-      if (state.invitationStatus !== 'pending') return
-      save({ ...state, invitationStatus: 'declined' })
+    [loadWorkspace],
+  )
+
+  const complete = useCallback(
+    async (assignmentId: string, painScore: number | null) => {
+      setActionPending(assignmentId)
+      setError(null)
+      try {
+        const session: PatientSession = await completePatientAssignment(assignmentId, {
+          ...(painScore === null ? {} : { pain_score: painScore }),
+        })
+        setAssignments((current) =>
+          current.map((assignment) =>
+            assignment.id === assignmentId
+              ? { ...assignment, sessions: [...assignment.sessions, session] }
+              : assignment,
+          ),
+        )
+        return true
+      } catch (caught) {
+        setError(getErrorMessage(caught))
+        return false
+      } finally {
+        setActionPending(null)
+      }
     },
-    completeExercise: (exerciseId) => {
-      if (state.invitationStatus !== 'accepted') return
-      if (state.completedExerciseIds.includes(exerciseId)) return
-      const completedExerciseIds = [...state.completedExerciseIds, exerciseId]
-      save({ ...state, completedExerciseIds })
-    },
-  }
+    [],
+  )
+
+  const value = useMemo(
+    () => ({
+      doctors,
+      invitations,
+      assignments,
+      loading,
+      actionPending,
+      error,
+      refresh,
+      respondToInvitation: respond,
+      completeAssignment: complete,
+    }),
+    [
+      doctors,
+      invitations,
+      assignments,
+      loading,
+      actionPending,
+      error,
+      refresh,
+      respond,
+      complete,
+    ],
+  )
 
   return <PatientWorkspaceContext.Provider value={value}>{children}</PatientWorkspaceContext.Provider>
-}
-
-export function usePatientWorkspace(): PatientWorkspaceContextValue {
-  const context = useContext(PatientWorkspaceContext)
-  if (!context) {
-    throw new Error('usePatientWorkspace must be used inside PatientWorkspaceProvider')
-  }
-  return context
 }
