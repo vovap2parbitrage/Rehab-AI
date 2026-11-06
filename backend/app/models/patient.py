@@ -82,6 +82,13 @@ class Patient(Base):
         back_populates="patients_as_therapist",
     )
 
+    therapist_invitations = relationship(
+        "TherapistInvitation",
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     assignments = relationship(
         "Assignment",
         back_populates="patient",
