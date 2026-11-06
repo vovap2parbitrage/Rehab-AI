@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_active_user, require_roles
 from app.core.auth import extract_roles
@@ -16,16 +16,23 @@ router = APIRouter()
 
 @router.get("/", response_model=list[PatientRead])
 def list_patients(
-    request: Request,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
 ) -> list[PatientRead]:
-    return list(demo_store.patients.values())
+    patients = list(demo_store.patients.values())
+    if Role.ADMIN.value in extract_roles(claims):
+        return patients
+
+    return [
+        patient
+        for patient in patients
+        if user.id in patient.therapist_ids
+    ]
 
 
 @router.post("/", response_model=PatientRead, status_code=201)
 def create_patient(
     payload: PatientCreate,
-    request: Request,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
 ) -> PatientRead:
     patient = PatientRead(**payload.model_dump())

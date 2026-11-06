@@ -22,7 +22,7 @@ def test_create_patient_requires_admin_or_therapist() -> None:
         "/api/v1/patients/",
         json={
             "user_id": str(uuid.uuid4()),
-            "therapist_id": str(uuid.uuid4()),
+            "therapist_ids": [str(uuid.uuid4())],
             "first_name": "Test",
             "last_name": "Patient",
         },

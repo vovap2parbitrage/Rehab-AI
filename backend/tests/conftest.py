@@ -95,7 +95,7 @@ def seed_patient():
     def _seed(owner: User, therapist: User) -> PatientRead:
         patient = PatientRead(
             user_id=owner.id,
-            therapist_id=therapist.id,
+            therapist_ids=[therapist.id],
             first_name="Ivan",
             last_name="Petrenko",
         )

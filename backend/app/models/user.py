@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+from app.models.patient_therapist import patient_therapist_table
 
 class User(Base):
     __tablename__ = "users"
@@ -96,6 +97,6 @@ class User(Base):
 
     patients_as_therapist: Mapped[list["Patient"]] = relationship(
         "Patient",
-        back_populates="therapist",
-        foreign_keys="Patient.therapist_id",
+        secondary=patient_therapist_table,
+        back_populates="therapists",
     )

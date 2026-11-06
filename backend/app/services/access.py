@@ -12,7 +12,7 @@ def _has_access(patient: PatientRead, user: User, roles: set[str]) -> bool:
     if Role.ADMIN.value in roles:
         return True
 
-    if Role.THERAPIST.value in roles and patient.therapist_id == user.id:
+    if Role.THERAPIST.value in roles and user.id in patient.therapist_ids:
         return True
 
     return Role.PATIENT.value in roles and patient.user_id == user.id
