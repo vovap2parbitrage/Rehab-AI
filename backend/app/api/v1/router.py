@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     comparisons,
     exercises,
     patient_workspace,
+    invitations,
     patients,
     sessions,
 )
@@ -18,6 +19,7 @@ api_router.include_router(
     prefix="/patient-workspace",
     tags=["patient workspace"],
 )
+api_router.include_router(invitations.router, prefix="/invitations", tags=["invitations"])
 api_router.include_router(exercises.router, prefix="/exercises", tags=["exercises"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])

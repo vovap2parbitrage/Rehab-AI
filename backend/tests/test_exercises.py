@@ -77,6 +77,38 @@ def test_reference_video_key_limit_matches_model(api, login, therapist):
     assert too_long.status_code == 422
 
 
+def test_therapist_can_update_and_delete_own_exercise(api, login, therapist):
+    login(therapist)
+    created = api.post("/api/v1/exercises/", json=exercise_payload()).json()
+
+    updated = api.put(
+        f"/api/v1/exercises/{created['id']}",
+        json=exercise_payload(name="Updated exercise"),
+    )
+    deleted = api.delete(f"/api/v1/exercises/{created['id']}")
+    missing = api.get(f"/api/v1/exercises/{created['id']}")
+
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Updated exercise"
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
+
+
+def test_therapist_cannot_update_another_therapists_exercise(
+    api, login, therapist, other_therapist
+):
+    login(therapist)
+    created = api.post("/api/v1/exercises/", json=exercise_payload()).json()
+
+    login(other_therapist)
+    response = api.put(
+        f"/api/v1/exercises/{created['id']}",
+        json=exercise_payload(name="Not allowed"),
+    )
+
+    assert response.status_code == 403
+
+
 def test_exercise_read_schema_matches_model_columns():
     from app.models.exercise import Exercise
 

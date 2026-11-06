@@ -1,6 +1,7 @@
 import uuid
 
 from app.models.assignment import Assignment
+from app.models.exercise import Exercise
 from app.schemas.assignment import AssignmentRead
 
 
@@ -17,12 +18,18 @@ def assignment_payload(patient_id, **overrides) -> dict:
 
 
 def test_therapist_assigns_exercise_to_own_patient(
-    api, login, therapist, patient_user, seed_patient
+    api, login, therapist, patient_user, seed_patient, db_session
 ):
     patient = seed_patient(patient_user, therapist)
+    exercise = Exercise(name="Test exercise", created_by=therapist.id)
+    db_session.add(exercise)
+    db_session.commit()
     login(therapist)
 
-    response = api.post("/api/v1/assignments/", json=assignment_payload(patient.id))
+    response = api.post(
+        "/api/v1/assignments/",
+        json=assignment_payload(patient.id, exercise_id=str(exercise.id)),
+    )
 
     assert response.status_code == 201
     body = response.json()
