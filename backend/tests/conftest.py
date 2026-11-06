@@ -24,6 +24,7 @@ def clean_demo_store():
         demo_store.exercises,
         demo_store.assignments,
         demo_store.sessions,
+        demo_store.invitations,
     )
     for store in stores:
         store.clear()

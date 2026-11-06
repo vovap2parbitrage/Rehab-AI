@@ -2,10 +2,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
 from app.core.auth import extract_roles
 from app.core.roles import Role
+from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.session import SessionCreate, SessionRead
 from app.services import demo_store
@@ -24,15 +26,16 @@ def list_sessions(
     patient_id: UUID | None = None,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> list[SessionRead]:
     roles = extract_roles(claims)
     if patient_id is not None:
-        require_patient_access(patient_id, user, roles)
+        require_patient_access(patient_id, user, roles, db)
     return [
         item
         for item in demo_store.sessions.values()
         if (patient_id is None or _patient_id_of(item) == patient_id)
-        and can_access_patient_id(_patient_id_of(item), user, roles)
+        and can_access_patient_id(_patient_id_of(item), user, roles, db)
     ]
 
 
@@ -41,11 +44,12 @@ def create_session(
     payload: SessionCreate,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> SessionRead:
     assignment = demo_store.assignments.get(payload.assignment_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_patient_access(assignment.patient_id, user, extract_roles(claims))
+    require_patient_access(assignment.patient_id, user, extract_roles(claims), db)
     session = SessionRead(**payload.model_dump())
     demo_store.sessions[session.id] = session
     return session
@@ -56,6 +60,7 @@ def get_session(
     session_id: UUID,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> SessionRead:
     session = demo_store.sessions.get(session_id)
     if session is None:
@@ -63,5 +68,5 @@ def get_session(
     patient_id = _patient_id_of(session)
     if patient_id is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    require_patient_access(patient_id, user, extract_roles(claims))
+    require_patient_access(patient_id, user, extract_roles(claims), db)
     return session

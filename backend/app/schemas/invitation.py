@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class InvitationCreate(BaseModel):
-    patient_id: UUID
+    email: str | None = Field(default=None, min_length=3, max_length=255)
+    patient_id: UUID | None = None
     message: str | None = Field(default=None, max_length=2000)
 
 
