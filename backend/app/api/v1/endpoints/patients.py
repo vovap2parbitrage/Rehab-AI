@@ -11,7 +11,6 @@ from app.db.dependencies import get_db
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services import demo_store
 from app.services.access import require_patient_access
 from app.services.doctor_access import get_patient_for_therapist
 
@@ -45,10 +44,44 @@ def list_patients(
 def create_patient(
     payload: PatientCreate,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> PatientRead:
-    patient = PatientRead(**payload.model_dump())
-    demo_store.patients[patient.id] = patient
-    return patient
+    if db.get(User, payload.user_id) is None:
+        raise HTTPException(status_code=404, detail="Patient user not found")
+    if db.query(Patient).filter(Patient.user_id == payload.user_id).first():
+        raise HTTPException(status_code=409, detail="Patient profile already exists")
+    patient = Patient(
+        user_id=payload.user_id,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        date_of_birth=payload.date_of_birth,
+        notes=payload.notes,
+    )
+    therapist_ids = set(payload.therapist_ids)
+    if user.role != Role.ADMIN.value:
+        therapist_ids.add(user.id)
+    if therapist_ids:
+        therapists = (
+            db.query(User)
+            .filter(User.id.in_(therapist_ids), User.role == Role.THERAPIST.value)
+            .all()
+        )
+        if len(therapists) != len(therapist_ids):
+            raise HTTPException(status_code=404, detail="Therapist not found")
+        patient.therapists = therapists
+    db.add(patient)
+    db.commit()
+    db.refresh(patient)
+    return PatientRead(
+        id=patient.id,
+        user_id=patient.user_id,
+        therapist_ids=[therapist.id for therapist in patient.therapists],
+        first_name=patient.first_name,
+        last_name=patient.last_name,
+        date_of_birth=patient.date_of_birth,
+        notes=patient.notes,
+    )
 
 
 @router.get("/{patient_id}", response_model=PatientRead)

@@ -1,6 +1,13 @@
-def test_therapist_can_send_invitation(api, login, therapist, patient_user, seed_patient):
+from app.models.patient import Patient
+
+
+def test_therapist_can_send_invitation(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
     patient = seed_patient(patient_user, therapist)
-    patient.therapist_ids = []
+    db_patient = db_session.get(Patient, patient.id)
+    db_patient.therapists.clear()
+    db_session.commit()
     login(therapist)
 
     response = api.post(
