@@ -1,18 +1,12 @@
 import { Outlet } from 'react-router-dom'
-import { usePatientWorkspace } from '../lib/patientWorkspace'
+import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
 
 export function PatientWorkspaceLayout() {
-  const { storageError } = usePatientWorkspace()
-
   return (
-    <div className="patient-workspace">
-      {storageError && (
-        <p className="workspace-storage-error" role="status">
-          {storageError}
-        </p>
-      )}
-
-      <Outlet />
-    </div>
+    <PatientWorkspaceProvider>
+      <div className="patient-workspace">
+        <Outlet />
+      </div>
+    </PatientWorkspaceProvider>
   )
 }
