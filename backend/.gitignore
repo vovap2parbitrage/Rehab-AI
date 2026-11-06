@@ -14,3 +14,4 @@ uploads/
 
 tests/data/*
 docker-compose.keycloak.yml
+scripts/*
