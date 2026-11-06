@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 - register every mapper before querying
 from app.core.auth import get_current_user
+from app.models.patient import Patient
 from app.models.user import User
 
 
@@ -17,6 +18,7 @@ def db():
         poolclass=StaticPool,
     )
     User.__table__.create(bind=engine)
+    Patient.__table__.create(bind=engine)
     session = sessionmaker(bind=engine, autoflush=False, autocommit=False)()
     try:
         yield session
@@ -31,6 +33,8 @@ def claims(**overrides):
         "email": "new@example.com",
         "email_verified": True,
         "realm_access": {"roles": []},
+        "given_name": "Нова",
+        "family_name": "Пацієнтка",
     }
     values.update(overrides)
     return values
@@ -45,6 +49,9 @@ def test_first_login_provisions_patient(db):
     assert user.is_verified is True
     assert user.hashed_password is None
     assert db.query(User).count() == 1
+    patient = db.query(Patient).filter(Patient.user_id == user.id).one()
+    assert patient.first_name == "Нова"
+    assert patient.last_name == "Пацієнтка"
 
 
 def test_existing_sub_is_reused(db):
@@ -66,6 +73,7 @@ def test_role_from_signed_token_is_applied_on_creation(db):
     )
 
     assert user.role == "therapist"
+    assert db.query(Patient).count() == 0
 
 
 def test_admin_role_wins_when_multiple_roles_are_present(db):
@@ -79,6 +87,7 @@ def test_admin_role_wins_when_multiple_roles_are_present(db):
     )
 
     assert user.role == "admin"
+    assert db.query(Patient).count() == 0
 
 
 def test_preprovisioned_user_is_linked_by_verified_email(db):
@@ -185,8 +194,39 @@ def test_inactive_user_is_rejected(db):
 
 def test_email_falls_back_to_preferred_username(db):
     user = get_current_user(
-        claims={"sub": "kc-username", "preferred_username": "jdoe", "email_verified": False},
+        claims={
+            "sub": "kc-username",
+            "preferred_username": "jdoe",
+            "email_verified": False,
+            "given_name": "John",
+            "family_name": "Doe",
+        },
         db=db,
     )
 
     assert user.email == "jdoe@keycloak.local"
+
+
+def test_existing_patient_user_gets_missing_profile(db):
+    preprovisioned = User(
+        email="patient@example.com",
+        hashed_password=None,
+        role="patient",
+        is_active=True,
+        is_verified=False,
+    )
+    db.add(preprovisioned)
+    db.commit()
+    db.refresh(preprovisioned)
+
+    user = get_current_user(
+        claims=claims(
+            sub="kc-patient",
+            email="patient@example.com",
+            given_name="Ім'я",
+            family_name="Прізвище",
+        ),
+        db=db,
+    )
+
+    assert db.query(Patient).filter(Patient.user_id == user.id).count() == 1

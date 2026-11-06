@@ -20,28 +20,20 @@ from app.models.user import User  # noqa: E402
 from app.schemas.assignment import AssignmentRead  # noqa: E402
 from app.schemas.patient import PatientRead  # noqa: E402
 from app.schemas.session import SessionRead  # noqa: E402
-from app.services import demo_store  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def clean_database():
+def clean_database(request: pytest.FixtureRequest):
+    if "db" in request.fixturenames:
+        yield
+        return
+
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(table.delete())
         db.commit()
-    stores = (
-        demo_store.patients,
-        demo_store.exercises,
-        demo_store.assignments,
-        demo_store.sessions,
-        demo_store.invitations,
-    )
-    for store in stores:
-        store.clear()
     yield
-    for store in stores:
-        store.clear()
 
 
 @pytest.fixture

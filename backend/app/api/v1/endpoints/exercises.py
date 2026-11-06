@@ -7,6 +7,7 @@ from app.api.deps import get_current_active_user, require_roles
 from app.core.auth import extract_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
+from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.user import User
 from app.schemas.exercise import ExerciseCreate, ExerciseRead
@@ -92,6 +93,11 @@ def delete_exercise(
         raise HTTPException(status_code=404, detail="Exercise not found")
     if Role.ADMIN.value not in extract_roles(claims) and exercise.created_by != user.id:
         raise HTTPException(status_code=403, detail="You can delete only your exercises")
+    if db.query(Assignment.id).filter(Assignment.exercise_id == exercise.id).first() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete an exercise assigned to a patient",
+        )
 
     db.delete(exercise)
     db.commit()

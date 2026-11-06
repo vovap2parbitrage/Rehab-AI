@@ -1,5 +1,8 @@
 import uuid
+from datetime import date
 
+from app.models.assignment import Assignment
+from app.models.exercise import Exercise
 from app.schemas.exercise import ExerciseRead
 
 
@@ -92,6 +95,30 @@ def test_therapist_can_update_and_delete_own_exercise(api, login, therapist):
     assert updated.json()["name"] == "Updated exercise"
     assert deleted.status_code == 204
     assert missing.status_code == 404
+
+
+def test_therapist_cannot_delete_assigned_exercise(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
+    patient = seed_patient(patient_user, therapist)
+    login(therapist)
+    created = api.post("/api/v1/exercises/", json=exercise_payload()).json()
+    db_exercise = db_session.get(Exercise, uuid.UUID(created["id"]))
+    db_session.add(
+        Assignment(
+            patient_id=patient.id,
+            exercise_id=db_exercise.id,
+            repetitions=10,
+            sessions_per_week=3,
+            starts_on=date(2026, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    response = api.delete(f"/api/v1/exercises/{created['id']}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot delete an exercise assigned to a patient"
 
 
 def test_therapist_cannot_update_another_therapists_exercise(
