@@ -59,8 +59,6 @@ def create_patient(
         notes=payload.notes,
     )
     therapist_ids = set(payload.therapist_ids)
-    if user.role != Role.ADMIN.value:
-        therapist_ids.add(user.id)
     if therapist_ids:
         therapists = (
             db.query(User)
