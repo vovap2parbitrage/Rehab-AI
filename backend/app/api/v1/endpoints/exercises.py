@@ -10,7 +10,7 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.exercise import ExerciseCreate, ExerciseRead
-from app.services import exercise_service
+from app.services import exercise
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ def list_exercises(
     ),
     db: Session = Depends(get_db),
 ) -> list[ExerciseRead]:
-    return exercise_service.list_exercises(db)
+    return exercise.list_exercises(db)
 
 
 @router.post("/", response_model=ExerciseRead, status_code=201)
@@ -32,7 +32,7 @@ def create_exercise(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ExerciseRead:
-    return exercise_service.create_exercise(db, payload, user)
+    return exercise.create_exercise(db, payload, user)
 
 
 @router.get("/{exercise_id}", response_model=ExerciseRead)
@@ -43,7 +43,7 @@ def get_exercise(
     ),
     db: Session = Depends(get_db),
 ) -> ExerciseRead:
-    return exercise_service.get_exercise(db, exercise_id)
+    return exercise.get_exercise(db, exercise_id)
 
 
 @router.put("/{exercise_id}", response_model=ExerciseRead)
@@ -54,7 +54,7 @@ def update_exercise(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ExerciseRead:
-    return exercise_service.update_exercise(
+    return exercise.update_exercise(
         db, exercise_id, payload, user, extract_roles(claims)
     )
 
@@ -66,6 +66,6 @@ def delete_exercise(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> None:
-    exercise_service.delete_exercise(
+    exercise.delete_exercise(
         db, exercise_id, user, extract_roles(claims)
     )

@@ -14,7 +14,7 @@ from app.schemas.invitation import (
     PatientInvitationRead,
     PatientInvitationRespond,
 )
-from app.services import invitation_service
+from app.services import invitation
 
 router = APIRouter()
 
@@ -26,7 +26,7 @@ def send_invitation(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> InvitationRead:
-    return invitation_service.send_invitation(db, payload, user)
+    return invitation.send_invitation(db, payload, user)
 
 
 @router.get("/mine", response_model=list[PatientInvitationRead])
@@ -35,7 +35,7 @@ def list_patient_invitations(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[PatientInvitationRead]:
-    return invitation_service.list_patient_invitations(db, user)
+    return invitation.list_patient_invitations(db, user)
 
 
 @router.patch("/{invitation_id}/response", response_model=PatientInvitationRead)
@@ -46,6 +46,6 @@ def respond_to_invitation(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PatientInvitationRead:
-    return invitation_service.respond_to_invitation(
+    return invitation.respond_to_invitation(
         db, invitation_id, payload.status, user
     )

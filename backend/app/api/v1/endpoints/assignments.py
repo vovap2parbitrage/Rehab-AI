@@ -9,7 +9,7 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
-from app.services import assignment_service
+from app.services import assignment
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ def list_patient_assignments(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[PatientAssignmentRead]:
-    return assignment_service.list_patient_assignments(db, user)
+    return assignment.list_patient_assignments(db, user)
 
 
 @router.get("/", response_model=list[AssignmentRead])
@@ -32,7 +32,7 @@ def list_assignments(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[AssignmentRead]:
-    return assignment_service.list_assignments(db, user, patient_id)
+    return assignment.list_assignments(db, user, patient_id)
 
 
 @router.post("/", response_model=AssignmentRead, status_code=201)
@@ -42,7 +42,7 @@ def create_assignment(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
-    return assignment_service.create_assignment(db, payload, user)
+    return assignment.create_assignment(db, payload, user)
 
 
 @router.get("/{assignment_id}", response_model=AssignmentRead)
@@ -54,4 +54,4 @@ def get_assignment(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
-    return assignment_service.get_assignment(db, assignment_id, user)
+    return assignment.get_assignment(db, assignment_id, user)

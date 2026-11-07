@@ -10,7 +10,7 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services import patient_service
+from app.services import patient
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ def list_patients(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[PatientRead]:
-    return patient_service.list_patients(
+    return patient.list_patients(
         db,
         is_admin=Role.ADMIN.value in extract_roles(claims),
         therapist_id=user.id,
@@ -35,7 +35,7 @@ def create_patient(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PatientRead:
-    return patient_service.create_patient(db, payload)
+    return patient.create_patient(db, payload)
 
 
 @router.get("/{patient_id}", response_model=PatientRead)
@@ -45,7 +45,7 @@ def get_patient(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PatientRead:
-    return patient_service.get_patient(db, patient_id, user, extract_roles(claims))
+    return patient.get_patient(db, patient_id, user, extract_roles(claims))
 
 
 @router.get("/{patient_id}/therapists", response_model=list[dict[str, str]])
@@ -57,7 +57,7 @@ def list_patient_therapists(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[dict[str, str]]:
-    return patient_service.list_patient_therapists(
+    return patient.list_patient_therapists(
         db, patient_id, user, extract_roles(claims)
     )
 
@@ -69,4 +69,4 @@ def remove_patient_from_therapist_list(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> None:
-    patient_service.remove_patient_from_therapist(db, patient_id, user)
+    patient.remove_patient_from_therapist(db, patient_id, user)
