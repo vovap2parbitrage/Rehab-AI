@@ -51,15 +51,12 @@ export function LoginPage() {
     <AuthLayout
       eyebrow="Захищений вхід"
       title="Вхід до AIRehab"
-      description="Увійдіть через Keycloak, щоб відкрити свій профіль, план реабілітації та результати занять."
+      description="Увійдіть, щоб відкрити свій профіль, план реабілітації та результати занять."
       icon={<LockIcon />}
       asideTitle="Один захищений вхід до всіх даних"
-      asideText="Keycloak перевіряє ваш пароль і керує сесією. AIRehab отримує лише короткоживучий токен доступу."
+      asideText="Захищений сервіс перевіряє ваш пароль і керує сесією."
       asidePoints={[
-        'Пароль вводиться лише на сторінці Keycloak',
-        'Захист Authorization Code Flow із PKCE',
-        'Токен зберігається в пам’яті та оновлюється автоматично',
-        'Роль і статус облікового запису визначає сервер',
+        'Пароль вводиться лише на захищеній сторінці входу'
       ]}
       footer={
         <>
@@ -80,7 +77,7 @@ export function LoginPage() {
 
       {initError && (
         <ErrorMessage
-          title="Keycloak недоступний"
+          title="Сервіс авторизації недоступний"
           message={initError}
           onRetry={() => window.location.reload()}
           retryLabel="Перевірити знову"
@@ -100,14 +97,14 @@ export function LoginPage() {
         ) : (
           <LockIcon aria-hidden="true" />
         )}
-        {busy ? 'Переходимо до Keycloak…' : 'Увійти через Keycloak'}
+        {busy ? 'Переходимо до захищеного входу…' : 'Увійти'}
       </button>
 
       <p className="auth-card__fineprint">
         <ShieldCheckIcon aria-hidden="true" />
         {initialized
-          ? 'Ви будете перенаправлені на захищену сторінку Keycloak. Після входу повернетеся до профілю.'
-          : 'Перевіряємо наявну сесію Keycloak…'}
+          ? 'Ви будете перенаправлені на захищену сторінку входу. Після входу повернетеся до профілю.'
+          : 'Перевіряємо наявну сесію…'}
       </p>
     </AuthLayout>
   )

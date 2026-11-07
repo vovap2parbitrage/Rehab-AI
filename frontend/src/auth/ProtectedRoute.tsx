@@ -13,7 +13,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation()
 
   if (!initialized) {
-    return <Loading fullPage label="Перевіряємо сесію Keycloak…" />
+    return <Loading fullPage label="Перевіряємо сесію…" />
   }
 
   if (initError) {

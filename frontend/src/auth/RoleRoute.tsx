@@ -37,7 +37,7 @@ export function RoleRoute({ allowedRoles, children }: RoleRouteProps) {
     return () => controller.abort()
   }, [authenticated, initialized])
 
-  if (!initialized) return <Loading fullPage label="Перевіряємо сесію Keycloak…" />
+  if (!initialized) return <Loading fullPage label="Перевіряємо сесію…" />
   if (!authenticated) {
     return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
   }
