@@ -154,6 +154,10 @@ docker compose up --build -d
 У `Dockerfile` встановлюються `libgl1` і `libglib2.0-0`: без них `import mediapipe`
 падає в `python:3.12-slim`.
 
+### Локальний тест для порівняння відео
+
+~/compare_demo.sh "token" backend/tests/data/reference.mp4 backend/tests/data/patient_good.mp4 list of important body parts 
+
 ### Що ще не зроблено
 
 - Еталонне відео поки має належати тому самому користувачу. Потрібно брати його з призначеної
