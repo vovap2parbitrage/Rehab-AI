@@ -7,6 +7,7 @@ migrations are added this module can be replaced with ``alembic upgrade head``.
 
 import time
 
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import OperationalError
 
 import app.models  # noqa: F401  (register all models on Base.metadata)
@@ -31,6 +32,42 @@ def wait_for_database() -> None:
 def init_db() -> None:
     wait_for_database()
     Base.metadata.create_all(bind=engine)
+    migrate_patient_therapists()
+
+
+def migrate_patient_therapists() -> None:
+    """Move the former single-therapist relation into the join table."""
+    with engine.begin() as connection:
+        columns = {
+            column["name"]
+            for column in inspect(connection).get_columns("patients")
+        }
+        if "therapist_id" not in columns:
+            return
+
+        connection.execute(
+            text(
+                """
+                INSERT INTO patient_therapists (patient_id, therapist_id)
+                SELECT id, therapist_id
+                FROM patients
+                WHERE therapist_id IS NOT NULL
+                ON CONFLICT (patient_id, therapist_id) DO NOTHING
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                ALTER TABLE patients
+                DROP CONSTRAINT IF EXISTS patients_therapist_id_fkey
+                """
+            )
+        )
+        connection.execute(text("DROP INDEX IF EXISTS ix_patients_therapist_id"))
+        connection.execute(
+            text("ALTER TABLE patients DROP COLUMN IF EXISTS therapist_id")
+        )
 
 
 def main() -> None:

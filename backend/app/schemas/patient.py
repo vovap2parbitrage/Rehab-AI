@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class PatientCreate(BaseModel):
     user_id: UUID
-    therapist_id: UUID
+    therapist_ids: list[UUID] = Field(default_factory=list)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
     date_of_birth: date | None = None

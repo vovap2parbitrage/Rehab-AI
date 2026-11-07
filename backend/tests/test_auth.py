@@ -17,15 +17,15 @@ def test_patients_with_bypass_allows_for_admin() -> None:
     assert response.status_code == 200
 
 
-def test_create_patient_requires_admin_or_therapist() -> None:
+def test_create_patient_rejects_unknown_database_users() -> None:
     response = client.post(
         "/api/v1/patients/",
         json={
             "user_id": str(uuid.uuid4()),
-            "therapist_id": str(uuid.uuid4()),
+            "therapist_ids": [str(uuid.uuid4())],
             "first_name": "Test",
             "last_name": "Patient",
         },
         headers={"X-Test-Auth": "bypass"},
     )
-    assert response.status_code == 201
+    assert response.status_code == 404
