@@ -1,7 +1,8 @@
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
@@ -11,7 +12,7 @@ from app.db.dependencies import get_db
 from app.models.assignment import Assignment
 from app.models.session import TrainingSession
 from app.models.user import User
-from app.schemas.session import SessionCreate, SessionRead
+from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
 from app.services.access import can_access_patient_id, require_patient_access
 
 router = APIRouter()
@@ -56,6 +57,39 @@ def create_session(
         raise HTTPException(status_code=404, detail="Assignment not found")
     require_patient_access(assignment.patient_id, user, extract_roles(claims), db)
     session = TrainingSession(**payload.model_dump())
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return SessionRead.model_validate(session, from_attributes=True)
+
+
+@router.post(
+    "/assignments/{assignment_id}",
+    response_model=SessionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def complete_assignment_session(
+    assignment_id: UUID,
+    payload: PatientSessionCreate,
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> SessionRead:
+    assignment = (
+        db.query(Assignment)
+        .filter(Assignment.id == assignment_id, Assignment.patient.has(user_id=user.id))
+        .first()
+    )
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if assignment.status != "active":
+        raise HTTPException(status_code=409, detail="Assignment is not active")
+
+    session = TrainingSession(
+        assignment_id=assignment.id,
+        pain_score=payload.pain_score,
+        completed_at=datetime.now(UTC),
+    )
     db.add(session)
     db.commit()
     db.refresh(session)

@@ -18,3 +18,18 @@ class InvitationRead(BaseModel):
     message: str | None = None
     created_at: datetime | None = None
     responded_at: datetime | None = None
+
+
+class PatientInvitationRead(BaseModel):
+    id: UUID
+    patient_id: UUID
+    therapist_id: UUID
+    therapist_email: str
+    status: str
+    message: str | None = None
+    created_at: datetime
+    responded_at: datetime | None = None
+
+
+class PatientInvitationRespond(BaseModel):
+    status: str

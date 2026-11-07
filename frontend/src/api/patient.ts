@@ -48,15 +48,21 @@ export interface PatientAssignment {
   sessions: PatientSession[]
 }
 
-export function listPatientDoctors(options: { signal?: AbortSignal } = {}) {
-  return apiRequest<PatientDoctor[]>('/api/v1/patient-workspace/doctors', {
+export function listPatientDoctors(
+  patientId: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<Array<{ id: string; role: string }>>(
+    `/api/v1/patients/${encodeURIComponent(patientId)}/therapists`,
+    {
     method: 'GET',
     signal: options.signal,
-  })
+    },
+  )
 }
 
 export function listPatientInvitations(options: { signal?: AbortSignal } = {}) {
-  return apiRequest<PatientInvitation[]>('/api/v1/patient-workspace/invitations', {
+  return apiRequest<PatientInvitation[]>('/api/v1/invitations/mine', {
     method: 'GET',
     signal: options.signal,
   })
@@ -67,7 +73,7 @@ export function respondToPatientInvitation(
   status: 'accepted' | 'declined',
 ) {
   return apiRequest<PatientInvitation>(
-    `/api/v1/patient-workspace/invitations/${encodeURIComponent(invitationId)}`,
+    `/api/v1/invitations/${encodeURIComponent(invitationId)}/response`,
     {
       method: 'PATCH',
       body: JSON.stringify({ status }),
@@ -76,7 +82,7 @@ export function respondToPatientInvitation(
 }
 
 export function listPatientAssignments(options: { signal?: AbortSignal } = {}) {
-  return apiRequest<PatientAssignment[]>('/api/v1/patient-workspace/assignments', {
+  return apiRequest<PatientAssignment[]>('/api/v1/assignments/mine', {
     method: 'GET',
     signal: options.signal,
   })
@@ -87,7 +93,7 @@ export function completePatientAssignment(
   payload: { pain_score?: number },
 ) {
   return apiRequest<PatientSession>(
-    `/api/v1/patient-workspace/assignments/${encodeURIComponent(assignmentId)}/sessions`,
+    `/api/v1/sessions/assignments/${encodeURIComponent(assignmentId)}`,
     {
       method: 'POST',
       body: JSON.stringify(payload),

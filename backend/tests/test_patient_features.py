@@ -15,7 +15,7 @@ from app.models.user import User
 
 
 @pytest.fixture
-def patient_workspace_db(api, db_session: Session):
+def patient_features_db(api, db_session: Session):
     app.dependency_overrides[get_db] = lambda: db_session
     try:
         yield db_session
@@ -36,46 +36,58 @@ def create_patient(db: Session, owner: User, therapist: User) -> Patient:
     return patient
 
 
-def test_patient_lists_active_therapists_only(
-    api, login, patient_user, therapist, other_therapist, patient_workspace_db
+def test_patient_lists_own_therapists(
+    api, login, patient_user, therapist, other_therapist, patient_features_db
 ):
-    inactive = User(
-        id=uuid.uuid4(),
-        email="inactive@example.com",
-        role="therapist",
-        is_active=False,
-        is_verified=True,
+    patient_features_db.add(patient_user)
+    patient = Patient(
+        user_id=patient_user.id,
+        first_name="Ivan",
+        last_name="Petrenko",
+        therapists=[therapist, other_therapist],
     )
-    patient_workspace_db.add_all([patient_user, therapist, other_therapist, inactive])
-    patient_workspace_db.commit()
+    patient_features_db.add(patient)
+    patient_features_db.commit()
     login(patient_user)
 
-    response = api.get("/api/v1/patient-workspace/doctors")
+    response = api.get(f"/api/v1/patients/{patient.id}/therapists")
 
     assert response.status_code == 200
-    assert {doctor["id"] for doctor in response.json()} == {
+    assert {therapist["id"] for therapist in response.json()} == {
         str(therapist.id),
         str(other_therapist.id),
     }
 
 
+def test_patient_cannot_list_another_patients_therapists(
+    api, login, patient_user, other_patient_user, therapist, patient_features_db
+):
+    create_patient(patient_features_db, other_patient_user, therapist)
+    patient_features_db.commit()
+    login(patient_user)
+
+    response = api.get(f"/api/v1/patients/{uuid.uuid4()}/therapists")
+
+    assert response.status_code == 404
+
+
 @pytest.mark.parametrize("response_status", ["accepted", "declined"])
 def test_patient_can_respond_to_invitation(
-    api, login, patient_user, therapist, patient_workspace_db, response_status
+    api, login, patient_user, therapist, patient_features_db, response_status
 ):
-    patient = create_patient(patient_workspace_db, patient_user, therapist)
+    patient = create_patient(patient_features_db, patient_user, therapist)
     invitation = TherapistInvitation(
         patient_id=patient.id,
         therapist_id=therapist.id,
         status="pending",
         message="Запрошую до співпраці",
     )
-    patient_workspace_db.add(invitation)
-    patient_workspace_db.commit()
+    patient_features_db.add(invitation)
+    patient_features_db.commit()
     login(patient_user)
 
     response = api.patch(
-        f"/api/v1/patient-workspace/invitations/{invitation.id}",
+        f"/api/v1/invitations/{invitation.id}/response",
         json={"status": response_status},
     )
 
@@ -83,23 +95,23 @@ def test_patient_can_respond_to_invitation(
     assert response.json()["status"] == response_status
     assert response.json()["therapist_email"] == therapist.email
     assert response.json()["responded_at"] is not None
-    patient_workspace_db.refresh(patient)
+    patient_features_db.refresh(patient)
     expected_therapists = [therapist.id] if response_status == "accepted" else []
     assert [linked.id for linked in patient.therapists] == expected_therapists
 
 
 def test_patient_lists_own_invitations_including_revoked_only(
     api, login, patient_user, other_patient_user, therapist, other_therapist,
-    patient_workspace_db,
+    patient_features_db,
 ):
-    own_patient = create_patient(patient_workspace_db, patient_user, therapist)
-    other_patient = create_patient(patient_workspace_db, other_patient_user, other_therapist)
+    own_patient = create_patient(patient_features_db, patient_user, therapist)
+    other_patient = create_patient(patient_features_db, other_patient_user, other_therapist)
     own_invitation = TherapistInvitation(
         patient_id=own_patient.id,
         therapist_id=therapist.id,
         status="revoked",
     )
-    patient_workspace_db.add_all(
+    patient_features_db.add_all(
         [
             own_invitation,
             TherapistInvitation(
@@ -109,10 +121,10 @@ def test_patient_lists_own_invitations_including_revoked_only(
             ),
         ]
     )
-    patient_workspace_db.commit()
+    patient_features_db.commit()
     login(patient_user)
 
-    response = api.get("/api/v1/patient-workspace/invitations")
+    response = api.get("/api/v1/invitations/mine")
 
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -122,20 +134,20 @@ def test_patient_lists_own_invitations_including_revoked_only(
 
 @pytest.mark.parametrize("invitation_status", ["accepted", "declined", "revoked"])
 def test_patient_cannot_respond_to_non_pending_invitation(
-    api, login, patient_user, therapist, patient_workspace_db, invitation_status
+    api, login, patient_user, therapist, patient_features_db, invitation_status
 ):
-    patient = create_patient(patient_workspace_db, patient_user, therapist)
+    patient = create_patient(patient_features_db, patient_user, therapist)
     invitation = TherapistInvitation(
         patient_id=patient.id,
         therapist_id=therapist.id,
         status=invitation_status,
     )
-    patient_workspace_db.add(invitation)
-    patient_workspace_db.commit()
+    patient_features_db.add(invitation)
+    patient_features_db.commit()
     login(patient_user)
 
     response = api.patch(
-        f"/api/v1/patient-workspace/invitations/{invitation.id}",
+        f"/api/v1/invitations/{invitation.id}/response",
         json={"status": "accepted"},
     )
 
@@ -149,14 +161,14 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
     other_patient_user,
     therapist,
     other_therapist,
-    patient_workspace_db,
+    patient_features_db,
 ):
-    patient = create_patient(patient_workspace_db, patient_user, therapist)
-    other_patient = create_patient(patient_workspace_db, other_patient_user, other_therapist)
+    patient = create_patient(patient_features_db, patient_user, therapist)
+    other_patient = create_patient(patient_features_db, other_patient_user, other_therapist)
     exercise = Exercise(name="Knee extension", created_by=therapist.id)
     other_exercise = Exercise(name="Ankle mobility", created_by=other_therapist.id)
-    patient_workspace_db.add_all([exercise, other_exercise])
-    patient_workspace_db.flush()
+    patient_features_db.add_all([exercise, other_exercise])
+    patient_features_db.flush()
     assignment = Assignment(
         patient_id=patient.id,
         exercise_id=exercise.id,
@@ -164,7 +176,7 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
         sessions_per_week=3,
         starts_on=date(2026, 1, 1),
     )
-    patient_workspace_db.add_all(
+    patient_features_db.add_all(
         [
             assignment,
             Assignment(
@@ -176,13 +188,13 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
             ),
         ]
     )
-    patient_workspace_db.flush()
+    patient_features_db.flush()
     session = TrainingSession(assignment_id=assignment.id, pain_score=2)
-    patient_workspace_db.add(session)
-    patient_workspace_db.commit()
+    patient_features_db.add(session)
+    patient_features_db.commit()
     login(patient_user)
 
-    response = api.get("/api/v1/patient-workspace/assignments")
+    response = api.get("/api/v1/assignments/mine")
 
     assert response.status_code == 200
     assert len(response.json()) == 1
@@ -191,12 +203,12 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
 
 
 def test_patient_completes_own_assignment_session(
-    api, login, patient_user, therapist, patient_workspace_db
+    api, login, patient_user, therapist, patient_features_db
 ):
-    patient = create_patient(patient_workspace_db, patient_user, therapist)
+    patient = create_patient(patient_features_db, patient_user, therapist)
     exercise = Exercise(name="Knee extension", created_by=therapist.id)
-    patient_workspace_db.add(exercise)
-    patient_workspace_db.flush()
+    patient_features_db.add(exercise)
+    patient_features_db.flush()
     assignment = Assignment(
         patient_id=patient.id,
         exercise_id=exercise.id,
@@ -204,12 +216,12 @@ def test_patient_completes_own_assignment_session(
         sessions_per_week=3,
         starts_on=date(2026, 1, 1),
     )
-    patient_workspace_db.add(assignment)
-    patient_workspace_db.commit()
+    patient_features_db.add(assignment)
+    patient_features_db.commit()
     login(patient_user)
 
     response = api.post(
-        f"/api/v1/patient-workspace/assignments/{assignment.id}/sessions",
+        f"/api/v1/sessions/assignments/{assignment.id}",
         json={"pain_score": 3},
     )
 
@@ -217,4 +229,4 @@ def test_patient_completes_own_assignment_session(
     assert response.json()["assignment_id"] == str(assignment.id)
     assert response.json()["pain_score"] == 3
     assert response.json()["completed_at"] is not None
-    assert patient_workspace_db.query(TrainingSession).count() == 1
+    assert patient_features_db.query(TrainingSession).count() == 1

@@ -151,9 +151,9 @@ export function PatientDoctorsPage() {
   return (
     <div className="workspace-page">
       <PageHeading
-        eyebrow="Фахівці"
-        title="Список лікарів"
-        lead="Тут показані активні фахівці, зареєстровані в AIRehab."
+        eyebrow="Мої лікарі"
+        title="Лікарі, які вас лікують"
+        lead="Тут показані лікарі, прив’язані до вашого профілю."
       />
       <WorkspaceError />
       {loading ? (
@@ -167,18 +167,15 @@ export function PatientDoctorsPage() {
                   {getInitials(doctor.email)}
                 </span>
                 <span className="doctor-card__experience">
-                  {connectedTherapists.has(doctor.id) ? 'Ваш лікар' : 'Активний фахівець'}
+                  Ваш лікар
                 </span>
               </div>
               <h2>{doctor.email}</h2>
               <p className="doctor-card__description">
                 {connectedTherapists.has(doctor.id)
-                  ? 'Ви прийняли запрошення цього фахівця.'
-                  : 'Запрошення до співпраці надсилає лікар.'}
+                  ? 'Ви прийняли запрошення цього лікаря.'
+                  : 'Лікар прив’язаний до вашого профілю.'}
               </p>
-              <Link to="/patient/invitations" className="doctor-card__directory-label">
-                Переглянути запрошення
-              </Link>
             </article>
           ))}
         </div>
@@ -187,8 +184,8 @@ export function PatientDoctorsPage() {
           <span className="workspace-empty-state__icon" aria-hidden="true">
             <UserIcon />
           </span>
-          <h2>Поки немає активних лікарів</h2>
-          <p>Коли фахівці зареєструються в системі, вони з’являться у цьому списку.</p>
+          <h2>У вас ще немає лікарів</h2>
+          <p>Коли лікар почне з вами працювати, він з’явиться у цьому списку.</p>
         </section>
       )}
     </div>

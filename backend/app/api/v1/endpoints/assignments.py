@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
@@ -11,10 +11,36 @@ from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.patient import Patient
 from app.models.user import User
-from app.schemas.assignment import AssignmentCreate, AssignmentRead
+from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
 from app.services.doctor_access import get_patient_for_user, get_patient_for_therapist
 
 router = APIRouter()
+
+
+def _patient_for_user(db: Session, user: User) -> Patient:
+    patient = db.query(Patient).filter(Patient.user_id == user.id).first()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+    return patient
+
+
+@router.get("/mine", response_model=list[PatientAssignmentRead])
+def list_patient_assignments(
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> list[PatientAssignmentRead]:
+    patient = _patient_for_user(db, user)
+    return (
+        db.query(Assignment)
+        .options(
+            joinedload(Assignment.exercise),
+            selectinload(Assignment.sessions),
+        )
+        .filter(Assignment.patient_id == patient.id)
+        .order_by(Assignment.starts_on.desc())
+        .all()
+    )
 
 
 @router.get("/", response_model=list[AssignmentRead])

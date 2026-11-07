@@ -37,28 +37,47 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [doctorsResult, invitationsResult, assignmentsResult] = await Promise.allSettled([
-        listPatientDoctors({ signal }),
+      const [invitationsResult, assignmentsResult] = await Promise.allSettled([
         listPatientInvitations({ signal }),
         listPatientAssignments({ signal }),
       ])
       if (signal?.aborted) return
 
       const failures: string[] = []
-      if (doctorsResult.status === 'fulfilled') {
-        setDoctors(doctorsResult.value)
-      } else {
-        failures.push(getErrorMessage(doctorsResult.reason))
-      }
+      const invitations =
+        invitationsResult.status === 'fulfilled' ? invitationsResult.value : []
+      const assignments =
+        assignmentsResult.status === 'fulfilled' ? assignmentsResult.value : []
+      const patientId = invitations[0]?.patient_id ?? assignments[0]?.patient_id
+
       if (invitationsResult.status === 'fulfilled') {
-        setInvitations(invitationsResult.value)
+        setInvitations(invitations)
       } else {
         failures.push(getErrorMessage(invitationsResult.reason))
       }
       if (assignmentsResult.status === 'fulfilled') {
-        setAssignments(assignmentsResult.value)
+        setAssignments(assignments)
       } else {
         failures.push(getErrorMessage(assignmentsResult.reason))
+      }
+
+      if (patientId) {
+        try {
+          const therapists = await listPatientDoctors(patientId, { signal })
+          const emails = new Map(
+            invitations.map((invitation) => [invitation.therapist_id, invitation.therapist_email]),
+          )
+          setDoctors(
+            therapists.map((therapist) => ({
+              id: therapist.id,
+              email: emails.get(therapist.id) ?? therapist.id,
+            })),
+          )
+        } catch (caught) {
+          failures.push(getErrorMessage(caught))
+        }
+      } else {
+        setDoctors([])
       }
       setError(failures[0] ?? null)
     } finally {

@@ -16,3 +16,7 @@ class SessionRead(SessionCreate):
     score: float | None = Field(default=None, ge=0, le=100)
     joint_deviations: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class PatientSessionCreate(BaseModel):
+    pain_score: int | None = Field(default=None, ge=0, le=10)
