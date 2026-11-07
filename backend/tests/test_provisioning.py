@@ -47,7 +47,6 @@ def test_first_login_provisions_patient(db):
     assert user.email == "new@example.com"
     assert user.role == "patient"
     assert user.is_verified is True
-    assert user.hashed_password is None
     assert db.query(User).count() == 1
     patient = db.query(Patient).filter(Patient.user_id == user.id).one()
     assert patient.first_name == "Нова"
@@ -93,7 +92,6 @@ def test_admin_role_wins_when_multiple_roles_are_present(db):
 def test_preprovisioned_user_is_linked_by_verified_email(db):
     preprovisioned = User(
         email="therapist@example.com",
-        hashed_password=None,
         role="therapist",
         is_active=True,
         is_verified=False,
@@ -116,7 +114,6 @@ def test_preprovisioned_user_is_linked_by_verified_email(db):
 def test_unverified_email_cannot_be_linked_to_existing_user(db):
     preprovisioned = User(
         email="therapist@example.com",
-        hashed_password=None,
         role="therapist",
         is_active=True,
         is_verified=False,
@@ -152,7 +149,6 @@ def test_new_user_can_register_without_verified_email(db):
 def test_email_linked_to_another_identity_is_rejected(db):
     other = User(
         email="taken@example.com",
-        hashed_password=None,
         keycloak_sub="other-keycloak-sub",
         role="patient",
         is_active=True,
@@ -174,7 +170,6 @@ def test_email_linked_to_another_identity_is_rejected(db):
 def test_inactive_user_is_rejected(db):
     inactive = User(
         email="inactive@example.com",
-        hashed_password=None,
         keycloak_sub="kc-inactive",
         role="patient",
         is_active=False,
@@ -210,7 +205,6 @@ def test_email_falls_back_to_preferred_username(db):
 def test_existing_patient_user_gets_missing_profile(db):
     preprovisioned = User(
         email="patient@example.com",
-        hashed_password=None,
         role="patient",
         is_active=True,
         is_verified=False,

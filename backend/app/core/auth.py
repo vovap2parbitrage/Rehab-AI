@@ -238,7 +238,6 @@ def _provision_user(db: Session, claims: dict[str, Any]) -> User:
     else:
         user = User(
             email=email,
-            hashed_password=None,
             keycloak_sub=sub,
             role=_role_from_claims(claims),
             is_active=True,
