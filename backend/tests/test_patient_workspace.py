@@ -2,11 +2,8 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
-from app.db.base import Base
 from app.db.dependencies import get_db
 from app.main import app
 from app.models.assignment import Assignment
@@ -18,21 +15,12 @@ from app.models.user import User
 
 
 @pytest.fixture
-def patient_workspace_db(api):
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    db = Session(engine)
-    app.dependency_overrides[get_db] = lambda: db
+def patient_workspace_db(api, db_session: Session):
+    app.dependency_overrides[get_db] = lambda: db_session
     try:
-        yield db
+        yield db_session
     finally:
         app.dependency_overrides.pop(get_db, None)
-        db.close()
-        engine.dispose()
 
 
 def create_patient(db: Session, owner: User, therapist: User) -> Patient:
