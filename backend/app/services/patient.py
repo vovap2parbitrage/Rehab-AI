@@ -7,7 +7,7 @@ from app.core.roles import Role
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services.access import require_patient_access
+from app.services.patient_access import require_patient_access
 
 
 def _to_read(patient: Patient) -> PatientRead:

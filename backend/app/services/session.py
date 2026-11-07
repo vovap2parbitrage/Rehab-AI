@@ -9,7 +9,7 @@ from app.models.assignment import Assignment
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
-from app.services.access import can_access_patient_id, require_patient_access
+from app.services.patient_access import can_access_patient_id, require_patient_access
 
 
 def _patient_id_of(session: TrainingSession) -> UUID:

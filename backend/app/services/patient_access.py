@@ -55,15 +55,38 @@ def require_patient_access(
     patient = db.get(Patient, patient_id)
 
     if patient is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Patient not found",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
     if not _has_access(patient, user, roles):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return _to_schema(patient)
+
+
+def get_patient_for_therapist(
+    patient_id: UUID,
+    user: User,
+    db: Session,
+) -> Patient:
+    patient = db.get(Patient, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if user.role != Role.ADMIN.value and not any(
+        therapist.id == user.id for therapist in patient.therapists
+    ):
+        raise HTTPException(status_code=403, detail="Patient is not assigned to you")
+    return patient
+
+
+def get_patient_for_user(patient_id: UUID, user: User, db: Session) -> Patient:
+    patient = db.get(Patient, patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    if user.role == Role.ADMIN.value:
+        return patient
+    if user.role == Role.THERAPIST.value and any(
+        therapist.id == user.id for therapist in patient.therapists
+    ):
+        return patient
+    if user.role == Role.PATIENT.value and patient.user_id == user.id:
+        return patient
+    raise HTTPException(status_code=403, detail="Access denied")
