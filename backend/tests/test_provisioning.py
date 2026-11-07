@@ -64,8 +64,8 @@ def test_existing_sub_is_reused(db):
 def test_role_from_signed_token_is_applied_on_creation(db):
     user = get_current_user(
         claims=claims(
-            sub="kc-doctor",
-            email="doctor@example.com",
+            sub="kc-therapist",
+            email="therapist@example.com",
             realm_access={"roles": ["therapist"]},
         ),
         db=db,

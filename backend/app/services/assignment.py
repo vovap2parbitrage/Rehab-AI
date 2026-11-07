@@ -9,7 +9,7 @@ from app.models.exercise import Exercise
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
-from app.services.doctor_access import get_patient_for_therapist, get_patient_for_user
+from app.services.therapist_access import get_patient_for_therapist, get_patient_for_user
 
 
 def _patient_for_user(db: Session, user: User) -> Patient:

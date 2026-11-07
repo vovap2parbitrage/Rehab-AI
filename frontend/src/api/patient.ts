@@ -1,6 +1,6 @@
 import { apiRequest } from './client'
 
-export interface PatientDoctor {
+export interface PatientTherapist {
   id: string
   email: string
 }
@@ -48,7 +48,7 @@ export interface PatientAssignment {
   sessions: PatientSession[]
 }
 
-export function listPatientDoctors(
+export function listPatientTherapists(
   patientId: string,
   options: { signal?: AbortSignal } = {},
 ) {

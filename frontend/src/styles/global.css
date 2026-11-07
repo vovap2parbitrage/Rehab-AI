@@ -2682,20 +2682,20 @@ code {
     margin-top: -6px;
   }
 
-  .doctor-grid {
+  .therapist-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
   }
 
-  .doctor-card {
+  .therapist-card {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     padding: 24px;
   }
 
-  .doctor-card__top {
+  .therapist-card__top {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2703,34 +2703,34 @@ code {
     margin-bottom: 20px;
   }
 
-  .doctor-card h2 {
+  .therapist-card h2 {
     margin: 0 0 5px;
     font-size: 1.2rem;
   }
 
-  .doctor-card__specialty {
+  .therapist-card__specialty {
     margin: 0 0 4px;
     color: var(--primary-strong);
     font-size: 0.87rem;
     font-weight: 700;
   }
 
-  .doctor-card__experience,
-  .doctor-card__description {
+  .therapist-card__experience,
+  .therapist-card__description {
     color: var(--text-soft);
     font-size: 0.88rem;
   }
 
-  .doctor-card__experience {
+  .therapist-card__experience {
     margin-bottom: 12px;
   }
 
-  .doctor-card__description {
+  .therapist-card__description {
     min-height: 68px;
     margin-bottom: 22px;
   }
 
-  .doctor-card__directory-label {
+  .therapist-card__directory-label {
     display: inline-flex;
     align-items: center;
     min-height: 38px;
@@ -2739,7 +2739,7 @@ code {
     font-weight: 650;
   }
 
-  .doctor-card .button {
+  .therapist-card .button {
     margin-top: auto;
     white-space: normal;
   }
@@ -3045,7 +3045,7 @@ code {
   }
 
   @media (max-width: 900px) {
-    .doctor-grid {
+    .therapist-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
@@ -3056,7 +3056,7 @@ code {
     }
 
     .workspace-summary-grid,
-    .doctor-grid {
+    .therapist-grid {
       grid-template-columns: 1fr;
     }
 

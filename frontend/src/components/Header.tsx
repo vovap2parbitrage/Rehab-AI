@@ -51,7 +51,7 @@ export function Header() {
         <nav className="site-nav" aria-label="Головна навігація">
           {authenticated && isPatient && (
             <>
-              <NavLink to="/patient/doctors" className={navLinkClass}>
+              <NavLink to="/patient/therapists" className={navLinkClass}>
                 Лікарі
               </NavLink>
               <NavLink to="/patient/invitations" className={navLinkClass}>

@@ -1,12 +1,12 @@
 import { createContext } from 'react'
 import type {
   PatientAssignment,
-  PatientDoctor,
+  PatientTherapist,
   PatientInvitation,
 } from '../api/patient'
 
 export interface PatientWorkspaceContextValue {
-  doctors: PatientDoctor[]
+  therapists: PatientTherapist[]
   invitations: PatientInvitation[]
   assignments: PatientAssignment[]
   loading: boolean

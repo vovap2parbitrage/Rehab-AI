@@ -104,12 +104,12 @@ export function PatientDashboardPage() {
           </section>
 
           <div className="workspace-summary-grid">
-            <section className="card workspace-summary-card" aria-labelledby="doctor-summary-title">
+            <section className="card workspace-summary-card" aria-labelledby="therapist-summary-title">
               <span className="workspace-summary-card__icon">
                 <UserIcon aria-hidden="true" />
               </span>
               <p className="eyebrow">Мої лікарі</p>
-              <h2 id="doctor-summary-title">{acceptedInvitations.length || 'Поки немає'}</h2>
+              <h2 id="therapist-summary-title">{acceptedInvitations.length || 'Поки немає'}</h2>
               <p>
                 {pendingInvitation
                   ? `Нове запрошення від ${pendingInvitation.therapist_email}`
@@ -140,8 +140,8 @@ export function PatientDashboardPage() {
   )
 }
 
-export function PatientDoctorsPage() {
-  const { doctors, invitations, loading } = usePatientWorkspace()
+export function PatientTherapistsPage() {
+  const { therapists, invitations, loading } = usePatientWorkspace()
   const connectedTherapists = new Set(
     invitations
       .filter((invitation) => invitation.status === 'accepted')
@@ -158,21 +158,21 @@ export function PatientDoctorsPage() {
       <WorkspaceError />
       {loading ? (
         <Loading label="Завантажуємо список лікарів…" />
-      ) : doctors.length ? (
-        <div className="doctor-grid">
-          {doctors.map((doctor) => (
-            <article className="card doctor-card" key={doctor.id}>
-              <div className="doctor-card__top">
+      ) : therapists.length ? (
+        <div className="therapist-grid">
+          {therapists.map((therapist) => (
+            <article className="card therapist-card" key={therapist.id}>
+              <div className="therapist-card__top">
                 <span className="avatar avatar--md" aria-hidden="true">
-                  {getInitials(doctor.email)}
+                  {getInitials(therapist.email)}
                 </span>
-                <span className="doctor-card__experience">
+                <span className="therapist-card__experience">
                   Ваш лікар
                 </span>
               </div>
-              <h2>{doctor.email}</h2>
-              <p className="doctor-card__description">
-                {connectedTherapists.has(doctor.id)
+              <h2>{therapist.email}</h2>
+              <p className="therapist-card__description">
+                {connectedTherapists.has(therapist.id)
                   ? 'Ви прийняли запрошення цього лікаря.'
                   : 'Лікар прив’язаний до вашого профілю.'}
               </p>
@@ -291,7 +291,7 @@ export function PatientInvitationsPage() {
           </span>
           <h2>Поки немає запрошень</h2>
           <p>Коли лікар надішле запрошення, воно з’явиться тут.</p>
-          <Link to="/patient/doctors" className="button button--primary">
+          <Link to="/patient/therapists" className="button button--primary">
             Переглянути лікарів <ArrowRightIcon aria-hidden="true" />
           </Link>
         </section>

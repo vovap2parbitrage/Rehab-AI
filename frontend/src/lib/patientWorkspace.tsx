@@ -8,11 +8,11 @@ import {
 import {
   completePatientAssignment,
   listPatientAssignments,
-  listPatientDoctors,
+  listPatientTherapists,
   listPatientInvitations,
   respondToPatientInvitation,
   type PatientAssignment,
-  type PatientDoctor,
+  type PatientTherapist,
   type PatientInvitation,
   type PatientSession,
 } from '../api/patient'
@@ -28,7 +28,7 @@ function getErrorMessage(error: unknown): string {
 
 export function PatientWorkspaceProvider({ children }: { children: ReactNode }) {
   const { authenticated, initialized } = useAuth()
-  const [doctors, setDoctors] = useState<PatientDoctor[]>([])
+  const [therapists, setTherapists] = useState<PatientTherapist[]>([])
   const [invitations, setInvitations] = useState<PatientInvitation[]>([])
   const [assignments, setAssignments] = useState<PatientAssignment[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,11 +63,11 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
 
       if (patientId) {
         try {
-          const therapists = await listPatientDoctors(patientId, { signal })
+          const therapists = await listPatientTherapists(patientId, { signal })
           const emails = new Map(
             invitations.map((invitation) => [invitation.therapist_id, invitation.therapist_email]),
           )
-          setDoctors(
+          setTherapists(
             therapists.map((therapist) => ({
               id: therapist.id,
               email: emails.get(therapist.id) ?? therapist.id,
@@ -77,7 +77,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
           failures.push(getErrorMessage(caught))
         }
       } else {
-        setDoctors([])
+        setTherapists([])
       }
       setError(failures[0] ?? null)
     } finally {
@@ -147,7 +147,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const value = useMemo(
     () => ({
-      doctors,
+      therapists,
       invitations,
       assignments,
       loading,
@@ -158,7 +158,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       completeAssignment: complete,
     }),
     [
-      doctors,
+      therapists,
       invitations,
       assignments,
       loading,

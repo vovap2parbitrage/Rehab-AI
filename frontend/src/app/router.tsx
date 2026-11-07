@@ -6,7 +6,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/ProfilePage'
 import {
   PatientDashboardPage,
-  PatientDoctorsPage,
+  PatientTherapistsPage,
   PatientExerciseExecutionPage,
   PatientExercisesPage,
   PatientInvitationsPage,
@@ -60,7 +60,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: <PatientDashboardPage /> },
-          { path: 'doctors', element: <PatientDoctorsPage /> },
+          { path: 'therapists', element: <PatientTherapistsPage /> },
           { path: 'invitations', element: <PatientInvitationsPage /> },
           { path: 'exercises', element: <PatientExercisesPage /> },
           { path: 'exercises/:assignmentId/execute', element: <PatientExerciseExecutionPage /> },
