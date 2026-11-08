@@ -12,7 +12,7 @@ import {
   YAxis,
   type TooltipContentProps,
 } from 'recharts'
-import type { AdherenceWeek, HistoryPoint } from '../../api/history'
+import type { AdherenceWeek, HistoryPoint, PatientHistory } from '../../api/history'
 import { formatDateTime, formatShortDate, formatWeek } from './format'
 
 const CHART_HEIGHT = 240
@@ -202,5 +202,15 @@ export function AdherenceChart({ weeks }: { weeks: AdherenceWeek[] }) {
         </ComposedChart>
       </ResponsiveContainer>
     </ChartCard>
+  )
+}
+
+export default function HistoryCharts({ history }: { history: PatientHistory }) {
+  return (
+    <div className="history-charts">
+      <PainChart points={history.pain_series} />
+      <AdherenceChart weeks={history.adherence_weeks} />
+      <ScoreChart points={history.score_series} />
+    </div>
   )
 }

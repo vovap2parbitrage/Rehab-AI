@@ -1,10 +1,11 @@
-import { useId } from 'react'
+import { lazy, Suspense, useId } from 'react'
 import { usePatientHistory } from '../../lib/usePatientHistory'
 import { ErrorMessage } from '../ErrorMessage'
 import { Loading } from '../Loading'
-import { AdherenceChart, PainChart, ScoreChart } from './HistoryCharts'
 import { HistoryKpiCards } from './HistoryKpiCards'
 import { PeriodSelector } from './PeriodSelector'
+
+const HistoryCharts = lazy(() => import('./HistoryCharts'))
 
 interface PatientHistorySectionProps {
   /** Omit to show the signed-in patient's own history. */
@@ -42,11 +43,9 @@ export function PatientHistorySection({
         {history && <HistoryKpiCards kpis={history.kpis} />}
         {empty && <p className="history-section__empty">{emptyText}</p>}
         {history && (
-          <div className="history-charts">
-            <PainChart points={history.pain_series} />
-            <AdherenceChart weeks={history.adherence_weeks} />
-            <ScoreChart points={history.score_series} />
-          </div>
+          <Suspense fallback={<Loading label="Завантажуємо графіки…" />}>
+            <HistoryCharts history={history} />
+          </Suspense>
         )}
       </div>
     )
