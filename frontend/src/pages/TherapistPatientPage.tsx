@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { createAssignment, listAssignments, listExercises, listPatients, type Assignment, type Exercise, type Patient } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import { ArrowRightIcon, CalendarIcon } from '../components/Icons'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -75,6 +76,12 @@ export function TherapistPatientPage() {
           <div className="patient-assignments">{assignments.map((item) => <div className="therapist-assignment" key={item.id}><strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong><span>{item.sessions_per_week} занять на тиждень · {item.repetitions} повторень</span><small>{item.starts_on} — {item.ends_on || 'без кінцевої дати'}</small></div>)}{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}</div>
         </section>
       </div>
+      <PatientHistorySection
+        patientId={patient.id}
+        title="Історія виконання"
+        description="Біль, регулярність занять та оцінка техніки пацієнта."
+        emptyText="Пацієнт ще не завершив жодної сесії за цей період."
+      />
     </div>
   )
 }
