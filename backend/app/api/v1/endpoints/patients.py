@@ -9,8 +9,9 @@ from app.core.auth import extract_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
+from app.schemas.history import HistoryPeriod, PatientHistoryRead
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services import patient
+from app.services import history, patient
 
 router = APIRouter()
 
@@ -36,6 +37,27 @@ def create_patient(
     db: Session = Depends(get_db),
 ) -> PatientRead:
     return patient.create_patient(db, payload)
+
+
+@router.get("/me/history", response_model=PatientHistoryRead)
+def get_my_history(
+    period: HistoryPeriod = HistoryPeriod.last_30_days,
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> PatientHistoryRead:
+    return history.get_my_history(db, user, period)
+
+
+@router.get("/{patient_id}/history", response_model=PatientHistoryRead)
+def get_patient_history(
+    patient_id: UUID,
+    period: HistoryPeriod = HistoryPeriod.last_30_days,
+    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> PatientHistoryRead:
+    return history.get_patient_history(db, patient_id, user, extract_roles(claims), period)
 
 
 @router.get("/{patient_id}", response_model=PatientRead)
