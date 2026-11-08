@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
 import { Loading } from '../components/Loading'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
@@ -134,6 +135,12 @@ export function PatientDashboardPage() {
               </Link>
             </section>
           </div>
+
+          <PatientHistorySection
+            title="Мій прогрес"
+            description="Як змінюються біль, регулярність занять та оцінка техніки."
+            emptyText="Ви ще не завершили жодної сесії за цей період. Виконайте вправу — і прогрес з’явиться тут."
+          />
         </>
       )}
     </div>

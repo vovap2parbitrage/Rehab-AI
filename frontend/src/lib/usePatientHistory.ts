@@ -18,7 +18,11 @@ export function usePatientHistory(patientId?: string) {
   const [period, setPeriod] = useState<HistoryPeriod>('30d')
   const [reloadKey, setReloadKey] = useState(0)
   const [history, setHistory] = useState<PatientHistory | null>(null)
-  const [settled, setSettled] = useState<{ key: string; error: string | null } | null>(null)
+  const [settled, setSettled] = useState<{
+    key: string
+    error: string | null
+    notFound: boolean
+  } | null>(null)
   const requestKey = `${patientId ?? 'me'}:${period}:${reloadKey}`
 
   useEffect(() => {
@@ -31,11 +35,12 @@ export function usePatientHistory(patientId?: string) {
       .then((result) => {
         if (controller.signal.aborted) return
         setHistory(result)
-        setSettled({ key: requestKey, error: null })
+        setSettled({ key: requestKey, error: null, notFound: false })
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
-        setSettled({ key: requestKey, error: getErrorMessage(reason) })
+        const notFound = reason instanceof ApiError && reason.kind === 'not-found'
+        setSettled({ key: requestKey, error: getErrorMessage(reason), notFound })
       })
 
     return () => controller.abort()
@@ -50,6 +55,7 @@ export function usePatientHistory(patientId?: string) {
     history,
     loading,
     error: loading ? null : settled.error,
+    notFound: !loading && settled.notFound,
     refresh,
   }
 }
