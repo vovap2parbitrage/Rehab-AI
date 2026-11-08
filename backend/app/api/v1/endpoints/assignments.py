@@ -1,56 +1,57 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
-from app.core.auth import extract_roles
 from app.core.roles import Role
+from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.assignment import AssignmentCreate, AssignmentRead
-from app.services import demo_store
-from app.services.access import can_access_patient_id, require_patient_access
+from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
+from app.services import assignment
 
 router = APIRouter()
+
+
+@router.get("/mine", response_model=list[PatientAssignmentRead])
+def list_patient_assignments(
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> list[PatientAssignmentRead]:
+    return assignment.list_patient_assignments(db, user)
 
 
 @router.get("/", response_model=list[AssignmentRead])
 def list_assignments(
     patient_id: UUID | None = None,
-    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
+    _claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
+    ),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> list[AssignmentRead]:
-    roles = extract_roles(claims)
-    if patient_id is not None:
-        require_patient_access(patient_id, user, roles)
-    return [
-        item
-        for item in demo_store.assignments.values()
-        if (patient_id is None or item.patient_id == patient_id)
-        and can_access_patient_id(item.patient_id, user, roles)
-    ]
+    return assignment.list_assignments(db, user, patient_id)
 
 
 @router.post("/", response_model=AssignmentRead, status_code=201)
 def create_assignment(
     payload: AssignmentCreate,
-    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> AssignmentRead:
-    require_patient_access(payload.patient_id, user, extract_roles(claims))
-    assignment = AssignmentRead(**payload.model_dump())
-    demo_store.assignments[assignment.id] = assignment
-    return assignment
+    return assignment.create_assignment(db, payload, user)
 
 
 @router.get("/{assignment_id}", response_model=AssignmentRead)
 def get_assignment(
     assignment_id: UUID,
-    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)),
+    _claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
+    ),
     user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ) -> AssignmentRead:
-    assignment = demo_store.assignments.get(assignment_id)
-    if assignment is None:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    require_patient_access(assignment.patient_id, user, extract_roles(claims))
-    return assignment
+    return assignment.get_assignment(db, assignment_id, user)

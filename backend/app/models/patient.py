@@ -6,7 +6,7 @@ from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
+from app.models.patient_therapist import patient_therapist_table
 
 class Patient(Base):
     __tablename__ = "patients"
@@ -33,12 +33,6 @@ class Patient(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"),
         unique=True,
-        nullable=False,
-        index=True,
-    )
-
-    therapist_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id"),
         nullable=False,
         index=True,
     )
@@ -82,10 +76,17 @@ class Patient(Base):
         foreign_keys=[user_id],
     )
 
-    therapist = relationship(
+    therapists = relationship(
         "User",
+        secondary=patient_therapist_table,
         back_populates="patients_as_therapist",
-        foreign_keys=[therapist_id],
+    )
+
+    therapist_invitations = relationship(
+        "TherapistInvitation",
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     assignments = relationship(

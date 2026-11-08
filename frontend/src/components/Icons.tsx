@@ -74,6 +74,24 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+export function PencilIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.1 2.1 0 0 0-3-3L4 16.5Z" />
+      <path d="m14.5 5.5 4 4" />
+    </IconBase>
+  )
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4.5 7h15" />
+      <path d="M9 7V4.5h6V7M7 7l.8 13h8.4L17 7M10 10.5v6M14 10.5v6" />
+    </IconBase>
+  )
+}
+
 export function UserIcon(props: IconProps) {
   return (
     <IconBase {...props}>

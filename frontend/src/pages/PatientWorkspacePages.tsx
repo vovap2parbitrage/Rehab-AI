@@ -1,8 +1,9 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
-import { DOCTORS, EXERCISES, usePatientWorkspace } from '../lib/patientWorkspace'
+import { Loading } from '../components/Loading'
+import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
 
 function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
@@ -17,214 +18,272 @@ function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string;
   )
 }
 
+function WorkspaceError() {
+  const { error, refresh } = usePatientWorkspace()
+  if (!error) return null
+
+  return (
+    <div className="workspace-error" role="alert">
+      <span>{error}</span>
+      <button type="button" className="button button--ghost" onClick={refresh}>
+        Спробувати ще раз
+      </button>
+    </div>
+  )
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return 'Без кінцевої дати'
+  return new Date(`${value}T00:00:00`).toLocaleDateString('uk-UA')
+}
+
+function getInitials(email: string): string {
+  return email
+    .split('@')[0]
+    .split(/[._-]/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toLocaleUpperCase('uk-UA')
+}
+
 export function PatientDashboardPage() {
   const { tokenParsed } = useAuth()
-  const { state } = usePatientWorkspace()
+  const { invitations, assignments, loading } = usePatientWorkspace()
   const displayName = getDisplayName(tokenParsed)
-  const invitedDoctor = DOCTORS.find((doctor) => doctor.id === state.invitationDoctorId)
-  const selectedDoctor = state.invitationStatus === 'accepted' ? invitedDoctor : undefined
-  const completedCount = selectedDoctor ? state.completedExerciseIds.length : 0
-  const progress = Math.round((completedCount / EXERCISES.length) * 100)
+  const pendingInvitation = invitations.find((invitation) => invitation.status === 'pending')
+  const acceptedInvitations = invitations.filter((invitation) => invitation.status === 'accepted')
+  const completedSessions = assignments.reduce(
+    (total, assignment) => total + assignment.sessions.length,
+    0,
+  )
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
 
   return (
     <div className="workspace-page">
       <PageHeading
         eyebrow="Кабінет пацієнта"
         title={`Вітаємо, ${displayName}`}
-        lead="Ваше відновлення, фахівець і щоденний цикл вправ — в одному місці."
+        lead="Ваші лікарі, запрошення та призначення — в одному місці."
       />
-
-      <section className="workspace-welcome card" aria-labelledby="welcome-title">
-        <div className="workspace-welcome__copy">
-          <p className="eyebrow">Ваш наступний крок</p>
-          <h2 id="welcome-title">
-            {state.invitationStatus === 'pending'
-              ? 'Вам надійшло запрошення'
-              : selectedDoctor
-                ? 'Ваш терапевт уже з вами'
-                : 'Очікуйте запрошення від терапевта'}
-          </h2>
-          <p>
-            {state.invitationStatus === 'pending' && invitedDoctor
-              ? `${invitedDoctor.name} надіслала вам запрошення до співпраці. Перегляньте його та прийміть або відхиліть.`
-              : selectedDoctor
-                ? 'Ви прийняли запрошення. Перейдіть до свого циклу та відстежуйте виконання вправ.'
-                : 'Коли терапевт надішле запрошення, воно з’явиться у цьому кабінеті.'}
-          </p>
-          <Link
-            className="button button--primary"
-            to={state.invitationStatus === 'pending' ? '/patient/invitations' : '/patient/doctors'}
-          >
-            {state.invitationStatus === 'pending'
-              ? 'Переглянути запрошення'
-              : selectedDoctor
-                ? 'Відкрити цикл вправ'
-                : 'Переглянути лікарів'}
-            <ArrowRightIcon aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="workspace-welcome__illustration" aria-hidden="true">
-          <ActivityIcon />
-        </div>
-      </section>
-
-      <div className="workspace-summary-grid">
-        <section className="card workspace-summary-card" aria-labelledby="doctor-summary-title">
-          <span className="workspace-summary-card__icon">
-            <UserIcon aria-hidden="true" />
-          </span>
-          <p className="eyebrow">
-            {selectedDoctor ? 'Мій терапевт' : 'Запрошення від'}
-          </p>
-          <h2 id="doctor-summary-title">
-            {selectedDoctor?.name ?? invitedDoctor?.name ?? 'Поки не призначений'}
-          </h2>
-          <p>
-            {selectedDoctor?.specialty ??
-              (invitedDoctor ? `Запрошення: ${invitedDoctor.specialty}` : 'Очікуйте запрошення')}
-          </p>
-          <Link to="/patient/invitations" className="text-link">
-            {state.invitationStatus === 'pending'
-              ? 'Переглянути запрошення'
-              : selectedDoctor
-                ? 'Статус терапевта'
-                : 'Переглянути запрошення'}
-          </Link>
-        </section>
-
-        <section className="card workspace-summary-card" aria-labelledby="exercise-summary-title">
-          <span className="workspace-summary-card__icon workspace-summary-card__icon--teal">
-            <CheckIcon aria-hidden="true" />
-          </span>
-          <p className="eyebrow">Цикл вправ</p>
-          <h2 id="exercise-summary-title">
-            {selectedDoctor ? `${completedCount} із ${EXERCISES.length} виконано` : 'Ще не призначений'}
-          </h2>
-          {selectedDoctor ? (
-            <div
-              className="workspace-progress"
-              role="progressbar"
-              aria-label="Прогрес циклу вправ"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={progress}
-            >
-              <span style={{ width: `${progress}%` }} />
+      <WorkspaceError />
+      {loading ? (
+        <Loading label="Завантажуємо ваш кабінет…" />
+      ) : (
+        <>
+          <section className="workspace-welcome card" aria-labelledby="welcome-title">
+            <div className="workspace-welcome__copy">
+              <p className="eyebrow">Ваш наступний крок</p>
+              <h2 id="welcome-title">
+                {pendingInvitation
+                  ? 'Вам надійшло запрошення'
+                  : acceptedInvitations.length
+                    ? 'Ваш план відновлення'
+                    : 'Очікуйте запрошення від лікаря'}
+              </h2>
+              <p>
+                {pendingInvitation
+                  ? `${pendingInvitation.therapist_email} надіслав запрошення до співпраці. Перегляньте його та прийміть або відхиліть.`
+                  : acceptedInvitations.length
+                    ? 'Перегляньте призначення та зафіксуйте кожне виконане заняття.'
+                    : 'Коли лікар надішле запрошення, воно з’явиться у цьому кабінеті.'}
+              </p>
+              <Link
+                className="button button--primary"
+                to={pendingInvitation ? '/patient/invitations' : '/patient/exercises'}
+              >
+                {pendingInvitation
+                  ? 'Переглянути запрошення'
+                  : 'Відкрити призначення'}
+                <ArrowRightIcon aria-hidden="true" />
+              </Link>
             </div>
-          ) : (
-            <p>Прийміть запрошення терапевта, щоб перейти до циклу.</p>
-          )}
-          <Link to="/patient/exercises" className="text-link">
-            Відкрити цикл
-          </Link>
-        </section>
-      </div>
+            <div className="workspace-welcome__illustration" aria-hidden="true">
+              <ActivityIcon />
+            </div>
+          </section>
 
+          <div className="workspace-summary-grid">
+            <section className="card workspace-summary-card" aria-labelledby="therapist-summary-title">
+              <span className="workspace-summary-card__icon">
+                <UserIcon aria-hidden="true" />
+              </span>
+              <p className="eyebrow">Мої лікарі</p>
+              <h2 id="therapist-summary-title">{acceptedInvitations.length || 'Поки немає'}</h2>
+              <p>
+                {pendingInvitation
+                  ? `Нове запрошення від ${pendingInvitation.therapist_email}`
+                  : 'Прийміть запрошення, щоб почати співпрацю.'}
+              </p>
+              <Link to="/patient/invitations" className="text-link">
+                Переглянути запрошення
+              </Link>
+            </section>
+
+            <section className="card workspace-summary-card" aria-labelledby="exercise-summary-title">
+              <span className="workspace-summary-card__icon workspace-summary-card__icon--teal">
+                <CheckIcon aria-hidden="true" />
+              </span>
+              <p className="eyebrow">Призначення</p>
+              <h2 id="exercise-summary-title">
+                {completedSessions} виконаних сесій
+              </h2>
+              <p>{activeAssignments.length} активних призначень</p>
+              <Link to="/patient/exercises" className="text-link">
+                Відкрити призначення
+              </Link>
+            </section>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
-export function PatientDoctorsPage() {
+export function PatientTherapistsPage() {
+  const { therapists, invitations, loading } = usePatientWorkspace()
+  const connectedTherapists = new Set(
+    invitations
+      .filter((invitation) => invitation.status === 'accepted')
+      .map((invitation) => invitation.therapist_id),
+  )
+
   return (
     <div className="workspace-page">
       <PageHeading
-        eyebrow="Фахівці"
-        title="Список лікарів"
-        lead="Переглядайте профілі фахівців, які можуть надіслати вам запрошення до співпраці."
+        eyebrow="Мої лікарі"
+        title="Лікарі, які вас лікують"
+        lead="Тут показані лікарі, прив’язані до вашого профілю."
       />
-
-      <div className="info-note workspace-note">
-        Запрошення надсилає лікар. Ви зможете прийняти або відхилити його в розділі «Запрошення».
-      </div>
-
-      <div className="doctor-grid">
-        {DOCTORS.map((doctor) => (
-          <article className="card doctor-card" key={doctor.id}>
-            <div className="doctor-card__top">
-              <span className="avatar avatar--md" aria-hidden="true">
-                {doctor.initials}
-              </span>
-              <span className="doctor-card__experience">{doctor.experience}</span>
-            </div>
-            <h2>{doctor.name}</h2>
-            <p className="doctor-card__specialty">{doctor.specialty}</p>
-            <p className="doctor-card__description">{doctor.description}</p>
-            <span className="doctor-card__directory-label">Профіль фахівця</span>
-          </article>
-        ))}
-      </div>
-      <p className="workspace-demo-caption">
-        Демо-список фахівців. Запрошення та список потребують інтеграції з backend.
-      </p>
+      <WorkspaceError />
+      {loading ? (
+        <Loading label="Завантажуємо список лікарів…" />
+      ) : therapists.length ? (
+        <div className="therapist-grid">
+          {therapists.map((therapist) => (
+            <article className="card therapist-card" key={therapist.id}>
+              <div className="therapist-card__top">
+                <span className="avatar avatar--md" aria-hidden="true">
+                  {getInitials(therapist.email)}
+                </span>
+                <span className="therapist-card__experience">
+                  Ваш лікар
+                </span>
+              </div>
+              <h2>{therapist.email}</h2>
+              <p className="therapist-card__description">
+                {connectedTherapists.has(therapist.id)
+                  ? 'Ви прийняли запрошення цього лікаря.'
+                  : 'Лікар прив’язаний до вашого профілю.'}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <section className="card workspace-empty-state">
+          <span className="workspace-empty-state__icon" aria-hidden="true">
+            <UserIcon />
+          </span>
+          <h2>У вас ще немає лікарів</h2>
+          <p>Коли лікар почне з вами працювати, він з’явиться у цьому списку.</p>
+        </section>
+      )}
     </div>
   )
 }
 
 export function PatientInvitationsPage() {
-  const { state, acceptInvitation, declineInvitation } = usePatientWorkspace()
-  const invitedDoctor = DOCTORS.find((doctor) => doctor.id === state.invitationDoctorId)
-  const isPending = state.invitationStatus === 'pending'
-  const isAccepted = state.invitationStatus === 'accepted'
+  const { invitations, loading, actionPending, respondToInvitation } = usePatientWorkspace()
+
+  const statusLabel = {
+    pending: 'Нове запрошення',
+    accepted: 'Запрошення прийнято',
+    declined: 'Запрошення відхилено',
+    revoked: 'Лікар скасував запрошення',
+  } as const
 
   return (
     <div className="workspace-page">
       <PageHeading
         eyebrow="Зв’язок із фахівцем"
         title="Запрошення від лікарів"
-        lead="Перегляньте запрошення від терапевта та вирішіть, чи хочете почати співпрацю."
+        lead="Прийміть або відхиліть запрошення. Якщо лікар його скасує, відповідь уже буде недоступна."
       />
+      <WorkspaceError />
+      {loading ? (
+        <Loading label="Завантажуємо запрошення…" />
+      ) : invitations.length ? (
+        <div className="patient-invitation-list">
+          {invitations.map((invitation) => {
+            const isPending = invitation.status === 'pending'
+            const isAccepted = invitation.status === 'accepted'
+            const busy = actionPending === invitation.id
 
-      {invitedDoctor && state.invitationStatus ? (
-        <section className="card invitation-card" aria-labelledby="invitation-title">
-          <div className="invitation-card__icon" aria-hidden="true">
-            {isPending ? <ClockIcon /> : isAccepted ? <CheckIcon /> : <UserIcon />}
-          </div>
-          <div className="invitation-card__body">
-            <span
-              className={
-                isPending
-                  ? 'status-pill status-pill--pending'
-                  : isAccepted
-                    ? 'status-pill status-pill--success status-pill--sm'
-                    : 'status-pill status-pill--danger status-pill--sm'
-              }
-            >
-              <span className="status-pill__dot" aria-hidden="true" />
-              {isPending ? 'Нове запрошення' : isAccepted ? 'Запрошення прийнято' : 'Запрошення відхилено'}
-            </span>
-            <h2 id="invitation-title">
-              {invitedDoctor.name} запрошує вас до співпраці
-            </h2>
-            <p>
-              {isPending
-                ? 'Прийміть запрошення, щоб почати працювати з терапевтом і переглянути призначений цикл вправ.'
-                : isAccepted
-                  ? 'Ви прийняли запрошення та можете перейти до циклу вправ.'
-                  : 'Ви відхилили це запрошення. Якщо передумаєте, попросіть лікаря надіслати нове.'}
-            </p>
-            <p className="invitation-card__specialty">{invitedDoctor.specialty}</p>
-            <div className="invitation-card__actions">
-              {isPending ? (
-                <>
-                  <button type="button" className="button button--primary" onClick={acceptInvitation}>
-                    <CheckIcon aria-hidden="true" /> Прийняти запрошення
-                  </button>
-                  <button type="button" className="button button--ghost" onClick={declineInvitation}>
-                    Відхилити
-                  </button>
-                </>
-              ) : isAccepted ? (
-                <Link to="/patient/exercises" className="button button--primary">
-                  Перейти до циклу вправ <ArrowRightIcon aria-hidden="true" />
-                </Link>
-              ) : (
-                <Link to="/patient/doctors" className="button button--ghost">
-                  Переглянути список лікарів <ArrowRightIcon aria-hidden="true" />
-                </Link>
-              )}
-            </div>
-          </div>
-        </section>
+            return (
+              <section className="card invitation-card" key={invitation.id}>
+                <div className="invitation-card__icon" aria-hidden="true">
+                  {isPending ? <ClockIcon /> : isAccepted ? <CheckIcon /> : <UserIcon />}
+                </div>
+                <div className="invitation-card__body">
+                  <span
+                    className={
+                      isPending
+                        ? 'status-pill status-pill--pending'
+                        : isAccepted
+                          ? 'status-pill status-pill--success status-pill--sm'
+                          : 'status-pill status-pill--danger status-pill--sm'
+                    }
+                  >
+                    <span className="status-pill__dot" aria-hidden="true" />
+                    {statusLabel[invitation.status]}
+                  </span>
+                  <h2>{invitation.therapist_email}</h2>
+                  <p>
+                    {isPending
+                      ? 'Лікар запрошує вас до співпраці. Прийміть запрошення, щоб почати роботу.'
+                      : isAccepted
+                        ? 'Запрошення прийнято. Перегляньте призначення цього фахівця.'
+                        : invitation.status === 'revoked'
+                          ? 'Запрошення більше не дійсне. За потреби лікар може надіслати нове.'
+                          : 'Ви відхилили це запрошення. За потреби лікар може надіслати нове.'}
+                  </p>
+                  {invitation.message && (
+                    <p className="invitation-card__specialty">{invitation.message}</p>
+                  )}
+                  <p className="patient-invitation-date">
+                    Надіслано: {new Date(invitation.created_at).toLocaleString('uk-UA')}
+                  </p>
+                  <div className="invitation-card__actions">
+                    {isPending ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button button--primary"
+                          disabled={busy}
+                          onClick={() => respondToInvitation(invitation.id, 'accepted')}
+                        >
+                          <CheckIcon aria-hidden="true" /> Прийняти запрошення
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          disabled={busy}
+                          onClick={() => respondToInvitation(invitation.id, 'declined')}
+                        >
+                          Відхилити
+                        </button>
+                      </>
+                    ) : isAccepted ? (
+                      <Link to="/patient/exercises" className="button button--primary">
+                        Перейти до призначень <ArrowRightIcon aria-hidden="true" />
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+            )
+          })}
+        </div>
       ) : (
         <section className="card workspace-empty-state">
           <span className="workspace-empty-state__icon" aria-hidden="true">
@@ -232,7 +291,7 @@ export function PatientInvitationsPage() {
           </span>
           <h2>Поки немає запрошень</h2>
           <p>Коли лікар надішле запрошення, воно з’явиться тут.</p>
-          <Link to="/patient/doctors" className="button button--primary">
+          <Link to="/patient/therapists" className="button button--primary">
             Переглянути лікарів <ArrowRightIcon aria-hidden="true" />
           </Link>
         </section>
@@ -242,185 +301,131 @@ export function PatientInvitationsPage() {
 }
 
 export function PatientExercisesPage() {
-  const { state } = usePatientWorkspace()
-  const selectedDoctor =
-    state.invitationStatus === 'accepted'
-      ? DOCTORS.find((doctor) => doctor.id === state.invitationDoctorId)
-      : undefined
-  const completedCount = state.completedExerciseIds.length
-  const progress = Math.round((completedCount / EXERCISES.length) * 100)
+  const { assignments, loading } = usePatientWorkspace()
 
   return (
     <div className="workspace-page">
       <PageHeading
         eyebrow="План відновлення"
-        title="Мій цикл вправ"
-        lead="Відкрийте вправу, завантажте відео виконання та завершіть сесію."
+        title="Мої призначення"
+        lead="Переглядайте план лікаря та зберігайте кожну виконану сесію."
       />
-
-      {!selectedDoctor ? (
+      <WorkspaceError />
+      {loading ? (
+        <Loading label="Завантажуємо призначення…" />
+      ) : assignments.length ? (
+        <div className="exercise-list">
+          {assignments.map((assignment) => (
+            <article className="card exercise-card" key={assignment.id}>
+              <span className="exercise-card__icon" aria-hidden="true">
+                <ActivityIcon />
+              </span>
+              <div className="exercise-card__content">
+                <div className="exercise-card__title-row">
+                  <h2>{assignment.exercise.name}</h2>
+                  <span
+                    className={
+                      assignment.status === 'active'
+                        ? 'status-pill status-pill--success status-pill--sm'
+                        : 'status-pill status-pill--danger status-pill--sm'
+                    }
+                  >
+                    {assignment.status === 'active' ? 'Активне' : 'Неактивне'}
+                  </span>
+                </div>
+                <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+                <div className="exercise-card__meta">
+                  <span>
+                    {assignment.sessions_per_week} занять на тиждень · {assignment.repetitions}{' '}
+                    повторень
+                  </span>
+                  <span>
+                    {assignment.sessions.length} сесій · до {formatDate(assignment.ends_on)}
+                  </span>
+                </div>
+              </div>
+              {assignment.status === 'active' && (
+                <Link
+                  to={`/patient/exercises/${assignment.id}/execute`}
+                  className="button button--primary exercise-card__action"
+                >
+                  Виконати вправу <ArrowRightIcon aria-hidden="true" />
+                </Link>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : (
         <section className="card workspace-empty-state">
           <span className="workspace-empty-state__icon" aria-hidden="true">
             <ClockIcon />
           </span>
-          <h2>Цикл вправ ще не доступний</h2>
-          <p>
-            {state.invitationStatus === 'declined'
-              ? 'Попросіть лікаря надіслати нове запрошення. Після його прийняття у кабінеті з’являться призначені вправи.'
-              : 'Спочатку прийміть запрошення від лікаря. Після цього у кабінеті з’являться призначені вправи.'}
-          </p>
+          <h2>Призначень поки немає</h2>
+          <p>Коли лікар додасть вправу до вашого плану, вона з’явиться тут.</p>
           <Link to="/patient/invitations" className="button button--primary">
             Переглянути запрошення <ArrowRightIcon aria-hidden="true" />
           </Link>
         </section>
-      ) : (
-        <>
-          <section className="card exercise-cycle-summary" aria-labelledby="cycle-summary-title">
-            <div>
-              <p className="eyebrow">Демо-цикл · тиждень 1</p>
-              <h2 id="cycle-summary-title">План від {selectedDoctor.name}</h2>
-              <p>
-                Це демонстраційний план; персональні призначення надійдуть від вашого терапевта.
-              </p>
-            </div>
-            <div className="exercise-cycle-summary__progress">
-              <strong>{progress}%</strong>
-              <span>
-                {completedCount}/{EXERCISES.length} виконано
-              </span>
-            </div>
-          </section>
-
-          <div className="exercise-list">
-            {EXERCISES.map((exercise) => {
-              const completed = state.completedExerciseIds.includes(exercise.id)
-              return (
-                <article
-                  className={
-                    completed ? 'card exercise-card exercise-card--complete' : 'card exercise-card'
-                  }
-                  key={exercise.id}
-                >
-                  <span className="exercise-card__icon" aria-hidden="true">
-                    <ActivityIcon />
-                  </span>
-                  <div className="exercise-card__content">
-                    <div className="exercise-card__title-row">
-                      <h2>{exercise.title}</h2>
-                      {completed && (
-                        <span className="status-pill status-pill--success status-pill--sm">
-                          <CheckIcon aria-hidden="true" /> Виконано
-                        </span>
-                      )}
-                    </div>
-                    <p>{exercise.description}</p>
-                    <div className="exercise-card__meta">
-                      <span>{exercise.prescription}</span>
-                      <span>{exercise.duration}</span>
-                    </div>
-                  </div>
-                  <Link
-                    to={`/patient/exercises/${exercise.id}/execute`}
-                    className={
-                      completed
-                        ? 'button button--ghost exercise-card__action'
-                        : 'button button--primary exercise-card__action'
-                    }
-                  >
-                    {completed ? 'Повторити вправу' : 'Виконати вправу'}
-                    <ArrowRightIcon aria-hidden="true" />
-                  </Link>
-                </article>
-              )
-            })}
-          </div>
-          <p className="workspace-demo-caption">
-            Приклад вправ для демонстрації інтерфейсу, не медична рекомендація. Виконуйте лише
-            вправи, погоджені з вашим фахівцем.
-          </p>
-        </>
       )}
     </div>
   )
 }
 
 export function PatientExerciseExecutionPage() {
-  const { exerciseId } = useParams()
-  const { state, completeExercise } = usePatientWorkspace()
-  const [selectedVideo, setSelectedVideo] = useState<{ file: File; url: string } | null>(null)
-  const [fileError, setFileError] = useState('')
+  const { assignmentId } = useParams()
+  const { assignments, loading, actionPending, completeAssignment } = usePatientWorkspace()
+  const [painScore, setPainScore] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const exercise = EXERCISES.find((item) => item.id === exerciseId)
-  const isPatientReady = state.invitationStatus === 'accepted'
+  const assignment = assignments.find((item) => item.id === assignmentId)
+  const saving = actionPending === assignmentId
 
-  useEffect(() => {
-    if (!selectedVideo) return
-    return () => URL.revokeObjectURL(selectedVideo.url)
-  }, [selectedVideo])
-
-  if (!exercise || !isPatientReady) {
-    return <Navigate to="/patient/exercises" replace />
-  }
-
-  const handleVideoChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedVideo = event.currentTarget.files?.[0] ?? null
-    event.currentTarget.value = ''
-
-    if (!selectedVideo) return
-
-    if (!selectedVideo.type.startsWith('video/')) {
-      setSelectedVideo(null)
-      setFileError('Оберіть відеофайл, наприклад MP4, MOV або WebM.')
-      setSubmitted(false)
-      return
-    }
-
-    setSelectedVideo({
-      file: selectedVideo,
-      url: URL.createObjectURL(selectedVideo),
-    })
-    setFileError('')
-    setSubmitted(false)
-  }
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!selectedVideo) {
-      setFileError('Спочатку оберіть відео виконання.')
-      return
-    }
-
-    completeExercise(exercise.id)
-    setSubmitted(true)
+    if (!assignmentId) return
+    const saved = await completeAssignment(
+      assignmentId,
+      painScore === '' ? null : Number(painScore),
+    )
+    if (saved) setSubmitted(true)
   }
 
-  const formattedVideoSize = selectedVideo
-    ? `${(selectedVideo.file.size / (1024 * 1024)).toLocaleString('uk-UA', {
-        maximumFractionDigits: 1,
-      })} МБ`
-    : ''
+  if (loading) return <Loading label="Завантажуємо призначення…" />
+  if (!assignment) {
+    return (
+      <div className="workspace-page">
+        <WorkspaceError />
+        <section className="card workspace-empty-state">
+          <h2>Призначення не знайдено</h2>
+          <p>Можливо, лікар видалив його або воно більше недоступне.</p>
+          <Link to="/patient/exercises" className="button button--primary">
+            До призначень <ArrowRightIcon aria-hidden="true" />
+          </Link>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="workspace-page">
       <Link to="/patient/exercises" className="text-link exercise-execution__back">
-        ← Повернутися до циклу вправ
+        ← Повернутися до призначень
       </Link>
-
       <PageHeading
         eyebrow="Виконання вправи"
-        title={exercise.title}
-        lead="Виконайте вправу за рекомендацією фахівця, додайте відео та завершіть сесію."
+        title={assignment.exercise.name}
+        lead="Після заняття зафіксуйте виконану сесію у своєму плані."
       />
+      <WorkspaceError />
 
       <section className="card exercise-execution__details" aria-labelledby="execution-instructions">
         <div>
-          <p className="eyebrow">Інструкція</p>
-          <h2 id="execution-instructions">{exercise.prescription}</h2>
-          <p>{exercise.description}</p>
+          <p className="eyebrow">Призначення лікаря</p>
+          <h2 id="execution-instructions">{assignment.repetitions} повторень</h2>
+          <p>{assignment.exercise.description ?? 'Лікар не додав опис до цієї вправи.'}</p>
         </div>
         <span className="exercise-execution__duration">
           <ClockIcon aria-hidden="true" />
-          {exercise.duration}
+          {assignment.sessions_per_week} занять на тиждень
         </span>
       </section>
 
@@ -430,56 +435,40 @@ export function PatientExerciseExecutionPage() {
             <CheckIcon />
           </span>
           <div>
-            <p className="eyebrow">Сесію завершено</p>
-            <h2>Вправу позначено виконаною</h2>
-            <p>
-              Відео «{selectedVideo?.file.name}» вибране для цієї демо-сесії. Воно не надсилалося на
-              сервер і залишилося на вашому пристрої.
-            </p>
+            <p className="eyebrow">Сесію збережено</p>
+            <h2>Виконання записано</h2>
+            <p>Лікар побачить цю сесію у вашому прогресі.</p>
             <Link to="/patient/exercises" className="button button--primary">
-              Повернутися до циклу <ArrowRightIcon aria-hidden="true" />
+              Повернутися до призначень <ArrowRightIcon aria-hidden="true" />
             </Link>
           </div>
         </section>
       ) : (
         <form className="card exercise-upload" onSubmit={handleSubmit}>
           <div>
-            <p className="eyebrow">Крок 1 · Відео</p>
-            <h2>Додайте відео виконання</h2>
+            <p className="eyebrow">Завершення заняття</p>
+            <h2>Позначте сесію виконаною</h2>
             <p className="exercise-upload__description">
-              Оберіть запис із пристрою, щоб переглянути його перед завершенням вправи.
+              Запис зберігається у базі даних. Оцінка болю необов’язкова.
             </p>
           </div>
-
           <label className="exercise-upload__field">
-            <span>Відеофайл</span>
-            <input type="file" accept="video/*" onChange={handleVideoChange} />
+            <span>Рівень болю після вправи (необов’язково)</span>
+            <select
+              value={painScore}
+              onChange={(event) => setPainScore(event.currentTarget.value)}
+            >
+              <option value="">Не вказувати</option>
+              {Array.from({ length: 11 }, (_, score) => (
+                <option key={score} value={score}>
+                  {score} із 10
+                </option>
+              ))}
+            </select>
           </label>
-
-          {fileError && (
-            <p className="exercise-upload__error" role="alert">
-              {fileError}
-            </p>
-          )}
-
-          {selectedVideo && (
-            <div className="exercise-upload__preview">
-              <video src={selectedVideo.url} controls preload="metadata">
-                Ваш браузер не підтримує відтворення відео.
-              </video>
-              <p>
-                {selectedVideo.file.name} · {formattedVideoSize}
-              </p>
-            </div>
-          )}
-
-          <p className="exercise-upload__notice" role="note">
-            Демо-режим: відео лише відкривається у браузері для попереднього перегляду. Воно не
-            завантажується на сервер і не передається на аналіз.
-          </p>
-
-          <button type="submit" className="button button--primary" disabled={!selectedVideo}>
-            Завершити виконання <CheckIcon aria-hidden="true" />
+          <button type="submit" className="button button--primary" disabled={saving}>
+            {saving ? 'Зберігаємо…' : 'Завершити сесію'}
+            <CheckIcon aria-hidden="true" />
           </button>
         </form>
       )}

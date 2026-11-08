@@ -16,7 +16,7 @@ export function Footer() {
 
         <p className="site-footer__security">
           <ShieldCheckIcon aria-hidden="true" />
-          Захищений вхід через Keycloak
+          Захищений вхід
         </p>
 
         <nav className="site-footer__nav" aria-label="Додаткова навігація">

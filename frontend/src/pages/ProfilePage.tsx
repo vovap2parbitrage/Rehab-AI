@@ -189,7 +189,7 @@ export function ProfilePage() {
     } catch (caught) {
       console.error('Logout failed', caught)
       setLogoutError(
-        'Не вдалося коректно завершити сесію в Keycloak. Оновіть сторінку та спробуйте ще раз.',
+        'Не вдалося коректно завершити сесію. Оновіть сторінку та спробуйте ще раз.',
       )
       setIsLoggingOut(false)
     }
@@ -317,20 +317,8 @@ export function ProfilePage() {
               </span>
               <h2 id="session-title">Захищена сесія</h2>
               <p>
-                Ви увійшли через Keycloak. Токен доступу зберігається лише в пам’яті браузера
-                та автоматично оновлюється перед запитами.
+                Ви увійшли через захищений сервіс.
               </p>
-
-              <ul className="session-card__list">
-                <li>
-                  <CheckIcon aria-hidden="true" />
-                  Authorization Code Flow + PKCE
-                </li>
-                <li>
-                  <CheckIcon aria-hidden="true" />
-                  Пароль не передається до AIRehab
-                </li>
-              </ul>
 
               {logoutError && <p className="form-error">{logoutError}</p>}
 
@@ -355,7 +343,6 @@ export function ProfilePage() {
               <div className="card__header">
                 <div>
                   <h2 id="personal-title">Особисті дані</h2>
-                  <p>Ім’я та username надходять із підписаного токена Keycloak.</p>
                 </div>
                 <span className="card__header-icon" aria-hidden="true">
                   <UserIcon />
@@ -378,7 +365,6 @@ export function ProfilePage() {
               <div className="card__header">
                 <div>
                   <h2 id="account-title">Обліковий запис</h2>
-                  <p>Роль і статус визначені сервером AIRehab, а не даними браузера.</p>
                 </div>
                 <span className="card__header-icon" aria-hidden="true">
                   <LockIcon />
@@ -481,7 +467,7 @@ export function ProfilePage() {
                   </button>
 
                   <p className="role-request-card__hint">
-                    Роль не змінюється автоматично: її підтверджує адміністратор у Keycloak.
+                    Роль не змінюється автоматично: її підтверджує адміністратор.
                   </p>
                 </div>
               </section>

@@ -42,7 +42,7 @@ export function AuthLayout({
       <aside className="auth-aside" aria-label="Переваги захищеного входу">
         <span className="auth-aside__badge">
           <ShieldCheckIcon aria-hidden="true" />
-          Keycloak · OIDC + PKCE
+          Захищений вхід
         </span>
 
         <h2>{asideTitle}</h2>
@@ -58,8 +58,7 @@ export function AuthLayout({
         </ul>
 
         <p className="auth-aside__note">
-          AIRehab не бачить і не зберігає ваш пароль. Автентифікацію виконує Keycloak, а
-          вебзастосунок отримує лише підписаний токен доступу.
+          Автентифікацію виконує захищений сервіс.
         </p>
       </aside>
     </div>

@@ -25,7 +25,7 @@ export function ErrorPage({ title, message, code, notFound = false }: ErrorPageP
     (notFound
       ? 'Можливо, сторінку переміщено або адресу введено з помилкою. Скористайтеся навігацією, щоб продовжити.'
       : (description?.message ??
-        'Спробуйте ще раз. Якщо проблема повторюється, перевірте налаштування Keycloak і backend AIRehab.'))
+        'Спробуйте ще раз'))
 
   return (
     <section className="error-page" aria-labelledby="error-page-title">
