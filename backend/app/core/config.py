@@ -3,13 +3,12 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     app_name: str = "Rehab AI API"
-    environment: str = "test"
+    environment: str = "production"
     api_v1_prefix: str = "/api/v1"
 
     secret_key: str = Field(min_length=32)

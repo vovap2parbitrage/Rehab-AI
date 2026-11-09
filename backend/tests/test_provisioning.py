@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -224,3 +225,50 @@ def test_existing_patient_user_gets_missing_profile(db):
     )
 
     assert db.query(Patient).filter(Patient.user_id == user.id).count() == 1
+
+
+def test_role_in_token_is_the_source_of_truth(db):
+    get_current_user(claims=claims(), db=db)
+
+    promoted = get_current_user(
+        claims=claims(realm_access={"roles": ["therapist"]}), db=db
+    )
+
+    assert promoted.role == "therapist"
+    assert db.query(User).one().role == "therapist"
+
+
+def test_role_removed_in_keycloak_is_removed_locally(db):
+    get_current_user(claims=claims(realm_access={"roles": ["therapist"]}), db=db)
+
+    demoted = get_current_user(claims=claims(), db=db)
+
+    assert demoted.role == "patient"
+
+
+def test_parallel_first_login_returns_the_existing_user(db, monkeypatch):
+    winner = User(
+        email="new@example.com",
+        keycloak_sub="kc-sub-1",
+        role="patient",
+        is_active=True,
+        is_verified=True,
+    )
+    original_commit = db.commit
+    calls = {"count": 0}
+
+    def racing_commit():
+        if calls["count"] == 0:
+            calls["count"] += 1
+            db.rollback()
+            db.add(winner)
+            original_commit()  # the concurrent request wins the insert
+            raise IntegrityError("INSERT", {}, Exception("duplicate key"))
+        return original_commit()
+
+    monkeypatch.setattr(db, "commit", racing_commit)
+
+    user = get_current_user(claims=claims(), db=db)
+
+    assert user.id == winner.id
+    assert db.query(User).count() == 1

@@ -1,12 +1,12 @@
 import time
-import uuid
 from typing import Any
 
 import httpx
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -126,21 +126,8 @@ def verify_token(token: str) -> dict[str, Any]:
 
 
 def get_current_claims(
-    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict[str, Any]:
-    if (
-        settings.environment == "test"
-        and request.headers.get("X-Test-Auth") == "bypass"
-    ):
-        return {
-            "sub": "test-user",
-            "email": "test@example.com",
-            "realm_access": {
-                "roles": ["admin", "therapist"]
-            },
-        }
-
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise unauthorized("Bearer token required")
 
@@ -261,29 +248,35 @@ def _provision_user(db: Session, claims: dict[str, Any]) -> User:
                 )
             )
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Parallel first requests (Header, RoleRoute, ProfilePage) provision the same
+        # user at once; the loser re-reads the row the winner created.
+        db.rollback()
+        existing = db.query(User).filter(User.keycloak_sub == sub).first()
+        if existing is None:
+            raise
+        return _ensure_active(existing)
     db.refresh(user)
 
     return _ensure_active(user)
+
+
+def _sync_role_from_claims(db: Session, user: User, claims: dict[str, Any]) -> User:
+    """Keycloak is the single source of roles: the token's role wins over the stored copy."""
+    role = _role_from_claims(claims)
+    if user.role != role:
+        user.role = role
+        db.commit()
+        db.refresh(user)
+    return user
 
 
 def get_current_user(
     claims: dict[str, Any] = Depends(get_current_claims),
     db: Session = Depends(get_db),
 ) -> User:
-    if (
-        settings.environment == "test"
-        and claims.get("sub") == "test-user"
-    ):
-        return User(
-            id=uuid.uuid5(uuid.NAMESPACE_URL, "rehab-ai:test-user"),
-            email="test@example.com",
-            keycloak_sub="test-user",
-            role=_role_from_claims(claims),
-            is_active=True,
-            is_verified=True,
-        )
-
     user = (
         db.query(User)
         .filter(User.keycloak_sub == claims["sub"])
@@ -293,4 +286,4 @@ def get_current_user(
     if user is None:
         return _provision_user(db, claims)
 
-    return _ensure_active(user)
+    return _ensure_active(_sync_role_from_claims(db, user, claims))
