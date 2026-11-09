@@ -5,6 +5,7 @@ import { createAssignment, getPatient, listAssignments, listExercises, type Assi
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Loading } from '../components/Loading'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
+import { PatientQuestionsCard } from '../components/PatientQuestionsCard'
 import { ArrowRightIcon, CalendarIcon } from '../components/Icons'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -88,10 +89,13 @@ export function TherapistPatientPage() {
             <button className="button button--primary" disabled={busy || exercises.length === 0}>{busy ? 'Призначаємо…' : 'Призначити план'}</button>
           </form>
         </section>
+        <div className="therapist-page__column">
         <section className="card">
           <div className="card__header"><div><h2>Поточні призначення</h2><p>{assignments.length} активних планів</p></div></div>
           <div className="patient-assignments">{assignments.map((item) => <div className="therapist-assignment" key={item.id}><strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong><span>{item.sessions_per_week} занять на тиждень · {item.repetitions} повторень</span><small>{item.starts_on} — {item.ends_on || 'без кінцевої дати'}</small></div>)}{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}</div>
         </section>
+        <PatientQuestionsCard patientId={patient.id} />
+        </div>
       </div>
       <PatientHistorySection
         patientId={patient.id}

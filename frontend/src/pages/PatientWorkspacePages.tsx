@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { HelpRequestList } from '../components/HelpRequestList'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
+import type { HelpRequest } from '../api/helpRequests'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
 import { Loading } from '../components/Loading'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
@@ -308,7 +310,7 @@ export function PatientInvitationsPage() {
 }
 
 export function PatientExercisesPage() {
-  const { assignments, loading } = usePatientWorkspace()
+  const { assignments, helpRequests, loading } = usePatientWorkspace()
 
   return (
     <div className="workspace-page">
@@ -350,6 +352,9 @@ export function PatientExercisesPage() {
                     {assignment.sessions.length} сесій · до {formatDate(assignment.ends_on)}
                   </span>
                 </div>
+                <ExerciseQuestions
+                  items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
+                />
               </div>
               {assignment.status === 'active' && (
                 <Link
@@ -382,7 +387,7 @@ export function PatientExerciseExecutionPage() {
   const { assignmentId } = useParams()
   const { assignments, loading, actionPending, completeAssignment } = usePatientWorkspace()
   const [painScore, setPainScore] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const assignment = assignments.find((item) => item.id === assignmentId)
   const saving = actionPending === assignmentId
 
@@ -393,7 +398,7 @@ export function PatientExerciseExecutionPage() {
       assignmentId,
       painScore === '' ? null : Number(painScore),
     )
-    if (saved) setSubmitted(true)
+    if (saved) setSessionId(saved.id)
   }
 
   if (loading) return <Loading label="Завантажуємо призначення…" />
@@ -436,20 +441,23 @@ export function PatientExerciseExecutionPage() {
         </span>
       </section>
 
-      {submitted ? (
-        <section className="card exercise-execution__success" role="status">
-          <span className="workspace-empty-state__icon" aria-hidden="true">
-            <CheckIcon />
-          </span>
-          <div>
-            <p className="eyebrow">Сесію збережено</p>
-            <h2>Виконання записано</h2>
-            <p>Лікар побачить цю сесію у вашому прогресі.</p>
-            <Link to="/patient/exercises" className="button button--primary">
-              Повернутися до призначень <ArrowRightIcon aria-hidden="true" />
-            </Link>
-          </div>
-        </section>
+      {sessionId ? (
+        <>
+          <section className="card exercise-execution__success" role="status">
+            <span className="workspace-empty-state__icon" aria-hidden="true">
+              <CheckIcon />
+            </span>
+            <div>
+              <p className="eyebrow">Сесію збережено</p>
+              <h2>Виконання записано</h2>
+              <p>Лікар побачить цю сесію у вашому прогресі.</p>
+              <Link to="/patient/exercises" className="button button--primary">
+                Повернутися до призначень <ArrowRightIcon aria-hidden="true" />
+              </Link>
+            </div>
+          </section>
+          <AskForHelpForm sessionId={sessionId} />
+        </>
       ) : (
         <form className="card exercise-upload" onSubmit={handleSubmit}>
           <div>
@@ -480,5 +488,70 @@ export function PatientExerciseExecutionPage() {
         </form>
       )}
     </div>
+  )
+}
+
+function AskForHelpForm({ sessionId }: { sessionId: string }) {
+  const { actionPending, askForHelp } = usePatientWorkspace()
+  const [message, setMessage] = useState('')
+  const [sent, setSent] = useState(false)
+  const sending = actionPending === sessionId
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (await askForHelp(sessionId, message.trim())) setSent(true)
+  }
+
+  if (sent) {
+    return (
+      <div className="success-message" role="status">
+        Запитання надіслано лікарю. Відповідь з’явиться під цією вправою на сторінці «Мій цикл вправ».
+      </div>
+    )
+  }
+
+  return (
+    <form className="card exercise-upload" onSubmit={handleSubmit}>
+      <div>
+        <p className="eyebrow">Потрібна допомога?</p>
+        <h2>Запитати лікаря</h2>
+        <p className="exercise-upload__description">
+          Якщо під час вправи виникли труднощі, біль або питання — напишіть лікарю.
+        </p>
+      </div>
+      <label className="therapist-form__field">
+        <span>Ваше запитання</span>
+        <textarea
+          rows={4}
+          maxLength={2000}
+          value={message}
+          onChange={(event) => setMessage(event.currentTarget.value)}
+          required
+        />
+      </label>
+      <button
+        type="submit"
+        className="button button--primary"
+        disabled={sending || !message.trim()}
+      >
+        {sending ? 'Надсилаємо…' : 'Надіслати запитання'}
+      </button>
+    </form>
+  )
+}
+
+/** Collapsible questions to the therapist under one exercise card. */
+function ExerciseQuestions({ items }: { items: HelpRequest[] }) {
+  if (items.length === 0) return null
+  const waiting = items.filter((item) => !item.reply).length
+
+  return (
+    <details className="exercise-questions">
+      <summary>
+        Запитання до лікаря ({items.length})
+        {waiting > 0 && <span className="exercise-questions__waiting"> · {waiting} очікує відповіді</span>}
+      </summary>
+      <HelpRequestList items={items} />
+    </details>
   )
 }
