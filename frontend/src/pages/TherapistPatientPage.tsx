@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { createAssignment, listAssignments, listExercises, listPatients, type Assignment, type Exercise, type Patient } from '../api/therapist'
+import { createAssignment, getPatient, listAssignments, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { Loading } from '../components/Loading'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import { ArrowRightIcon, CalendarIcon } from '../components/Icons'
 
@@ -12,6 +13,8 @@ const monthFromToday = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOStri
 export function TherapistPatientPage() {
   const { patientId } = useParams()
   const [patient, setPatient] = useState<Patient | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -21,14 +24,26 @@ export function TherapistPatientPage() {
 
   useEffect(() => {
     if (!patientId) return
-    Promise.all([listPatients(), listExercises(), listAssignments(patientId)]).then(([patients, loadedExercises, loadedAssignments]) => {
-      setPatient(patients.find((item) => item.id === patientId) || null)
+    const controller = new AbortController()
+    const { signal } = controller
+    setLoading(true)
+    setNotFound(false)
+    Promise.all([getPatient(patientId, signal), listExercises(signal), listAssignments(patientId, signal)]).then(([loadedPatient, loadedExercises, loadedAssignments]) => {
+      setPatient(loadedPatient)
       setExercises(loadedExercises)
       setAssignments(loadedAssignments)
       setForm((current) => ({ ...current, exercise_id: loadedExercises[0]?.id || '' }))
     }).catch((reason: unknown) => {
+      if (signal.aborted) return
+      if (reason instanceof ApiError && reason.status === 404) {
+        setNotFound(true)
+        return
+      }
       setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося завантажити дані пацієнта.')
+    }).finally(() => {
+      if (!signal.aborted) setLoading(false)
     })
+    return () => controller.abort()
   }, [patientId])
 
   const exerciseNames = useMemo(() => new Map(exercises.map((item) => [item.id, item.name])), [exercises])
@@ -49,7 +64,9 @@ export function TherapistPatientPage() {
     }
   }
 
-  if (!patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
+  if (loading) return <Loading />
+  if (error && !patient) return <ErrorMessage title="Помилка" message={error} />
+  if (notFound || !patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
 
   return (
     <div className="workspace-page">

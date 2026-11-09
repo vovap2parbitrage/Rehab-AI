@@ -60,6 +60,10 @@ export function listPatients(signal?: AbortSignal): Promise<Patient[]> {
   return apiRequest<Patient[]>('/api/v1/patients/', { signal })
 }
 
+export function getPatient(id: string, signal?: AbortSignal): Promise<Patient> {
+  return apiRequest<Patient>(`/api/v1/patients/${encodeURIComponent(id)}`, { signal })
+}
+
 export function sendInvitation(email: string, message?: string): Promise<Invitation> {
   return apiRequest<Invitation>('/api/v1/invitations/', {
     method: 'POST',
