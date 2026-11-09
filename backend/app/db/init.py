@@ -33,6 +33,58 @@ def init_db() -> None:
     wait_for_database()
     Base.metadata.create_all(bind=engine)
     migrate_patient_therapists()
+    migrate_invitation_pending_index()
+    migrate_session_score_range()
+
+
+def migrate_invitation_pending_index() -> None:
+    """Allow repeated answered invitations: only one *pending* one per patient/therapist."""
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE therapist_invitations
+                DROP CONSTRAINT IF EXISTS uq_therapist_invitations_patient_therapist_status
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_therapist_invitations_pending
+                ON therapist_invitations (patient_id, therapist_id)
+                WHERE status = 'pending'
+                """
+            )
+        )
+
+
+def migrate_session_score_range() -> None:
+    """The video analysis score is 0-10; older databases stored a 0-100 range."""
+    with engine.begin() as connection:
+        definition = connection.execute(
+            text(
+                """
+                SELECT pg_get_constraintdef(oid)
+                FROM pg_constraint
+                WHERE conname = 'ck_sessions_score_range'
+                """
+            )
+        ).scalar()
+        if definition is None or "100" not in definition:
+            return
+        connection.execute(
+            text("ALTER TABLE sessions DROP CONSTRAINT ck_sessions_score_range")
+        )
+        connection.execute(text("UPDATE sessions SET score = score / 10 WHERE score > 10"))
+        connection.execute(
+            text(
+                """
+                ALTER TABLE sessions ADD CONSTRAINT ck_sessions_score_range
+                CHECK (score IS NULL OR score BETWEEN 0 AND 10)
+                """
+            )
+        )
 
 
 def migrate_patient_therapists() -> None:
