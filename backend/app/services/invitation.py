@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.roles import Role
@@ -73,7 +74,11 @@ def send_invitation(db: Session, payload: InvitationCreate, therapist: User) -> 
         message=payload.message,
     )
     db.add(invitation)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Invitation already exists") from exc
     db.refresh(invitation)
     return InvitationRead.model_validate(invitation, from_attributes=True)
 

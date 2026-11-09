@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,11 +14,13 @@ class TherapistInvitation(Base):
             "status IN ('pending', 'accepted', 'declined', 'revoked')",
             name="ck_therapist_invitations_status",
         ),
-        UniqueConstraint(
+        # Only one *pending* invitation per patient and therapist; answered ones may repeat.
+        Index(
+            "uq_therapist_invitations_pending",
             "patient_id",
             "therapist_id",
-            "status",
-            name="uq_therapist_invitations_patient_therapist_status",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
         ),
     )
 

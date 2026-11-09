@@ -1,11 +1,12 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class InvitationCreate(BaseModel):
-    email: str | None = Field(default=None, min_length=3, max_length=255)
+    email: EmailStr | None = Field(default=None, max_length=255)
     patient_id: UUID | None = None
     message: str | None = Field(default=None, max_length=2000)
 
@@ -32,4 +33,4 @@ class PatientInvitationRead(BaseModel):
 
 
 class PatientInvitationRespond(BaseModel):
-    status: str
+    status: Literal["accepted", "declined"]
