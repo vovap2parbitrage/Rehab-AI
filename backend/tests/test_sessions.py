@@ -1,5 +1,8 @@
 import uuid
 
+import pytest
+from pydantic import ValidationError
+
 from app.models.session import TrainingSession
 from app.schemas.session import SessionCreate, SessionRead
 
@@ -143,3 +146,9 @@ def test_session_schemas_match_model_columns():
 
     assert set(SessionCreate.model_fields) <= columns
     assert set(SessionRead.model_fields) <= columns
+
+
+def test_score_uses_the_zero_to_ten_scale():
+    assert SessionRead(assignment_id=uuid.uuid4(), score=8.5).score == 8.5
+    with pytest.raises(ValidationError):
+        SessionRead(assignment_id=uuid.uuid4(), score=85)

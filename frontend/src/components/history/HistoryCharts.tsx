@@ -135,11 +135,11 @@ export function ScoreChart({ points }: { points: HistoryPoint[] }) {
   return (
     <ChartCard
       title="Оцінка техніки"
-      description="Результат аналізу відео, 0–100"
+      description="Результат аналізу відео, 0–10"
       empty={points.length === 0}
       emptyText="Оцінка техніки з’явиться після аналізу відео."
     >
-      <TimeSeriesChart points={points} max={100} unit="/ 100" color="#1266a6" label="Оцінка" />
+      <TimeSeriesChart points={points} max={10} unit="/ 10" color="#1266a6" label="Оцінка" />
     </ChartCard>
   )
 }

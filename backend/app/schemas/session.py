@@ -13,7 +13,7 @@ class SessionCreate(BaseModel):
 
 class SessionRead(SessionCreate):
     id: UUID = Field(default_factory=uuid4)
-    score: float | None = Field(default=None, ge=0, le=100)
+    score: float | None = Field(default=None, ge=0, le=10)
     joint_deviations: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
