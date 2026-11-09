@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role
@@ -29,9 +29,21 @@ def list_patients(db: Session, *, is_admin: bool, therapist_id: UUID | None) -> 
     return [_to_read(patient) for patient in query.all()]
 
 
-def create_patient(db: Session, payload: PatientCreate) -> PatientRead:
-    if db.get(User, payload.user_id) is None:
+def create_patient(
+    db: Session,
+    payload: PatientCreate,
+    actor: User,
+    *,
+    is_admin: bool,
+) -> PatientRead:
+    patient_user = db.get(User, payload.user_id)
+    if patient_user is None:
         raise HTTPException(status_code=404, detail="Patient user not found")
+    if patient_user.role != Role.PATIENT.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The specified user is not a patient",
+        )
     if db.query(Patient).filter(Patient.user_id == payload.user_id).first():
         raise HTTPException(status_code=409, detail="Patient profile already exists")
 
@@ -43,6 +55,14 @@ def create_patient(db: Session, payload: PatientCreate) -> PatientRead:
         notes=payload.notes,
     )
     therapist_ids = set(payload.therapist_ids)
+    if not is_admin:
+        # A therapist may only create a profile for themselves, never for other therapists.
+        if therapist_ids - {actor.id}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Therapists can only assign themselves to a patient",
+            )
+        therapist_ids = {actor.id}
     if therapist_ids:
         therapists = (
             db.query(User)

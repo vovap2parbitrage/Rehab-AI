@@ -36,7 +36,12 @@ def create_patient(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> PatientRead:
-    return patient.create_patient(db, payload)
+    return patient.create_patient(
+        db,
+        payload,
+        user,
+        is_admin=Role.ADMIN.value in extract_roles(claims),
+    )
 
 
 @router.get("/me/history", response_model=PatientHistoryRead)
