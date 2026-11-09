@@ -38,6 +38,12 @@ class Assignment(Base):
         nullable=False,
         index=True,
     )
+    # The therapist who assigned the exercise; patient questions about it go to them.
+    therapist_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
 
     repetitions: Mapped[int] = mapped_column(Integer, nullable=False)
     sessions_per_week: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -54,4 +60,5 @@ class Assignment(Base):
 
     patient = relationship("Patient", back_populates="assignments")
     exercise = relationship("Exercise", back_populates="assignments")
+    therapist = relationship("User", foreign_keys=[therapist_id])
     sessions = relationship("TrainingSession", back_populates="assignment")

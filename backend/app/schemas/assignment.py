@@ -17,6 +17,7 @@ class AssignmentCreate(BaseModel):
 
 class AssignmentRead(AssignmentCreate):
     id: UUID = Field(default_factory=uuid4)
+    therapist_id: UUID | None = None
     status: str = Field(default="active", max_length=20)
 
 

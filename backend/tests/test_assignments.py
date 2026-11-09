@@ -36,6 +36,7 @@ def test_therapist_assigns_exercise_to_own_patient(
     assert body["patient_id"] == str(patient.id)
     assert body["status"] == "active"
     assert body["ends_on"] is None
+    assert body["therapist_id"] == str(therapist.id)
 
 
 def test_therapist_cannot_assign_to_foreign_patient(

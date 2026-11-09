@@ -35,6 +35,7 @@ def init_db() -> None:
     migrate_patient_therapists()
     migrate_invitation_pending_index()
     migrate_session_score_range()
+    migrate_assignment_therapist()
 
 
 def migrate_invitation_pending_index() -> None:
@@ -82,6 +83,39 @@ def migrate_session_score_range() -> None:
                 """
                 ALTER TABLE sessions ADD CONSTRAINT ck_sessions_score_range
                 CHECK (score IS NULL OR score BETWEEN 0 AND 10)
+                """
+            )
+        )
+
+
+def migrate_assignment_therapist() -> None:
+    """Remember which therapist made an assignment (older databases lack the column)."""
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE assignments
+                ADD COLUMN IF NOT EXISTS therapist_id UUID REFERENCES users (id)
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_assignments_therapist_id
+                ON assignments (therapist_id)
+                """
+            )
+        )
+        # Old assignments: best guess is the therapist who created the exercise.
+        connection.execute(
+            text(
+                """
+                UPDATE assignments
+                SET therapist_id = exercises.created_by
+                FROM exercises
+                WHERE assignments.exercise_id = exercises.id
+                  AND assignments.therapist_id IS NULL
                 """
             )
         )

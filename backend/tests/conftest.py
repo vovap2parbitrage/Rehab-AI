@@ -210,6 +210,7 @@ def seed_assignment(db_session):
             sessions_per_week=3,
             repetitions=10,
             starts_on="2026-01-01",
+            therapist_id=patient.therapist_ids[0],
         )
         db_assignment = Assignment(**assignment.model_dump())
         db_session.add(db_assignment)
