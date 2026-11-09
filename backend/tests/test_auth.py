@@ -2,6 +2,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.main import app
 
 client = TestClient(app)
@@ -12,12 +13,12 @@ def test_patients_requires_auth() -> None:
     assert response.status_code == 401
 
 
-def test_patients_with_bypass_allows_for_admin() -> None:
+def test_test_auth_header_does_not_bypass_authentication() -> None:
     response = client.get("/api/v1/patients/", headers={"X-Test-Auth": "bypass"})
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
-def test_create_patient_rejects_unknown_database_users() -> None:
+def test_create_patient_requires_authentication() -> None:
     response = client.post(
         "/api/v1/patients/",
         json={
@@ -28,4 +29,9 @@ def test_create_patient_rejects_unknown_database_users() -> None:
         },
         headers={"X-Test-Auth": "bypass"},
     )
-    assert response.status_code == 404
+    assert response.status_code == 401
+
+
+def test_default_environment_is_production(monkeypatch) -> None:
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    assert Settings(_env_file=None, secret_key="x" * 32).environment == "production"

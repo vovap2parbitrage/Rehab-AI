@@ -1,16 +1,16 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, configure_mappers
 
+from app.db.base import Base
 from app.models import (
     Assignment,
     Exercise,
-    TherapistInvitation,
     Patient,
+    TherapistInvitation,
     TrainingSession,
     User,
 )
 from app.models.patient_therapist import patient_therapist_table
-from app.db.base import Base
 
 
 def test_models_relationships_configure():
@@ -66,10 +66,13 @@ def test_models_define_database_constraints():
         constraint.name
         for constraint in TherapistInvitation.__table__.constraints
         if constraint.name
-    } >= {
-        "ck_therapist_invitations_status",
-        "uq_therapist_invitations_patient_therapist_status",
-    }
+    } >= {"ck_therapist_invitations_status"}
+    pending_index = next(
+        index
+        for index in TherapistInvitation.__table__.indexes
+        if index.name == "uq_therapist_invitations_pending"
+    )
+    assert pending_index.unique
 
 
 def test_patient_therapist_join_table_has_two_composite_keys():

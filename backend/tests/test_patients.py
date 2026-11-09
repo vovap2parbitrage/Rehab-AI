@@ -31,6 +31,35 @@ def test_therapist_creates_and_reads_own_patient(
     assert fetched.json()["id"] == body["id"]
 
 
+def test_therapist_cannot_assign_another_therapist(
+    api, login, therapist, other_therapist, patient_user
+):
+    login(therapist)
+    response = api.post(
+        "/api/v1/patients/",
+        json=patient_payload(patient_user.id, [other_therapist.id]),
+    )
+    assert response.status_code == 403
+
+
+def test_therapist_is_assigned_automatically(api, login, therapist, patient_user):
+    login(therapist)
+    response = api.post("/api/v1/patients/", json=patient_payload(patient_user.id, []))
+    assert response.status_code == 201
+    assert response.json()["therapist_ids"] == [str(therapist.id)]
+
+
+def test_cannot_create_profile_for_non_patient_user(
+    api, login, therapist, other_therapist
+):
+    login(therapist)
+    response = api.post(
+        "/api/v1/patients/",
+        json=patient_payload(other_therapist.id, [therapist.id]),
+    )
+    assert response.status_code == 400
+
+
 def test_patient_cannot_create_patient(api, login, patient_user):
     login(patient_user)
 
@@ -75,9 +104,9 @@ def test_therapist_cannot_read_patient_of_another_therapist(
 
 
 def test_multiple_therapists_can_read_the_same_patient(
-    api, login, therapist, other_therapist, patient_user
+    api, login, admin, therapist, other_therapist, patient_user
 ):
-    login(therapist)
+    login(admin)
     created = api.post(
         "/api/v1/patients/",
         json=patient_payload(patient_user.id, [therapist.id, other_therapist.id]),
@@ -91,9 +120,9 @@ def test_multiple_therapists_can_read_the_same_patient(
 
 
 def test_therapist_patient_list_is_limited_to_assigned_patients(
-    api, login, therapist, other_therapist, patient_user, other_patient_user
+    api, login, admin, therapist, other_therapist, patient_user, other_patient_user
 ):
-    login(therapist)
+    login(admin)
     own = api.post(
         "/api/v1/patients/",
         json=patient_payload(patient_user.id, [therapist.id]),
@@ -104,6 +133,8 @@ def test_therapist_patient_list_is_limited_to_assigned_patients(
     )
     assert own.status_code == 201
     assert foreign.status_code == 201
+
+    login(therapist)
 
     response = api.get("/api/v1/patients/")
 

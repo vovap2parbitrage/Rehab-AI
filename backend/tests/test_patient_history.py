@@ -65,8 +65,8 @@ def history_data(therapist, patient_user, seed_patient, add_assignment, add_sess
     add_session(main, None, pain_score=7)
     add_session(main, at(2, 17), pain_score=6)
     add_session(main, at(2, 18), pain_score=5)
-    add_session(short, at(3, 3), pain_score=4, score=70)
-    add_session(main, at(3, 4), pain_score=3, score=80)
+    add_session(short, at(3, 3), pain_score=4, score=7)
+    add_session(main, at(3, 4), pain_score=3, score=8)
     add_session(main, at(3, 5))
     add_session(main, at(3, 16), pain_score=2)
     add_session(main, at(3, 17), pain_score=2)
@@ -94,10 +94,10 @@ def test_history_for_last_30_days(db_session, history_data):
     assert result.kpis.adherence_pct == 47.1
     assert result.kpis.avg_pain == 3.3
     assert result.kpis.pain_trend == -3.3
-    assert result.kpis.avg_score == 75.0
+    assert result.kpis.avg_score == 7.5
     assert result.kpis.last_session_at == at(3, 18, 9)
     assert [point.value for point in result.pain_series] == [6, 5, 4, 3, 2, 2, 1]
-    assert [point.value for point in result.score_series] == [70, 80]
+    assert [point.value for point in result.score_series] == [7, 8]
     assert result.score_series[0].assignment_id == short.id
     assert result.score_series[0].exercise_name == "Bridge"
 

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, JSON, DateTime, Float, ForeignKey, Integer, func
+from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -13,7 +13,7 @@ class TrainingSession(Base):
     __tablename__ = "sessions"
     __table_args__ = (
         CheckConstraint(
-            "score IS NULL OR score BETWEEN 0 AND 100",
+            "score IS NULL OR score BETWEEN 0 AND 10",
             name="ck_sessions_score_range",
         ),
         CheckConstraint(

@@ -11,8 +11,6 @@ from app.main import app
 from app.models.user import User
 from app.services import keycloak_admin
 
-BYPASS = {"X-Test-Auth": "bypass"}
-
 
 class FakeQuery:
     def __init__(self, items):

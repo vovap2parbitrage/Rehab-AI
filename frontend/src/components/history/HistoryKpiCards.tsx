@@ -40,7 +40,7 @@ export function HistoryKpiCards({ kpis }: { kpis: HistoryKpis }) {
       </div>
       <div className="history-kpi">
         <dt>Оцінка техніки</dt>
-        <dd>{kpis.avg_score === null ? '—' : `${formatNumber(kpis.avg_score)} / 100`}</dd>
+        <dd>{kpis.avg_score === null ? '—' : `${formatNumber(kpis.avg_score)} / 10`}</dd>
         <small>
           {kpis.avg_score === null ? 'З’явиться після аналізу відео' : 'Середня за період'}
         </small>

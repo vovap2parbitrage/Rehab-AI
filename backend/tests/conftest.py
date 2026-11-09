@@ -4,8 +4,27 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-0123456789abcdef
 
 import uuid  # noqa: E402
 
+import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
+
+
+def _test_database_url() -> str:
+    """Tests never touch the dev database: use TEST_DATABASE_URL or "<name>_test"."""
+    explicit = os.environ.get("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+    url = make_url(settings.database_url)
+    if not (url.database or "").endswith("_test"):
+        url = url.set(database=f"{url.database}_test")
+    return url.render_as_string(hide_password=False)
+
+
+# Must happen before the engine is created (app.db.session reads settings on import).
+settings.database_url = _test_database_url()
 
 from app.api.deps import get_current_active_user  # noqa: E402
 from app.core.auth import get_current_claims  # noqa: E402
@@ -21,14 +40,57 @@ from app.schemas.assignment import AssignmentRead  # noqa: E402
 from app.schemas.patient import PatientRead  # noqa: E402
 from app.schemas.session import SessionRead  # noqa: E402
 
+# Modules that never need a database: they run without one.
+NO_DATABASE_MODULES = {
+    "test_angles",
+    "test_comparison_api",
+    "test_comparison_task",
+    "test_dtw",
+    "test_health",
+    "test_jwt",
+    "test_pose",
+    "test_repetitions",
+    "test_scoring",
+    "test_signal_utils",
+    "test_storage",
+    "test_video_checks",
+    "test_auth",
+}
+
+_database_ready = False
+
+
+def _ensure_test_database() -> None:
+    """Create the "<name>_test" database on first use, then the tables."""
+    global _database_ready
+    if _database_ready:
+        return
+    url = make_url(settings.database_url)
+    assert (url.database or "").endswith("_test"), "refusing to run tests on a non-test database"
+    admin_url = url.set(drivername="postgresql", database="postgres")
+    with psycopg.connect(admin_url.render_as_string(hide_password=False), autocommit=True) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", (url.database,)
+        ).fetchone()
+        if not exists:
+            conn.execute(f'CREATE DATABASE "{url.database}"')
+    # Fresh schema every run, so model changes are never hidden by a stale test database.
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    _database_ready = True
+
 
 @pytest.fixture(autouse=True)
 def clean_database(request: pytest.FixtureRequest):
+    if request.module.__name__.rsplit(".", 1)[-1] in NO_DATABASE_MODULES:
+        yield
+        return
+
     if "db" in request.fixturenames:
         yield
         return
 
-    Base.metadata.create_all(bind=engine)
+    _ensure_test_database()
     with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(table.delete())
