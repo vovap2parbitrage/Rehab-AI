@@ -3324,3 +3324,154 @@ code {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Help requests: patient's "Ask for help" questions and therapist's "Needs attention" list */
+.help-request-list {
+  display: grid;
+  gap: 12px;
+}
+
+.help-request {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+.help-request p {
+  margin: 0;
+  white-space: pre-wrap;
+  /* Long words without spaces wrap too, instead of stretching the card or the dialog. */
+  overflow-wrap: anywhere;
+}
+
+.help-request__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.help-request__meta small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.help-request__reply {
+  padding-left: 12px;
+  border-left: 3px solid var(--primary);
+  color: var(--text-soft);
+}
+
+.help-request .therapist-form .button {
+  justify-self: start;
+}
+
+/* Patient: questions under each exercise card */
+.exercise-questions {
+  margin-top: 12px;
+}
+
+/* Keep the icon and the "Виконати вправу" button at the top while questions are open. */
+.exercise-card:has(.exercise-questions[open]) {
+  align-items: flex-start;
+}
+
+.exercise-questions summary {
+  color: var(--primary);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exercise-questions__waiting {
+  color: var(--warning);
+}
+
+.exercise-questions .help-request-list {
+  margin-top: 10px;
+}
+
+.exercise-card .help-request p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.exercise-card .help-request .help-request__reply {
+  color: var(--text-soft);
+}
+
+/* Therapist: unanswered questions badge in the header */
+.nav-badge {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Therapist: patient page right column and questions dialog */
+.therapist-page__column {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 20px;
+}
+
+/* Preview on the patient page: long questions and replies are cut with "…". */
+.help-request-list--compact .help-request p {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The questions card fills the column so its buttons line up with "Призначити план". */
+.patient-questions {
+  display: flex;
+  flex-direction: column;
+}
+
+.patient-questions__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.questions-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  background: var(--surface, #fff);
+}
+
+.questions-dialog::backdrop {
+  background: rgb(16 42 67 / 45%);
+}
+
+.questions-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.questions-dialog__header h2 {
+  margin: 0;
+  font-size: 1.18rem;
+}

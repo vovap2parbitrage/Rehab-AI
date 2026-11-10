@@ -17,6 +17,7 @@ import { RoleRoute } from '../auth/RoleRoute'
 import { TherapistPatientsPage } from '../pages/TherapistPatientsPage'
 import { TherapistPatientPage } from '../pages/TherapistPatientPage'
 import { TherapistExercisesPage } from '../pages/TherapistExercisesPage'
+import { TherapistQuestionsPage } from '../pages/TherapistQuestionsPage'
 import { StartPage } from '../pages/StartPage'
 import { TherapistWorkspaceLayout } from '../pages/TherapistWorkspaceLayout'
 
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
           { path: 'patients', element: <TherapistPatientsPage /> },
           { path: 'patients/:patientId', element: <TherapistPatientPage /> },
           { path: 'exercises', element: <TherapistExercisesPage /> },
+          { path: 'questions', element: <TherapistQuestionsPage /> },
         ],
       },
       {

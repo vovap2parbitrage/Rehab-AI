@@ -70,7 +70,7 @@ def create_assignment(
     if db.get(Exercise, payload.exercise_id) is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
-    assignment = Assignment(**payload.model_dump())
+    assignment = Assignment(**payload.model_dump(), therapist_id=user.id)
     db.add(assignment)
     db.commit()
     db.refresh(assignment)

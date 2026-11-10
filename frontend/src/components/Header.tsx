@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { fetchCurrentUser, type AppRole } from '../api/auth'
+import { HELP_REQUESTS_CHANGED_EVENT, listNeedsAttention } from '../api/helpRequests'
 import { useAuth } from '../auth/useAuth'
 import { getDisplayName, getInitials } from '../lib/profile'
 import { LogoMark } from './Icons'
@@ -16,6 +17,8 @@ export function Header() {
   const initials = getInitials(displayName)
   const isTherapist = role === 'therapist' || role === 'admin'
   const isPatient = role === 'patient'
+  const { pathname } = useLocation()
+  const [openQuestions, setOpenQuestions] = useState(0)
 
   useEffect(() => {
     if (!authenticated) {
@@ -34,6 +37,24 @@ export function Header() {
 
     return () => controller.abort()
   }, [authenticated])
+
+  // Number of unanswered patient questions; refreshed on navigation and after a reply.
+  useEffect(() => {
+    if (!authenticated || !isTherapist) return
+
+    const controller = new AbortController()
+    const load = () => {
+      listNeedsAttention(controller.signal)
+        .then((items) => setOpenQuestions(items.length))
+        .catch(() => {})
+    }
+    load()
+    window.addEventListener(HELP_REQUESTS_CHANGED_EVENT, load)
+    return () => {
+      controller.abort()
+      window.removeEventListener(HELP_REQUESTS_CHANGED_EVENT, load)
+    }
+  }, [authenticated, isTherapist, pathname])
 
   return (
     <header className="site-header">
@@ -70,6 +91,16 @@ export function Header() {
           {authenticated && isTherapist && (
             <NavLink to="/therapist/exercises" className={navLinkClass}>
               Вправи
+            </NavLink>
+          )}
+          {authenticated && isTherapist && (
+            <NavLink to="/therapist/questions" className={navLinkClass}>
+              Запитання
+              {openQuestions > 0 && (
+                <span className="nav-badge" aria-label={`${openQuestions} нових запитань`}>
+                  {openQuestions}
+                </span>
+              )}
             </NavLink>
           )}
         </nav>

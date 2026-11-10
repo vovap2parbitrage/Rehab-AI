@@ -16,6 +16,7 @@ import {
   type PatientInvitation,
   type PatientSession,
 } from '../api/patient'
+import { createHelpRequest, listMyHelpRequests, type HelpRequest } from '../api/helpRequests'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { PatientWorkspaceContext } from './patientWorkspaceContext'
@@ -31,15 +32,17 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
   const [therapists, setTherapists] = useState<PatientTherapist[]>([])
   const [invitations, setInvitations] = useState<PatientInvitation[]>([])
   const [assignments, setAssignments] = useState<PatientAssignment[]>([])
+  const [helpRequests, setHelpRequests] = useState<HelpRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [actionPending, setActionPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [invitationsResult, assignmentsResult] = await Promise.allSettled([
+      const [invitationsResult, assignmentsResult, helpRequestsResult] = await Promise.allSettled([
         listPatientInvitations({ signal }),
         listPatientAssignments({ signal }),
+        listMyHelpRequests({ signal }),
       ])
       if (signal?.aborted) return
 
@@ -59,6 +62,11 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
         setAssignments(assignments)
       } else {
         failures.push(getErrorMessage(assignmentsResult.reason))
+      }
+      if (helpRequestsResult.status === 'fulfilled') {
+        setHelpRequests(helpRequestsResult.value)
+      } else {
+        failures.push(getErrorMessage(helpRequestsResult.reason))
       }
 
       if (patientId) {
@@ -134,10 +142,10 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
               : assignment,
           ),
         )
-        return true
+        return session
       } catch (caught) {
         setError(getErrorMessage(caught))
-        return false
+        return null
       } finally {
         setActionPending(null)
       }
@@ -145,28 +153,47 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
     [],
   )
 
+  const askForHelp = useCallback(async (sessionId: string, message: string) => {
+    setActionPending(sessionId)
+    setError(null)
+    try {
+      const created = await createHelpRequest(sessionId, message)
+      setHelpRequests((current) => [created, ...current])
+      return true
+    } catch (caught) {
+      setError(getErrorMessage(caught))
+      return false
+    } finally {
+      setActionPending(null)
+    }
+  }, [])
+
   const value = useMemo(
     () => ({
       therapists,
       invitations,
       assignments,
+      helpRequests,
       loading,
       actionPending,
       error,
       refresh,
       respondToInvitation: respond,
       completeAssignment: complete,
+      askForHelp,
     }),
     [
       therapists,
       invitations,
       assignments,
+      helpRequests,
       loading,
       actionPending,
       error,
       refresh,
       respond,
       complete,
+      askForHelp,
     ],
   )
 
