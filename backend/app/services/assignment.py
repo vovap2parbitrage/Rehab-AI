@@ -51,7 +51,7 @@ def list_assignments(
         assignments = (
             db.query(Assignment)
             .join(Assignment.patient)
-            .filter(Patient.user_id == user.id)
+            .filter(Patient.user_id == user.id and Assignment.status != "canceled")
             .all()
         )
     return [AssignmentRead.model_validate(item, from_attributes=True) for item in assignments]
@@ -83,3 +83,18 @@ def get_assignment(db: Session, assignment_id: UUID, user: User) -> AssignmentRe
         raise HTTPException(status_code=404, detail="Assignment not found")
     get_patient_for_user(assignment.patient_id, user, db)
     return AssignmentRead.model_validate(assignment, from_attributes=True)
+
+
+def cancel_assignment(db: Session, assignment_id: UUID, user: User) -> None:
+    assignment = db.get(Assignment, assignment_id)
+
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if user.role != Role.ADMIN.value and assignment.therapist_id != user.id:
+        raise HTTPException(status_code=403, detail="You can cancel only your assignments")
+    if assignment.status == "cancelled":
+        raise HTTPException(status_code=403, detail="You can cancel assignments only once")
+
+    assignment.status = "cancelled"
+
+    db.commit()

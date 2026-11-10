@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { createAssignment, getPatient, listAssignments, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
+import { createAssignment, getPatient, listAssignments, cancelAssignment, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Loading } from '../components/Loading'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import { PatientQuestionsCard } from '../components/PatientQuestionsCard'
-import { ArrowRightIcon, CalendarIcon } from '../components/Icons'
+import { ArrowRightIcon, CalendarIcon, TrashIcon } from '../components/Icons'
 
 const today = new Date().toISOString().slice(0, 10)
 const monthFromToday = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -65,6 +65,25 @@ export function TherapistPatientPage() {
     }
   }
 
+  const handleCancel = async (assignment: Assignment) => {
+    if (!window.confirm(`Відмінити призначення «${exerciseNames.get(assignment.exercise_id)}»?`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await cancelAssignment(assignment.id)
+      setAssignments((current) =>
+        current.map((item) =>
+          item.id === assignment.id ? { ...item, status: 'cancelled' } : item
+        )
+      )
+      setNotice('Призначення відмінено.')
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося відмінити призначення.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) return <Loading />
   if (error && !patient) return <ErrorMessage title="Помилка" message={error} />
   if (notFound || !patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
@@ -92,7 +111,28 @@ export function TherapistPatientPage() {
         <div className="therapist-page__column">
         <section className="card">
           <div className="card__header"><div><h2>Поточні призначення</h2><p>{assignments.length} активних планів</p></div></div>
-          <div className="patient-assignments">{assignments.map((item) => <div className="therapist-assignment" key={item.id}><strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong><span>{item.sessions_per_week} занять на тиждень · {item.repetitions} повторень</span><small>{item.starts_on} — {item.ends_on || 'без кінцевої дати'}</small></div>)}{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}</div>
+          <div className="patient-assignments">{assignments.map((item) => (
+            <div className="therapist-assignment" key={item.id}>
+              <strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong>
+              <span>{item.sessions_per_week} занять на тиждень · {item.repetitions} повторень</span>
+              <small>{item.starts_on} — {item.ends_on || 'без кінцевої дати'}</small>
+              <span>· стан: {item.status}</span>
+              {item.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  className="icon-button icon-button--danger"
+                  aria-label={`Відмінити ${exerciseNames.get(item.exercise_id)}`}
+                  title="Відмінити"
+                  onClick={() => void handleCancel(item)}
+                  disabled={busy}
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </div>)
+            )
+          }{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}
+          </div>
         </section>
         <PatientQuestionsCard patientId={patient.id} />
         </div>
