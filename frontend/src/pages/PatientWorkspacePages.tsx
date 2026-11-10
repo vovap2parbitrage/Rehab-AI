@@ -339,7 +339,7 @@ export function PatientExercisesPage() {
                         : 'status-pill status-pill--danger status-pill--sm'
                     }
                   >
-                    {assignment.status === 'active' ? 'Активне' : 'Неактивне'}
+                    {assignment.status === 'active' ? 'Активне' : 'Завершене'}
                   </span>
                 </div>
                 <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>

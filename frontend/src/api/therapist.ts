@@ -108,3 +108,9 @@ export function createAssignment(payload: AssignmentPayload): Promise<Assignment
     body: JSON.stringify(payload),
   })
 }
+
+export function cancelAssignment(assignmentId: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/assignments/${assignmentId}/cancel`, {
+    method: 'POST',
+  })
+}
