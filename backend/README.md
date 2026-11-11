@@ -24,7 +24,7 @@ app/
   services/               # бізнес-логіка
   tasks/                  # Celery tasks
   main.py
-alembic/                  # міграції (додати після створення моделей)
+alembic/versions/         # Alembic-міграції
 tests/
 ```
 
@@ -59,13 +59,80 @@ docker compose up --build -d
    ```bash
    docker compose up -d
    ```
-4. Запусти API:
+4. Застосуй міграції БД:
+   ```bash
+   alembic upgrade head
+   ```
+5. Запусти API:
    ```bash
    uvicorn app.main:app --reload
    ```
-5. Перевір:
+6. Перевір:
    - http://127.0.0.1:8000/health
    - http://127.0.0.1:8000/docs
+
+## Міграції БД (Alembic)
+
+Схему БД задають міграції в `alembic/versions/`, а не `Base.metadata.create_all`.
+Під час старту контейнер `backend` виконує:
+
+1. `python -m app.db.init`: чекає на PostgreSQL і переводить на Alembic базу, створену
+   до появи міграцій (див. нижче);
+2. `alembic upgrade head`: застосовує всі нові міграції.
+
+Команди `alembic` запускаються з каталогу `backend/`. URL бази береться з `DATABASE_URL`
+(змінна середовища або `.env`) через `app.core.config`, тому в `alembic.ini` його немає.
+
+### Як створити нову міграцію
+
+1. Зміни або додай модель у `app/models/`. Нову модель обов'язково імпортуй в
+   `app/models/__init__.py`, інакше Alembic її не побачить.
+2. Онови локальну БД до останньої ревізії:
+   ```bash
+   alembic upgrade head
+   ```
+3. Згенеруй міграцію з різниці між моделями та БД:
+   ```bash
+   alembic revision --autogenerate -m "add exercise difficulty"
+   ```
+4. Перевір створений файл в `alembic/versions/`. Autogenerate не бачить:
+   - перейменувань таблиць і колонок (замість них генерує видалення та створення, тобто втрату даних);
+   - змін у `CheckConstraint`;
+   - перенесення або виправлення даних.
+
+   Такі кроки допиши вручну через `op.alter_column(...)`, `op.execute("...")` тощо.
+5. Перевір, що міграція застосовується і відкочується:
+   ```bash
+   alembic upgrade head
+   alembic downgrade -1
+   alembic upgrade head
+   ```
+6. Переконайся, що моделі й міграції збігаються. Команда має вивести
+   `No new upgrade operations detected.`:
+   ```bash
+   alembic check
+   ```
+7. Закоміть міграцію разом зі зміною моделей.
+
+Корисні команди: `alembic current` (поточна ревізія БД), `alembic history` (список
+міграцій), `alembic upgrade head --sql` (показати SQL без виконання).
+
+### Бази, створені до Alembic
+
+Раніше таблиці створював `create_all`, а старі бази виправлялися вручну в `app/db/init.py`.
+Якщо в базі є таблиці застосунку, але немає `alembic_version`, `app/db/init.py` позначає її
+ревізією `0001` (`alembic stamp`). Міграція `0002` виконує колишні ручні кроки (перенесення
+`patients.therapist_id` у `patient_therapists`, індекс pending-запрошень, діапазон балу
+0–10, `assignments.therapist_id`). На новій базі вона нічого не змінює. Якщо в старій базі
+бракує таблиць, старт зупиняється з помилкою. Для локальної бази простіше її перестворити:
+`docker compose down -v`.
+
+### Тести та CI
+
+Тести створюють схему з моделей (`tests/conftest.py`), щоб працювати швидко. Тому окремий
+крок у CI (`.github/workflows/backend-ci.yml`) на чистій PostgreSQL виконує
+`alembic upgrade head`, `alembic check` (падає, якщо модель змінили без міграції), а потім
+`alembic downgrade base` і повторний `alembic upgrade head`.
 
 ## API першого каркаса
 

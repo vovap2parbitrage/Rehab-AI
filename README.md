@@ -57,7 +57,9 @@ Realm `rehab-ai` імпортується автоматично під час �
 ## Що входить до стеку
 
 - `frontend` — збірка Vite у nginx, SPA fallback.
-- `backend` — FastAPI + Uvicorn. Під час старту створює таблиці SQLAlchemy.
+- `backend` — FastAPI + Uvicorn. Під час старту застосовує міграції БД
+  (`alembic upgrade head`). Як створити нову міграцію, описано в
+  [`backend/README.md`](backend/README.md#міграції-бд-alembic).
 - `celery-worker` — фоновий воркер для аналізу відео.
 - `db` — PostgreSQL 16.
 - `redis` — Redis 7 (брокер Celery).
@@ -90,8 +92,7 @@ docker compose up -d --build
 призначені лише для локальної розробки. Для production:
 
 - змініть усі секрети в `.env` та `keycloak/realm-export.json`;
-- увімкніть HTTPS і вимкніть `start-dev` у Keycloak;
-- замініть автоматичне створення таблиць на Alembic-міграції.
+- увімкніть HTTPS і вимкніть `start-dev` у Keycloak.
 
 ## Розробка без Docker
 

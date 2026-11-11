@@ -36,6 +36,19 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - name: Install
         run: pip install -e ".[dev]"
+      - name: Migrations apply to a clean database
+        env:
+          DATABASE_URL: postgresql+psycopg://rehab:rehab@localhost:5432/rehab_ai
+          SECRET_KEY: ci-only-secret-key-0123456789abcdefghij
+        run: |
+          # Same steps as the container entrypoint.
+          python -m app.db.init
+          alembic upgrade head
+          # Models and migrations must not diverge (fails if a migration is missing).
+          alembic check
+          # Every downgrade works and the chain can be applied again.
+          alembic downgrade base
+          alembic upgrade head
       - name: Test
         env:
           ENVIRONMENT: test

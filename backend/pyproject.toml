@@ -29,6 +29,9 @@ line-length = 100
 target-version = "py312"
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "app.api.deps.require_roles"]
+[tool.ruff.lint.isort]
+# The local alembic/ migrations directory is not the alembic package.
+known-third-party = ["alembic"]
 [tool.ruff.lint.per-file-ignores]
 # Existing code from main, left untouched: forward references and old noqa markers.
 "app/models/user.py" = ["F821"]
