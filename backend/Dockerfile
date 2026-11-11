@@ -15,6 +15,9 @@ COPY pyproject.toml ./
 COPY app ./app
 RUN pip install --no-cache-dir .
 
+COPY alembic.ini ./
+COPY alembic ./alembic
+
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
