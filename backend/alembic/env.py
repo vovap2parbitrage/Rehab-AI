@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
-import app.models  # noqa: F401  (register all models on Base.metadata)
+import app.models
 from app.core.config import settings
 from app.db.base import Base
 
