@@ -1950,6 +1950,81 @@ code {
   background: var(--danger-soft);
 }
 
+.assignment-sessions {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.assignment-sessions h3 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.assignment-session {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.assignment-session summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.assignment-session summary::-webkit-details-marker {
+  display: none;
+}
+
+.assignment-session summary::after {
+  content: '+';
+  color: var(--primary);
+}
+
+.assignment-session[open] summary::after {
+  content: '−';
+}
+
+.assignment-session summary time {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.assignment-session__details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.assignment-session__details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+  font-size: 0.8rem;
+}
+
+.assignment-session__details dt {
+  color: var(--muted);
+}
+
+.assignment-session__details dd {
+  margin: 0;
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .pending-role {
   display: inline-flex;
   align-items: center;
