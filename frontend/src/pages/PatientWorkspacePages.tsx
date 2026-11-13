@@ -8,6 +8,7 @@ import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '..
 import { Loading } from '../components/Loading'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
+import { formatWeekdays } from '../lib/assignmentSchedule'
 
 function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
   return (
@@ -33,11 +34,6 @@ function WorkspaceError() {
       </button>
     </div>
   )
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return 'Без кінцевої дати'
-  return new Date(`${value}T00:00:00`).toLocaleDateString('uk-UA')
 }
 
 function getInitials(email: string): string {
@@ -345,11 +341,10 @@ export function PatientExercisesPage() {
                 <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
                 <div className="exercise-card__meta">
                   <span>
-                    {assignment.sessions_per_week} занять на тиждень · {assignment.repetitions}{' '}
-                    повторень
+                    {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
                   </span>
                   <span>
-                    {assignment.sessions.length} сесій · до {formatDate(assignment.ends_on)}
+                    {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
                   </span>
                 </div>
                 <ExerciseQuestions
@@ -437,7 +432,7 @@ export function PatientExerciseExecutionPage() {
         </div>
         <span className="exercise-execution__duration">
           <ClockIcon aria-hidden="true" />
-          {assignment.sessions_per_week} занять на тиждень
+          {assignment.duration_weeks} тиж. · {formatWeekdays(assignment.weekdays)}
         </span>
       </section>
 

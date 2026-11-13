@@ -9,7 +9,8 @@ def assignment_payload(patient_id, **overrides) -> dict:
     payload = {
         "patient_id": str(patient_id),
         "exercise_id": str(uuid.uuid4()),
-        "sessions_per_week": 3,
+        "duration_weeks": 4,
+        "weekdays": [0, 2, 4],
         "repetitions": 10,
         "starts_on": "2026-01-01",
     }
@@ -35,7 +36,8 @@ def test_therapist_assigns_exercise_to_own_patient(
     body = response.json()
     assert body["patient_id"] == str(patient.id)
     assert body["status"] == "active"
-    assert body["ends_on"] is None
+    assert body["duration_weeks"] == 4
+    assert body["weekdays"] == [0, 2, 4]
     assert body["therapist_id"] == str(therapist.id)
 
 

@@ -23,9 +23,9 @@ export const MOCK_ASSIGNMENT: Assignment = {
   id: 'mock-assignment-1',
   patient_id: MOCK_PATIENT.id,
   exercise_id: MOCK_EXERCISE.id,
-  sessions_per_week: 3,
+  duration_weeks: 4,
+  weekdays: [0, 2, 4],
   repetitions: 12,
   starts_on: '2026-10-01',
-  ends_on: '2026-11-01',
   status: 'active',
 }

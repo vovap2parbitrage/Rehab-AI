@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,12 +15,8 @@ class Assignment(Base):
             name="ck_assignments_repetitions_range",
         ),
         CheckConstraint(
-            "sessions_per_week BETWEEN 1 AND 14",
-            name="ck_assignments_sessions_per_week_range",
-        ),
-        CheckConstraint(
-            "ends_on IS NULL OR ends_on >= starts_on",
-            name="ck_assignments_date_range",
+            "duration_weeks > 0",
+            name="ck_assignments_duration_weeks_positive",
         )
     )
 
@@ -38,19 +34,19 @@ class Assignment(Base):
         nullable=False,
         index=True,
     )
-    # The therapist who assigned the exercise; patient questions about it go to them.
     therapist_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"),
         nullable=True,
         index=True,
     )
 
+    duration_weeks: Mapped[int] = mapped_column(Integer, nullable=False)
+
     repetitions: Mapped[int] = mapped_column(Integer, nullable=False)
-    sessions_per_week: Mapped[int] = mapped_column(Integer, nullable=False)
 
     starts_on: Mapped[date] = mapped_column(Date, nullable=False)
-    ends_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    weekdays: Mapped[list[int]] = mapped_column(JSON, nullable=False)
 
     status: Mapped[str] = mapped_column(
         String(20),

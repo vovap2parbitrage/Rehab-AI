@@ -40,9 +40,9 @@ export interface PatientAssignment {
   patient_id: string
   exercise_id: string
   repetitions: number
-  sessions_per_week: number
+  duration_weeks: number
+  weekdays: number[]
   starts_on: string
-  ends_on: string | null
   status: string
   exercise: PatientExercise
   sessions: PatientSession[]

@@ -3,16 +3,23 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AssignmentCreate(BaseModel):
     patient_id: UUID
     exercise_id: UUID
-    sessions_per_week: int = Field(ge=1, le=14)
+    duration_weeks: int = Field(ge=1)
+    weekdays: list[int] = Field(min_length=1, max_length=7)
     repetitions: int = Field(ge=1, le=500)
     starts_on: date
-    ends_on: date | None = None
+
+    @field_validator("weekdays")
+    @classmethod
+    def validate_weekdays(cls, value: list[int]) -> list[int]:
+        if len(set(value)) != len(value) or any(day < 0 or day > 6 for day in value):
+            raise ValueError("weekdays must contain unique values from 0 (Monday) to 6 (Sunday)")
+        return sorted(value)
 
 
 class AssignmentRead(AssignmentCreate):

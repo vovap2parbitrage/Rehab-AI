@@ -109,7 +109,8 @@ def test_therapist_cannot_delete_assigned_exercise(
             patient_id=patient.id,
             exercise_id=db_exercise.id,
             repetitions=10,
-            sessions_per_week=3,
+            duration_weeks=4,
+            weekdays=[0, 2, 4],
             starts_on=date(2026, 1, 1),
         )
     )

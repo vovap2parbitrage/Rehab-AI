@@ -207,7 +207,8 @@ def seed_assignment(db_session):
         assignment = AssignmentRead(
             patient_id=patient.id,
             exercise_id=exercise.id,
-            sessions_per_week=3,
+            duration_weeks=4,
+            weekdays=[0, 2, 4],
             repetitions=10,
             starts_on="2026-01-01",
             therapist_id=patient.therapist_ids[0],

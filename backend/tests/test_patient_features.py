@@ -173,7 +173,8 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
         patient_id=patient.id,
         exercise_id=exercise.id,
         repetitions=10,
-        sessions_per_week=3,
+        duration_weeks=4,
+        weekdays=[0, 2, 4],
         starts_on=date(2026, 1, 1),
     )
     patient_features_db.add_all(
@@ -183,7 +184,8 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
                 patient_id=other_patient.id,
                 exercise_id=other_exercise.id,
                 repetitions=8,
-                sessions_per_week=2,
+                duration_weeks=4,
+                weekdays=[0, 2],
                 starts_on=date(2026, 1, 1),
             ),
         ]
@@ -213,7 +215,8 @@ def test_patient_completes_own_assignment_session(
         patient_id=patient.id,
         exercise_id=exercise.id,
         repetitions=10,
-        sessions_per_week=3,
+        duration_weeks=4,
+        weekdays=[0, 2, 4],
         starts_on=date(2026, 1, 1),
     )
     patient_features_db.add(assignment)

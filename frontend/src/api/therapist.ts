@@ -23,10 +23,10 @@ export interface Assignment {
   id: string
   patient_id: string
   exercise_id: string
-  sessions_per_week: number
+  duration_weeks: number
+  weekdays: number[]
   repetitions: number
   starts_on: string
-  ends_on: string | null
   status: string
 }
 
@@ -50,10 +50,10 @@ export interface ExercisePayload {
 export interface AssignmentPayload {
   patient_id: string
   exercise_id: string
-  sessions_per_week: number
+  duration_weeks: number
+  weekdays: number[]
   repetitions: number
   starts_on: string
-  ends_on: string | null
 }
 
 export function listPatients(signal?: AbortSignal): Promise<Patient[]> {
