@@ -136,7 +136,7 @@ export function TherapistPatientPage() {
               <span>{item.repetitions} повторень · {formatWeekdays(item.weekdays)}</span>
               <small>{item.starts_on} · {item.duration_weeks} тиж.</small>
               <span>· стан: {item.status}</span>
-              {item.status !== 'cancelled' && (
+              {item.status == 'active' && (
                 <button
                   type="button"
                   className="icon-button icon-button--danger"

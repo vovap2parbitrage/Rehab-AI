@@ -1,7 +1,9 @@
 import uuid
+from datetime import date
 
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
+from app.models.session import TrainingSession
 from app.schemas.assignment import AssignmentRead
 
 
@@ -109,6 +111,65 @@ def test_patient_list_without_patient_id_returns_only_own(
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()] == [str(own_assignment.id)]
+
+
+def test_patient_list_marks_expired_assignment_completed(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    patient = seed_patient(patient_user, therapist)
+    assignment = seed_assignment(patient)
+    db_assignment = db_session.get(Assignment, assignment.id)
+    db_assignment.starts_on = date(2000, 1, 1)
+    db_session.commit()
+    login(patient_user)
+
+    response = api.get("/api/v1/assignments/mine")
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == str(assignment.id)
+    assert response.json()[0]["status"] == "completed"
+
+
+def test_assignment_becomes_completed_after_all_planned_sessions(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    patient = seed_patient(patient_user, therapist)
+    assignment = seed_assignment(
+        patient,
+        duration_weeks=1,
+        weekdays=[date.today().weekday()],
+        starts_on=date.today().isoformat(),
+    )
+    db_assignment = db_session.get(Assignment, assignment.id)
+    db_session.add(
+        TrainingSession(
+            assignment_id=db_assignment.id,
+            completed_at=date.today(),
+        )
+    )
+    db_session.commit()
+    login(patient_user)
+
+    response = api.get("/api/v1/assignments/mine")
+
+    assert response.status_code == 200
+    assert response.json()[0]["status"] == "completed"
+
+
+def test_completed_assignment_cannot_be_canceled(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    patient = seed_patient(patient_user, therapist)
+    assignment = seed_assignment(patient)
+    db_assignment = db_session.get(Assignment, assignment.id)
+    db_assignment.status = "completed"
+    db_session.commit()
+    login(therapist)
+
+    response = api.post(f"/api/v1/assignments/{assignment.id}/cancel")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "You can cancel only cancel active assignments"
 
 
 def test_therapist_list_without_patient_id_returns_only_own_patients(
