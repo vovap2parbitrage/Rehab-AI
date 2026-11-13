@@ -1576,6 +1576,29 @@ code {
   font-weight: 700;
 }
 
+.therapist-form__field:where(fieldset) {
+  border: 0;
+  padding: 0;
+}
+
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weekday-picker label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .therapist-form__field input,
 .therapist-form__field select,
 .therapist-form__field textarea {

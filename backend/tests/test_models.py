@@ -37,8 +37,7 @@ def test_models_define_database_constraints():
         if constraint.name
     } >= {
         "ck_assignments_repetitions_range",
-        "ck_assignments_sessions_per_week_range",
-        "ck_assignments_date_range",
+        "ck_assignments_duration_weeks_positive",
     }
     assert {
         constraint.name

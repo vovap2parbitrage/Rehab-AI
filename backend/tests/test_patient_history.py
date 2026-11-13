@@ -14,7 +14,7 @@ TODAY = date(2026, 3, 18)
 
 @pytest.fixture
 def add_assignment(db_session):
-    def _add(patient, starts_on, sessions_per_week=3, ends_on=None, name="Squat"):
+    def _add(patient, starts_on, duration_weeks=52, weekdays=None, name="Squat"):
         exercise = Exercise(name=name, created_by=patient.therapist_ids[0])
         db_session.add(exercise)
         db_session.flush()
@@ -22,9 +22,9 @@ def add_assignment(db_session):
             patient_id=patient.id,
             exercise_id=exercise.id,
             repetitions=10,
-            sessions_per_week=sessions_per_week,
+            duration_weeks=duration_weeks,
+            weekdays=weekdays or [0, 1, 2],
             starts_on=starts_on,
-            ends_on=ends_on,
         )
         db_session.add(assignment)
         db_session.commit()
@@ -58,7 +58,7 @@ def history_data(therapist, patient_user, seed_patient, add_assignment, add_sess
     patient = seed_patient(patient_user, therapist)
     main = add_assignment(patient, date(2026, 1, 1))
     short = add_assignment(
-        patient, date(2026, 3, 2), sessions_per_week=2, ends_on=date(2026, 3, 8), name="Bridge"
+        patient, date(2026, 3, 2), duration_weeks=1, weekdays=[0, 1], name="Bridge"
     )
 
     add_session(main, at(2, 10), pain_score=9)
@@ -108,7 +108,7 @@ def test_history_for_all_time_starts_with_first_assignment_week(db_session, hist
     result = build_patient_history(db_session, patient.id, HistoryPeriod.all_time, TODAY)
 
     assert result.date_from == date(2025, 12, 29)
-    assert result.adherence_weeks[0].planned == 3
+    assert result.adherence_weeks[0].planned == 0
     assert result.kpis.total_sessions == 10
     assert result.pain_series[0].value == 9
 
