@@ -307,6 +307,50 @@ export function PatientInvitationsPage() {
 
 export function PatientExercisesPage() {
   const { assignments, helpRequests, loading } = usePatientWorkspace()
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
+  const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
+
+  const renderAssignments = (items: typeof assignments) => items.map((assignment) => (
+    <article className="card exercise-card" key={assignment.id}>
+      <span className="exercise-card__icon" aria-hidden="true">
+        <ActivityIcon />
+      </span>
+      <div className="exercise-card__content">
+        <div className="exercise-card__title-row">
+          <h2>{assignment.exercise.name}</h2>
+          <span
+            className={
+              assignment.status === 'active'
+                ? 'status-pill status-pill--success status-pill--sm'
+                : 'status-pill status-pill--danger status-pill--sm'
+            }
+          >
+            {assignment.status === 'active' ? 'Активне' : 'Завершене'}
+          </span>
+        </div>
+        <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+        <div className="exercise-card__meta">
+          <span>
+            {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
+          </span>
+          <span>
+            {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
+          </span>
+        </div>
+        <ExerciseQuestions
+          items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
+        />
+      </div>
+      {assignment.status === 'active' && (
+        <Link
+          to={`/patient/exercises/${assignment.id}/execute`}
+          className="button button--primary exercise-card__action"
+        >
+          Виконати вправу <ArrowRightIcon aria-hidden="true" />
+        </Link>
+      )}
+    </article>
+  ))
 
   return (
     <div className="workspace-page">
@@ -319,48 +363,23 @@ export function PatientExercisesPage() {
       {loading ? (
         <Loading label="Завантажуємо призначення…" />
       ) : assignments.length ? (
-        <div className="exercise-list">
-          {assignments.map((assignment) => (
-            <article className="card exercise-card" key={assignment.id}>
-              <span className="exercise-card__icon" aria-hidden="true">
-                <ActivityIcon />
-              </span>
-              <div className="exercise-card__content">
-                <div className="exercise-card__title-row">
-                  <h2>{assignment.exercise.name}</h2>
-                  <span
-                    className={
-                      assignment.status === 'active'
-                        ? 'status-pill status-pill--success status-pill--sm'
-                        : 'status-pill status-pill--danger status-pill--sm'
-                    }
-                  >
-                    {assignment.status === 'active' ? 'Активне' : 'Завершене'}
-                  </span>
-                </div>
-                <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
-                <div className="exercise-card__meta">
-                  <span>
-                    {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
-                  </span>
-                  <span>
-                    {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
-                  </span>
-                </div>
-                <ExerciseQuestions
-                  items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
-                />
+        <div className="exercise-assignment-groups">
+          {activeAssignments.length > 0 && (
+            <section>
+              <div className="card__header">
+                <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
               </div>
-              {assignment.status === 'active' && (
-                <Link
-                  to={`/patient/exercises/${assignment.id}/execute`}
-                  className="button button--primary exercise-card__action"
-                >
-                  Виконати вправу <ArrowRightIcon aria-hidden="true" />
-                </Link>
-              )}
-            </article>
-          ))}
+              <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
+            </section>
+          )}
+          {completedAssignments.length > 0 && (
+            <section>
+              <div className="card__header">
+                <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
+              </div>
+              <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
+            </section>
+          )}
         </div>
       ) : (
         <section className="card workspace-empty-state">

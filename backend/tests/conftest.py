@@ -197,22 +197,24 @@ def seed_patient(db_session):
 
 @pytest.fixture
 def seed_assignment(db_session):
-    def _seed(patient: PatientRead) -> AssignmentRead:
+    def _seed(patient: PatientRead, **overrides) -> AssignmentRead:
         exercise = Exercise(
             name="Test exercise",
             created_by=patient.therapist_ids[0],
         )
         db_session.add(exercise)
         db_session.flush()
-        assignment = AssignmentRead(
-            patient_id=patient.id,
-            exercise_id=exercise.id,
-            duration_weeks=4,
-            weekdays=[0, 2, 4],
-            repetitions=10,
-            starts_on="2026-01-01",
-            therapist_id=patient.therapist_ids[0],
-        )
+        assignment_data = {
+            "patient_id": patient.id,
+            "exercise_id": exercise.id,
+            "duration_weeks": 4,
+            "weekdays": [0, 2, 4],
+            "repetitions": 10,
+            "starts_on": "2026-01-01",
+            "therapist_id": patient.therapist_ids[0],
+        }
+        assignment_data.update(overrides)
+        assignment = AssignmentRead(**assignment_data)
         db_assignment = Assignment(**assignment.model_dump())
         db_session.add(db_assignment)
         db_session.commit()
