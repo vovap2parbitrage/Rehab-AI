@@ -8,7 +8,7 @@ import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '..
 import { Loading } from '../components/Loading'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
-import { formatWeekdays } from '../lib/assignmentSchedule'
+import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
 
 function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
   return (
@@ -307,8 +307,16 @@ export function PatientInvitationsPage() {
 
 export function PatientExercisesPage() {
   const { assignments, helpRequests, loading } = usePatientWorkspace()
+  const [assignmentView, setAssignmentView] = useState<'today' | 'all'>('today')
   const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
   const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
+  const todayAssignments = activeAssignments.filter((assignment) =>
+    isAssignmentScheduledToday(
+      assignment.starts_on,
+      assignment.duration_weeks,
+      assignment.weekdays,
+    ),
+  )
 
   const renderAssignments = (items: typeof assignments) => items.map((assignment) => (
     <article className="card exercise-card" key={assignment.id}>
@@ -363,24 +371,58 @@ export function PatientExercisesPage() {
       {loading ? (
         <Loading label="Завантажуємо призначення…" />
       ) : assignments.length ? (
-        <div className="exercise-assignment-groups">
-          {activeAssignments.length > 0 && (
-            <section>
-              <div className="card__header">
-                <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
-              </div>
-              <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
-            </section>
+        <>
+          <div className="period-selector" role="tablist" aria-label="Призначення">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'today'}
+              className={assignmentView === 'today' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('today')}
+            >
+              На сьогодні
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'all'}
+              className={assignmentView === 'all' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('all')}
+            >
+              Усі призначення
+            </button>
+          </div>
+          {assignmentView === 'today' ? (
+            todayAssignments.length ? (
+              <div className="exercise-list">{renderAssignments(todayAssignments)}</div>
+            ) : (
+              <section className="card workspace-empty-state">
+                <span className="workspace-empty-state__icon" aria-hidden="true"><ClockIcon /></span>
+                <h2>На сьогодні вправ немає</h2>
+                <p>Перевірте розклад або відкрийте всі призначення.</p>
+              </section>
+            )
+          ) : (
+            <div className="exercise-assignment-groups">
+              {activeAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
+                  </div>
+                  <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
+                </section>
+              )}
+              {completedAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
+                  </div>
+                  <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
+                </section>
+              )}
+            </div>
           )}
-          {completedAssignments.length > 0 && (
-            <section>
-              <div className="card__header">
-                <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
-              </div>
-              <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
-            </section>
-          )}
-        </div>
+        </>
       ) : (
         <section className="card workspace-empty-state">
           <span className="workspace-empty-state__icon" aria-hidden="true">
