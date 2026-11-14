@@ -182,16 +182,33 @@ docker compose up --build -d
 
 ### API
 
+Порівняння привʼязане до призначення (`assignment`): пацієнт каже лише, для якого призначення
+його відео. Еталон, частини тіла й допуски сервер бере з вправи цього призначення (дані лікаря),
+тому пацієнт не може їх підмінити.
+
 1. `POST /api/v1/comparisons/uploads` з `{"content_type": "video/mp4"}` (або `video/quicktime`)
    повертає короткоживучу підписану ціль завантаження `{key, url, fields}`.
-2. Застосунок завантажує відео напряму в S3-бакет (multipart POST на `url` з `fields` і файлом).
-   Те саме для другого відео.
-3. `POST /api/v1/comparisons` з `{reference_key, patient_key, body_parts, tolerances_deg}`
-   ставить аналіз у чергу і повертає `{task_id}` (202). `tolerances_deg` необов'язковий,
-   ключі: `l_elbow`, `r_elbow`, `l_shoulder`, `r_shoulder`, `l_hip`, `r_hip`, `l_knee`,
-   `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів.
+2. Застосунок завантажує відео пацієнта напряму в S3-бакет (multipart POST на `url` з `fields`
+   і файлом).
+3. `POST /api/v1/comparisons` з `{assignment_id, patient_key, pain_score}` (`pain_score`
+   необов'язковий, 0-10) ставить аналіз у чергу і повертає `{task_id}` (202). Запит може
+   зробити лише пацієнт, якому належить активне призначення (інакше 404 або 409), а
+   `patient_key` має бути його власним ключем (інакше 403). Якщо у вправи немає еталона або
+   частин тіла, відповідь 409.
 4. `GET /api/v1/comparisons/{task_id}` повертає статус `pending`, `done`, `rerecord`,
    `no_repetitions` або `failed`. Читати задачу може лише користувач, який її створив.
+5. Коли аналіз завершився зі статусом `done`, worker сам створює сесію (`TrainingSession`)
+   призначення: `score`, `joint_deviations` (бали по суглобах, помилкові відрізки, кількість
+   повторень), `pain_score`, `completed_at`. Поле `sessions.comparison_task_id` унікальне, тому
+   один аналіз не дає двох сесій. Для `rerecord`, `no_repetitions` і `failed` сесія не
+   створюється.
+
+Налаштування вправи: `reference_video_key` (ключ відео в S3 виду `videos/<id>/<32hex>.mp4`),
+`body_parts` (`left_arm`, `right_arm`, `left_leg`, `right_leg`, `torso`) і `joint_tolerances`
+(необов'язково; ключі: `l_elbow`, `r_elbow`, `l_shoulder`, `r_shoulder`, `l_hip`, `r_hip`,
+`l_knee`, `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів). Поки інтерфейс
+не вміє завантажувати еталон (SCRUM-19), ці поля задаються через API: завантажити відео
+лікарем через `/comparisons/uploads`, потім `PUT /api/v1/exercises/{id}` з ключем і частинами тіла.
 
 Приклад відповіді зі статусом `done`:
 
@@ -221,12 +238,9 @@ docker compose up --build -d
 У `Dockerfile` встановлюються `libgl1` і `libglib2.0-0`: без них `import mediapipe`
 падає в `python:3.12-slim`.
 
-### Локальний тест для порівняння відео
-
-~/compare_demo.sh "token" backend/tests/data/reference.mp4 backend/tests/data/patient_good.mp4 list of important body parts 
-
 ### Що ще не зроблено
 
-- Еталонне відео поки має належати тому самому користувачу. Потрібно брати його з призначеної
-  вправи й перевіряти доступ до пацієнта (див. TODO в `app/api/v1/endpoints/comparisons.py`).
-- Результати і відео не зберігаються в БД (лише ключі в S3 і результат у Redis на 24 години).
+- Інтерфейс не завантажує еталон у вправу й не вибирає частини тіла (SCRUM-19), а екран
+  виконання не записує відео й не викликає `/comparisons` (окрема задача).
+- Лікар у відповіді сесії бачить `joint_deviations`, але окремого екрана для їх перегляду немає.
+- Відео в S3 не видаляються автоматично.
