@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.services.comparison.video_checks import InvalidVideoError
 from app.services.storage import StorageError
 from app.tasks import comparison_analysis
@@ -92,3 +94,44 @@ def test_unexpected_error_hides_details(monkeypatch):
         "status": "failed",
         "message": "Analysis failed.",
     }
+
+
+ASSIGNMENT = "11111111-1111-1111-1111-111111111111"
+
+
+def test_done_report_is_saved_as_a_session(monkeypatch):
+    saved = []
+    monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
+    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "done", "score": 9.0})
+    monkeypatch.setattr(comparison_analysis, "record_session", lambda *a: saved.append(a))
+
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, 2, "task-1")
+
+    assert result == {"status": "done", "score": 9.0}
+    assert saved == [(ASSIGNMENT, "task-1", 2, {"status": "done", "score": 9.0})]
+
+
+@pytest.mark.parametrize("status", ["rerecord", "no_repetitions"])
+def test_unfinished_report_is_not_saved(monkeypatch, status):
+    saved = []
+    monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
+    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": status})
+    monkeypatch.setattr(comparison_analysis, "record_session", lambda *a: saved.append(a))
+
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, None, "task-1")
+
+    assert result == {"status": status}
+    assert saved == []
+
+
+def test_database_failure_returns_failed(monkeypatch):
+    def boom(*args):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
+    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "done"})
+    monkeypatch.setattr(comparison_analysis, "record_session", boom)
+
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, None, "task-1")
+
+    assert result == {"status": "failed", "message": "Could not save the result."}

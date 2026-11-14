@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.api.comparison_auth import require_user_id
+from app.api.deps import get_current_active_user
+from app.db.dependencies import get_db
+from app.models.user import User
 from app.schemas.comparison import (
     ComparisonCreated,
     ComparisonRequest,
@@ -9,6 +13,7 @@ from app.schemas.comparison import (
     UploadTarget,
 )
 from app.services import comparison_service, storage
+from app.services.comparison_assignment import prepare_comparison
 
 router = APIRouter()
 
@@ -34,15 +39,12 @@ def create_upload(
 @router.post("", response_model=ComparisonCreated, status_code=status.HTTP_202_ACCEPTED)
 def create_comparison(
     req: ComparisonRequest,
-    user_id: str = Depends(require_user_id),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
     svc=Depends(get_comparison_service),
 ):
-    # TODO(after merging main): resolve the reference video from the assigned exercise
-    # and check the user may access that patient; for now both videos must be the caller's.
-    for key in (req.reference_key, req.patient_key):
-        if not storage.is_owned_key(key, user_id):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Video does not belong to you")
-    return ComparisonCreated(task_id=svc.submit_comparison(req, user_id))
+    job = prepare_comparison(db, req, user)
+    return ComparisonCreated(task_id=svc.submit_comparison(job, str(user.id)))
 
 
 @router.get("/{task_id}", response_model=ComparisonResult)

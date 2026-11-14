@@ -142,3 +142,31 @@ def test_exercise_read_schema_matches_model_columns():
     columns = {column.name for column in Exercise.__table__.columns}
 
     assert set(ExerciseRead.model_fields) <= columns
+
+
+def test_exercise_stores_body_parts(api, login, therapist):
+    login(therapist)
+
+    response = api.post(
+        "/api/v1/exercises/",
+        json=exercise_payload(body_parts=["right_leg", "torso"]),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["body_parts"] == ["right_leg", "torso"]
+
+
+def test_exercise_body_parts_default_to_empty(api, login, therapist):
+    login(therapist)
+
+    response = api.post("/api/v1/exercises/", json=exercise_payload())
+
+    assert response.json()["body_parts"] == []
+
+
+def test_exercise_rejects_unknown_or_repeated_body_parts(api, login, therapist):
+    login(therapist)
+
+    for bad in (["head"], ["torso", "torso"]):
+        response = api.post("/api/v1/exercises/", json=exercise_payload(body_parts=bad))
+        assert response.status_code == 422

@@ -6,7 +6,7 @@ import redis
 from celery.result import AsyncResult
 
 from app.core.config import settings
-from app.schemas.comparison import ComparisonRequest
+from app.services.comparison_assignment import PreparedComparison
 from app.tasks.celery_app import celery_app
 from app.tasks.comparison_analysis import analyze_video_task
 
@@ -21,16 +21,19 @@ def _owner_key(task_id: str) -> str:
     return f"comparison:owner:{task_id}"
 
 
-def submit_comparison(req: ComparisonRequest, user_id: str) -> str:
+def submit_comparison(job: PreparedComparison, user_id: str) -> str:
     """Record who owns the job, then queue it and return its id immediately."""
     task_id = str(uuid.uuid4())
     _redis().set(_owner_key(task_id), user_id, ex=OWNER_TTL_SECONDS)
     analyze_video_task.apply_async(
         args=[
-            req.reference_key,
-            req.patient_key,
-            [p.value for p in req.body_parts],
-            req.tolerances_deg,
+            job.reference_key,
+            job.patient_key,
+            job.body_parts,
+            job.tolerances_deg,
+            str(job.assignment_id),
+            job.pain_score,
+            task_id,
         ],
         task_id=task_id,
     )
