@@ -1,7 +1,7 @@
 """replace assignment dates and frequency with duration and weekdays
 
-Revision ID: 0003
-Revises: 0002
+Revision ID: 0004
+Revises: 0003
 """
 from collections.abc import Sequence
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "0003"
-down_revision: str | Sequence[str] | None = "0002"
+revision: str = "0004"
+down_revision: str | Sequence[str] | None = "0003"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
