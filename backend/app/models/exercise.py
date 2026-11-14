@@ -47,6 +47,12 @@ class Exercise(Base):
         nullable=False,
     )
 
+    body_parts: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+    )
+
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"),
         nullable=False,

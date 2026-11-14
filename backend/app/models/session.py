@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Integer, func
+from sqlalchemy import JSON, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -42,6 +42,12 @@ class TrainingSession(Base):
         JSON,
         default=dict,
         nullable=False,
+    )
+
+    comparison_task_id: Mapped[str | None] = mapped_column(
+        String(64),
+        unique=True,
+        nullable=True,
     )
 
     pain_score: Mapped[int | None] = mapped_column(
