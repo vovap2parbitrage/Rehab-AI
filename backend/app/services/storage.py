@@ -52,6 +52,11 @@ def new_video_key(owner_id: str, content_type: str) -> str:
     return f"videos/{owner_id}/{uuid.uuid4().hex}.{extension}"
 
 
+def is_valid_key(key: str) -> bool:
+    """True for a well-formed video key, whoever owns it."""
+    return KEY_RE.match(key) is not None
+
+
 def is_owned_key(key: str, owner_id: str) -> bool:
     """True only for well-formed video keys that live under the caller's own prefix."""
     match = KEY_RE.match(key)

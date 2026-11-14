@@ -1,7 +1,8 @@
 from enum import Enum
 from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from app.services.comparison.angles import JOINT_TRIPLETS, TORSO_TILT
 
@@ -28,27 +29,9 @@ class UploadTarget(BaseModel):
 
 
 class ComparisonRequest(BaseModel):
-    reference_key: str = Field(pattern=VIDEO_KEY_PATTERN)
+    assignment_id: UUID
     patient_key: str = Field(pattern=VIDEO_KEY_PATTERN)
-    body_parts: list[BodyPart] = Field(min_length=1, max_length=len(BodyPart))
-    tolerances_deg: dict[str, float] = Field(default_factory=dict, max_length=len(KNOWN_JOINTS))
-
-    @field_validator("body_parts")
-    @classmethod
-    def body_parts_unique(cls, v: list[BodyPart]) -> list[BodyPart]:
-        if len(set(v)) != len(v):
-            raise ValueError("body_parts must not repeat")
-        return v
-
-    @field_validator("tolerances_deg")
-    @classmethod
-    def tolerances_valid(cls, v: dict[str, float]) -> dict[str, float]:
-        unknown = set(v) - KNOWN_JOINTS
-        if unknown:
-            raise ValueError(f"unknown joints: {sorted(unknown)}")
-        if any(not 0 < t <= MAX_TOLERANCE_DEG for t in v.values()):
-            raise ValueError(f"tolerance must be > 0 and <= {MAX_TOLERANCE_DEG}")
-        return v
+    pain_score: int | None = Field(default=None, ge=0, le=10)
 
 
 class ComparisonCreated(BaseModel):

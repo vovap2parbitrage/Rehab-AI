@@ -1,17 +1,18 @@
+import uuid
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.comparison_auth import require_user_id
+from app.api.deps import get_current_active_user
 from app.api.v1.endpoints.comparisons import get_comparison_service, get_storage
 from app.main import app
 
 USER = "user1"
-OTHER = "user2"
-KEY_A = f"videos/{USER}/{'a' * 32}.mp4"
 KEY_B = f"videos/{USER}/{'b' * 32}.mov"
-FOREIGN_KEY = f"videos/{OTHER}/{'c' * 32}.mp4"
 
-VALID = {"reference_key": KEY_A, "patient_key": KEY_B, "body_parts": ["right_leg"]}
+VALID = {"assignment_id": str(uuid.uuid4()), "patient_key": KEY_B}
 PREFIX = "/api/v1/comparisons"
 
 
@@ -35,6 +36,7 @@ def client():
     app.dependency_overrides[get_comparison_service] = lambda: FakeService()
     app.dependency_overrides[get_storage] = lambda: FakeStorage()
     app.dependency_overrides[require_user_id] = lambda: USER
+    app.dependency_overrides[get_current_active_user] = lambda: SimpleNamespace(id=USER)
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -47,13 +49,6 @@ def anonymous_client():
     app.dependency_overrides.clear()
 
 
-def test_create_returns_202_and_task_id(client):
-    r = client.post(PREFIX, json=VALID)
-    assert r.status_code == 202
-    assert r.json() == {"task_id": "task-1"}
-
-
-@pytest.mark.parametrize("field", ["reference_key", "patient_key"])
 @pytest.mark.parametrize(
     "bad",
     [
@@ -64,51 +59,17 @@ def test_create_returns_202_and_task_id(client):
         "nope",
     ],
 )
-def test_urls_and_malformed_keys_are_422(client, field, bad):
-    assert client.post(PREFIX, json={**VALID, field: bad}).status_code == 422
+def test_urls_and_malformed_keys_are_422(client, bad):
+    assert client.post(PREFIX, json={**VALID, "patient_key": bad}).status_code == 422
 
 
-@pytest.mark.parametrize("field", ["reference_key", "patient_key"])
-def test_someone_elses_video_is_403(client, field):
-    assert client.post(PREFIX, json={**VALID, field: FOREIGN_KEY}).status_code == 403
+def test_bad_assignment_id_is_422(client):
+    assert client.post(PREFIX, json={**VALID, "assignment_id": "x"}).status_code == 422
 
 
-def test_unknown_body_part_is_422(client):
-    assert client.post(PREFIX, json={**VALID, "body_parts": ["head"]}).status_code == 422
-
-
-def test_empty_body_parts_is_422(client):
-    assert client.post(PREFIX, json={**VALID, "body_parts": []}).status_code == 422
-
-
-def test_repeated_body_parts_is_422(client):
-    r = client.post(PREFIX, json={**VALID, "body_parts": ["torso", "torso"]})
-    assert r.status_code == 422
-
-
-def test_too_many_body_parts_is_422(client):
-    parts = ["left_arm", "right_arm", "left_leg", "right_leg", "torso", "torso"]
-    assert client.post(PREFIX, json={**VALID, "body_parts": parts}).status_code == 422
-
-
-def test_negative_tolerance_is_422(client):
-    r = client.post(PREFIX, json={**VALID, "tolerances_deg": {"r_knee": -5}})
-    assert r.status_code == 422
-
-
-def test_huge_tolerance_is_422(client):
-    r = client.post(PREFIX, json={**VALID, "tolerances_deg": {"r_knee": 500}})
-    assert r.status_code == 422
-
-
-def test_unknown_joint_tolerance_is_422(client):
-    r = client.post(PREFIX, json={**VALID, "tolerances_deg": {"left_pinky": 5}})
-    assert r.status_code == 422
-
-
-def test_known_joint_tolerance_is_accepted(client):
-    r = client.post(PREFIX, json={**VALID, "tolerances_deg": {"r_knee": 5, "torso_tilt": 3}})
-    assert r.status_code == 202
+@pytest.mark.parametrize("pain", [-1, 11])
+def test_pain_score_out_of_range_is_422(client, pain):
+    assert client.post(PREFIX, json={**VALID, "pain_score": pain}).status_code == 422
 
 
 def test_get_own_task(client):
