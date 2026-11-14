@@ -57,11 +57,18 @@ def _period_start(
 
 def _planned_for_week(assignments: list[Assignment], week_start: date) -> int:
     week_end = week_start + timedelta(days=6)
-    return sum(
-        item.sessions_per_week
-        for item in assignments
-        if item.starts_on <= week_end and (item.ends_on is None or item.ends_on >= week_start)
-    )
+    planned = 0
+    for item in assignments:
+        assignment_end = item.starts_on + timedelta(days=item.duration_weeks * 7 - 1)
+        first_day = max(item.starts_on, week_start)
+        last_day = min(assignment_end, week_end)
+        if first_day > last_day:
+            continue
+        planned += sum(
+            (first_day + timedelta(days=offset)).weekday() in item.weekdays
+            for offset in range((last_day - first_day).days + 1)
+        )
+    return planned
 
 
 def _adherence_weeks(

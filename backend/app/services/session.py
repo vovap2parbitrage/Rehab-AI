@@ -10,6 +10,7 @@ from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
 from app.services.patient_access import can_access_patient_id, require_patient_access
+from app.services.assignment import complete_finished_assignments
 
 
 def _patient_id_of(session: TrainingSession) -> UUID:
@@ -76,6 +77,8 @@ def complete_assignment_session(
         completed_at=datetime.now(UTC),
     )
     db.add(session)
+    db.flush()
+    complete_finished_assignments(db, [assignment])
     db.commit()
     db.refresh(session)
     return SessionRead.model_validate(session, from_attributes=True)

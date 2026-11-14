@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import type { PatientAssignment } from '../api/patient'
 import { useAuth } from '../auth/useAuth'
 import { HelpRequestList } from '../components/HelpRequestList'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
@@ -8,6 +9,7 @@ import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '..
 import { Loading } from '../components/Loading'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
+import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
 
 function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
   return (
@@ -35,11 +37,6 @@ function WorkspaceError() {
   )
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Без кінцевої дати'
-  return new Date(`${value}T00:00:00`).toLocaleDateString('uk-UA')
-}
-
 function getInitials(email: string): string {
   return email
     .split('@')[0]
@@ -48,6 +45,56 @@ function getInitials(email: string): string {
     .map((part) => part[0] ?? '')
     .join('')
     .toLocaleUpperCase('uk-UA')
+}
+
+function formatSessionDate(value: string | null, fallback: string): string {
+  return new Date(value ?? fallback).toLocaleString('uk-UA', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+function SessionDetails({ assignment }: { assignment: PatientAssignment }) {
+  if (!assignment.sessions.length) return null
+
+  return (
+    <div className="assignment-sessions">
+      <h3>Виконані сесії</h3>
+      {assignment.sessions
+        .slice()
+        .sort((left, right) => {
+          const leftDate = left.completed_at ?? left.created_at
+          const rightDate = right.completed_at ?? right.created_at
+          return rightDate.localeCompare(leftDate)
+        })
+        .map((session, index) => (
+          <details className="assignment-session" key={session.id}>
+            <summary>
+              <span>Сесія {assignment.sessions.length - index}</span>
+              <time dateTime={session.completed_at ?? session.created_at}>
+                {formatSessionDate(session.completed_at, session.created_at)}
+              </time>
+            </summary>
+            <dl className="assignment-session__details">
+              <div>
+                <dt>Біль</dt>
+                <dd>{session.pain_score === null ? 'Не вказано' : `${session.pain_score} із 10`}</dd>
+              </div>
+              <div>
+                <dt>Оцінка техніки</dt>
+                <dd>{session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}</dd>
+              </div>
+              {Object.keys(session.joint_deviations).length > 0 && (
+                <div>
+                  <dt>Відхилення суглобів</dt>
+                  <dd>{JSON.stringify(session.joint_deviations)}</dd>
+                </div>
+              )}
+            </dl>
+          </details>
+        ))}
+    </div>
+  )
 }
 
 export function PatientDashboardPage() {
@@ -311,6 +358,59 @@ export function PatientInvitationsPage() {
 
 export function PatientExercisesPage() {
   const { assignments, helpRequests, loading } = usePatientWorkspace()
+  const [assignmentView, setAssignmentView] = useState<'today' | 'all'>('today')
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
+  const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
+  const todayAssignments = activeAssignments.filter((assignment) =>
+    isAssignmentScheduledToday(
+      assignment.starts_on,
+      assignment.duration_weeks,
+      assignment.weekdays,
+    ),
+  )
+
+  const renderAssignments = (items: typeof assignments) => items.map((assignment) => (
+    <article className="card exercise-card" key={assignment.id}>
+      <span className="exercise-card__icon" aria-hidden="true">
+        <ActivityIcon />
+      </span>
+      <div className="exercise-card__content">
+        <div className="exercise-card__title-row">
+          <h2>{assignment.exercise.name}</h2>
+          <span
+            className={
+              assignment.status === 'active'
+                ? 'status-pill status-pill--success status-pill--sm'
+                : 'status-pill status-pill--danger status-pill--sm'
+            }
+          >
+            {assignment.status === 'active' ? 'Активне' : 'Завершене'}
+          </span>
+        </div>
+        <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+        <div className="exercise-card__meta">
+          <span>
+            {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
+          </span>
+          <span>
+            {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
+          </span>
+        </div>
+        <SessionDetails assignment={assignment} />
+        <ExerciseQuestions
+          items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
+        />
+      </div>
+      {assignment.status === 'active' && (
+        <Link
+          to={`/patient/exercises/${assignment.id}/execute`}
+          className="button button--primary exercise-card__action"
+        >
+          Виконати вправу <ArrowRightIcon aria-hidden="true" />
+        </Link>
+      )}
+    </article>
+  ))
 
   return (
     <div className="workspace-page">
@@ -323,50 +423,58 @@ export function PatientExercisesPage() {
       {loading ? (
         <Loading label="Завантажуємо призначення…" />
       ) : assignments.length ? (
-        <div className="exercise-list">
-          {assignments.map((assignment) => (
-            <article className="card exercise-card" key={assignment.id}>
-              <span className="exercise-card__icon" aria-hidden="true">
-                <ActivityIcon />
-              </span>
-              <div className="exercise-card__content">
-                <div className="exercise-card__title-row">
-                  <h2>{assignment.exercise.name}</h2>
-                  <span
-                    className={
-                      assignment.status === 'active'
-                        ? 'status-pill status-pill--success status-pill--sm'
-                        : 'status-pill status-pill--danger status-pill--sm'
-                    }
-                  >
-                    {assignment.status === 'active' ? 'Активне' : 'Неактивне'}
-                  </span>
-                </div>
-                <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
-                <div className="exercise-card__meta">
-                  <span>
-                    {assignment.sessions_per_week} занять на тиждень · {assignment.repetitions}{' '}
-                    повторень
-                  </span>
-                  <span>
-                    {assignment.sessions.length} сесій · до {formatDate(assignment.ends_on)}
-                  </span>
-                </div>
-                <ExerciseQuestions
-                  items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
-                />
-              </div>
-              {assignment.status === 'active' && (
-                <Link
-                  to={`/patient/exercises/${assignment.id}/execute`}
-                  className="button button--primary exercise-card__action"
-                >
-                  Виконати вправу <ArrowRightIcon aria-hidden="true" />
-                </Link>
+        <>
+          <div className="period-selector" role="tablist" aria-label="Призначення">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'today'}
+              className={assignmentView === 'today' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('today')}
+            >
+              На сьогодні
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'all'}
+              className={assignmentView === 'all' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('all')}
+            >
+              Усі призначення
+            </button>
+          </div>
+          {assignmentView === 'today' ? (
+            todayAssignments.length ? (
+              <div className="exercise-list">{renderAssignments(todayAssignments)}</div>
+            ) : (
+              <section className="card workspace-empty-state">
+                <span className="workspace-empty-state__icon" aria-hidden="true"><ClockIcon /></span>
+                <h2>На сьогодні вправ немає</h2>
+                <p>Перевірте розклад або відкрийте всі призначення.</p>
+              </section>
+            )
+          ) : (
+            <div className="exercise-assignment-groups">
+              {activeAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
+                  </div>
+                  <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
+                </section>
               )}
-            </article>
-          ))}
-        </div>
+              {completedAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
+                  </div>
+                  <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
+                </section>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <section className="card workspace-empty-state">
           <span className="workspace-empty-state__icon" aria-hidden="true">
@@ -437,7 +545,7 @@ export function PatientExerciseExecutionPage() {
         </div>
         <span className="exercise-execution__duration">
           <ClockIcon aria-hidden="true" />
-          {assignment.sessions_per_week} занять на тиждень
+          {assignment.duration_weeks} тиж. · {formatWeekdays(assignment.weekdays)}
         </span>
       </section>
 

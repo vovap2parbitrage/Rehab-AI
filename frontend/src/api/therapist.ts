@@ -23,10 +23,10 @@ export interface Assignment {
   id: string
   patient_id: string
   exercise_id: string
-  sessions_per_week: number
+  duration_weeks: number
+  weekdays: number[]
   repetitions: number
   starts_on: string
-  ends_on: string | null
   status: string
 }
 
@@ -50,10 +50,10 @@ export interface ExercisePayload {
 export interface AssignmentPayload {
   patient_id: string
   exercise_id: string
-  sessions_per_week: number
+  duration_weeks: number
+  weekdays: number[]
   repetitions: number
   starts_on: string
-  ends_on: string | null
 }
 
 export function listPatients(signal?: AbortSignal): Promise<Patient[]> {
@@ -106,5 +106,11 @@ export function createAssignment(payload: AssignmentPayload): Promise<Assignment
   return apiRequest<Assignment>('/api/v1/assignments/', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function cancelAssignment(assignmentId: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/assignments/${assignmentId}/cancel`, {
+    method: 'POST',
   })
 }
