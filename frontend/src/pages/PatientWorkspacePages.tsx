@@ -1,11 +1,15 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ApiError } from '../api/client'
+import { getPatientExerciseVideoUrl } from '../api/patient'
 import { useAuth } from '../auth/useAuth'
+import { ErrorMessage } from '../components/ErrorMessage'
 import { HelpRequestList } from '../components/HelpRequestList'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import type { HelpRequest } from '../api/helpRequests'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
 import { Loading } from '../components/Loading'
+import { uploadVideo } from '../api/uploads'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
 
@@ -311,6 +315,36 @@ export function PatientInvitationsPage() {
 
 export function PatientExercisesPage() {
   const { assignments, helpRequests, loading } = usePatientWorkspace()
+  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({})
+  const [videoLoading, setVideoLoading] = useState<string | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+
+  const handleViewVideo = async (exerciseId: string) => {
+    setVideoLoading(exerciseId)
+    setVideoError(null)
+    try {
+      const url = await getPatientExerciseVideoUrl(exerciseId)
+      setVideoUrls((current) => ({ ...current, [exerciseId]: url }))
+    } catch (reason: unknown) {
+      setVideoError(
+        reason instanceof ApiError
+          ? reason.detail || reason.message
+          : reason instanceof Error
+            ? reason.message
+            : 'Не вдалося відкрити еталонне відео.',
+      )
+    } finally {
+      setVideoLoading(null)
+    }
+  }
+
+  const handleHideVideo = (exerciseId: string) => {
+    setVideoUrls((current) => {
+      const next = { ...current }
+      delete next[exerciseId]
+      return next
+    })
+  }
 
   return (
     <div className="workspace-page">
@@ -320,6 +354,7 @@ export function PatientExercisesPage() {
         lead="Переглядайте план лікаря та зберігайте кожну виконану сесію."
       />
       <WorkspaceError />
+      {videoError && <ErrorMessage title="Не вдалося відкрити відео" message={videoError} />}
       {loading ? (
         <Loading label="Завантажуємо призначення…" />
       ) : assignments.length ? (
@@ -343,6 +378,44 @@ export function PatientExercisesPage() {
                   </span>
                 </div>
                 <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+                {assignment.exercise.reference_video_key && (
+                  <div className="exercise-card__video">
+                    {videoUrls[assignment.exercise.id] ? (
+                      <div>
+                        <video
+                          key={videoUrls[assignment.exercise.id]}
+                          src={videoUrls[assignment.exercise.id]}
+                          controls
+                          preload="metadata"
+                          style={{
+                            width: '100%',
+                            maxWidth: '360px',
+                            maxHeight: '220px',
+                            objectFit: 'contain',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => handleHideVideo(assignment.exercise.id)}
+                        >
+                          Сховати відео
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="button button--ghost"
+                        onClick={() => void handleViewVideo(assignment.exercise.id)}
+                        disabled={videoLoading !== null}
+                      >
+                        {videoLoading === assignment.exercise.id
+                          ? 'Завантажуємо…'
+                          : 'Переглянути еталонне відео'}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="exercise-card__meta">
                   <span>
                     {assignment.sessions_per_week} занять на тиждень · {assignment.repetitions}{' '}
@@ -388,8 +461,38 @@ export function PatientExerciseExecutionPage() {
   const { assignments, loading, actionPending, completeAssignment } = usePatientWorkspace()
   const [painScore, setPainScore] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [recordingFile, setRecordingFile] = useState<File | null>(null)
+  const [recordingUploadError, setRecordingUploadError] = useState<string | null>(null)
+  const [recordingUploadKey, setRecordingUploadKey] = useState<string | null>(null)
+  const [uploadingRecording, setUploadingRecording] = useState(false)
+  const recordingInputRef = useRef<HTMLInputElement>(null)
   const assignment = assignments.find((item) => item.id === assignmentId)
   const saving = actionPending === assignmentId
+
+  const handleUploadRecording = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!recordingFile) return
+
+    setRecordingUploadError(null)
+    setRecordingUploadKey(null)
+    setUploadingRecording(true)
+    try {
+      const key = await uploadVideo(recordingFile)
+      setRecordingUploadKey(key)
+      setRecordingFile(null)
+      if (recordingInputRef.current) recordingInputRef.current.value = ''
+    } catch (reason: unknown) {
+      setRecordingUploadError(
+        reason instanceof ApiError
+          ? reason.detail || reason.message
+          : reason instanceof Error
+            ? reason.message
+            : 'Не вдалося завантажити відео.',
+      )
+    } finally {
+      setUploadingRecording(false)
+    }
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -440,6 +543,46 @@ export function PatientExerciseExecutionPage() {
           {assignment.sessions_per_week} занять на тиждень
         </span>
       </section>
+
+      <form className="card exercise-upload" onSubmit={handleUploadRecording}>
+        <div>
+          <p className="eyebrow">Відео виконання</p>
+          <h2>Завантажити своє відео</h2>
+          <p className="exercise-upload__description">
+            Відео завантажиться до сховища. Надсилання лікарю та результати додадуть окремо.
+          </p>
+        </div>
+        {recordingUploadError && (
+          <ErrorMessage title="Не вдалося завантажити відео" message={recordingUploadError} />
+        )}
+        {recordingUploadKey && (
+          <p className="success-message" role="status">
+            Відео завантажено до сховища. Ключ: <code>{recordingUploadKey}</code>
+          </p>
+        )}
+        <label className="exercise-upload__field">
+          <span>Відеофайл (MP4 або MOV, максимум 100 МБ)</span>
+          <input
+            ref={recordingInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime"
+            required
+            disabled={uploadingRecording}
+            onChange={(event) => {
+              setRecordingFile(event.target.files?.[0] || null)
+              setRecordingUploadError(null)
+              setRecordingUploadKey(null)
+            }}
+          />
+        </label>
+        <button
+          type="submit"
+          className="button button--primary"
+          disabled={!recordingFile || uploadingRecording}
+        >
+          {uploadingRecording ? 'Завантажуємо…' : 'Завантажити відео'}
+        </button>
+      </form>
 
       {sessionId ? (
         <>

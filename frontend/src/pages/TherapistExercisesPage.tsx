@@ -1,17 +1,42 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { createExercise, deleteExercise, listExercises, updateExercise, type Exercise } from '../api/therapist'
+import { createExercise, deleteExercise, getExerciseVideoUrl, listExercises, updateExercise, type Exercise } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { ArrowRightIcon, CheckIcon, PencilIcon, TrashIcon } from '../components/Icons'
+import { deleteUploadedVideo, uploadVideo } from '../api/uploads'
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url)
+      resolve(video.duration)
+    }
+    video.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Не вдалося прочитати відео.'))
+    }
+    video.src = url
+  })
+}
 
 export function TherapistExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
-  const [form, setForm] = useState({ name: '', description: '', video: '' })
+  const [form, setForm] = useState({ name: '', description: ''})
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [bodyParts, setBodyParts] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({})
+  const [videoLoading, setVideoLoading] = useState<string | null>(null)
+  const editingExercise = exercises.find((item) => item.id === editingId)
 
   useEffect(() => {
     listExercises().then(setExercises).catch((reason: unknown) => {
@@ -24,15 +49,42 @@ export function TherapistExercisesPage() {
     setForm({
       name: exercise.name,
       description: exercise.description || '',
-      video: exercise.reference_video_key || '',
     })
+    setBodyParts(exercise.body_parts)
+    setVideoFile(null)
+    if (videoInputRef.current) videoInputRef.current.value = ''
     setNotice(null)
     setError(null)
   }
 
   const cancelEditing = () => {
     setEditingId(null)
-    setForm({ name: '', description: '', video: '' })
+    setForm({ name: '', description: ''})
+    setBodyParts([])
+    setVideoFile(null)
+    if (videoInputRef.current) videoInputRef.current.value = ''
+  }
+
+  const handleViewVideo = async (exerciseId: string) => {
+    setVideoLoading(exerciseId)
+    setError(null)
+
+    try {
+      const url = await getExerciseVideoUrl(exerciseId)
+      setVideoUrls((current) => ({ ...current, [exerciseId]: url }))
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося відкрити відео.')
+    } finally {
+      setVideoLoading(null)
+    }
+  }
+
+  const handleHideVideo = (exerciseId: string) => {
+    setVideoUrls((current) => {
+      const next = { ...current }
+      delete next[exerciseId]
+      return next
+    })
   }
 
   const handleDelete = async (exercise: Exercise) => {
@@ -51,39 +103,120 @@ export function TherapistExercisesPage() {
     }
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setBusy(true)
-    setNotice(null)
-    try {
-      if (editingId) {
-        const updated = await updateExercise(editingId, {
-          name: form.name,
-          description: form.description || null,
-          reference_video_key: form.video || null,
-          joint_tolerances: {},
-        })
-        setExercises((current) => current.map((item) => item.id === updated.id ? updated : item))
-        cancelEditing()
-        setNotice('Вправу змінено.')
-      } else {
-        const created = await createExercise({
-          name: form.name,
-          description: form.description || null,
-          reference_video_key: form.video || null,
-          joint_tolerances: {},
-        })
-        setExercises((current) => [...current, created])
-        setForm({ name: '', description: '', video: '' })
-        setNotice('Вправу додано до бібліотеки.')
-      }
-    } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося створити вправу.')
-    } finally {
-      setBusy(false)
+  const toggleBodyPart = (part: string) => {
+    if (bodyParts.includes(part)) {
+      setBodyParts(bodyParts.filter((item) => item !== part))
+    } else {
+      setBodyParts([...bodyParts, part])
     }
-
   }
+  const availableBodyParts = [
+    { value: 'left_arm', label: 'Ліва рука' },
+    { value: 'right_arm', label: 'Права рука' },
+    { value: 'left_leg', label: 'Ліва нога' },
+    { value: 'right_leg', label: 'Права нога' },
+    { value: 'torso', label: 'Тулуб' },
+  ]
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  event.preventDefault()
+  setError(null)
+  setNotice(null)
+  if (bodyParts.length === 0) {
+    setError('Оберіть хоча б одну частину тіла.')
+    return
+  }
+  if (!videoFile && (!editingId || !editingExercise?.reference_video_key)) {
+    const message = 'Оберіть відео.'
+    setVideoError(message)
+    setError(message)
+    return
+  }
+  setBusy(true)
+  setVideoError(null)
+  let uploadedVideoKey: string | null = null
+
+  try {
+    if (videoFile) {
+      const duration = await getVideoDuration(videoFile)
+      if (duration > 120) {
+        const message = 'Відео задовге. Максимальна тривалість — 120 секунд.'
+        setVideoError(message)
+        setError(message)
+        return
+      }
+    }
+    if (videoFile) uploadedVideoKey = await uploadVideo(videoFile)
+    const videoKey = uploadedVideoKey ?? editingExercise?.reference_video_key ?? null
+    if (editingId) {
+      const updated = await updateExercise(editingId, {
+        name: form.name,
+        description: form.description || null,
+        reference_video_key: videoKey,
+        joint_tolerances: editingExercise?.joint_tolerances ?? {},
+        body_parts: bodyParts,
+      })
+      setExercises((current) => current.map((item) => item.id === updated.id ? updated : item))
+      if (videoFile) {
+        setVideoUrls((current) => {
+          const next = { ...current }
+          delete next[updated.id]
+          return next
+        })
+        try {
+          const updatedVideoUrl = await getExerciseVideoUrl(updated.id)
+          setVideoUrls((current) => ({ ...current, [updated.id]: updatedVideoUrl }))
+        } catch (reason: unknown) {
+          const detail = reason instanceof ApiError
+            ? reason.detail || reason.message
+            : reason instanceof Error ? reason.message : 'Невідома помилка'
+          setError(`Вправу збережено, але не вдалося оновити відеопрогравач: ${detail}`)
+        }
+      }
+      cancelEditing()
+      setNotice('Вправу змінено.')
+    } else {
+      const created = await createExercise({
+        name: form.name,
+        description: form.description || null,
+        reference_video_key: videoKey,
+        joint_tolerances: {},
+        body_parts: bodyParts,
+      })
+      setExercises((current) => [...current, created])
+      setForm({ name: '', description: ''})
+      setVideoFile(null)
+      if (videoInputRef.current) videoInputRef.current.value = ''
+      setBodyParts([])
+      setNotice('Вправу додано до бібліотеки.')
+    }
+  } catch (reason: unknown) {
+    let message = reason instanceof ApiError
+      ? reason.detail || reason.message
+      : reason instanceof Error
+        ? reason.message
+        : 'Не вдалося зберегти вправу.'
+    if (uploadedVideoKey) {
+      try {
+        await deleteUploadedVideo(uploadedVideoKey)
+      } catch (cleanupReason: unknown) {
+        if (cleanupReason instanceof ApiError && cleanupReason.status === 409) {
+          message += ' Нове відео вже прив’язане до вправи, тому його не видалено.'
+        } else {
+          const cleanupMessage = cleanupReason instanceof ApiError
+            ? cleanupReason.detail || cleanupReason.message
+            : cleanupReason instanceof Error
+              ? cleanupReason.message
+              : 'невідома помилка'
+          message += ` Не вдалося видалити нове відео: ${cleanupMessage}`
+        }
+      }
+    }
+    setError(message)
+  } finally {
+    setBusy(false)
+  }
+}
 
   return (
     <div className="workspace-page">
@@ -92,11 +225,32 @@ export function TherapistExercisesPage() {
       {notice && <div className="success-message" role="status">{notice}</div>}
       {error && <ErrorMessage title="Помилка" message={error} />}
       <div className="workspace-summary-grid therapist-page__grid">
-        <section className="card"><div className="card__header"><div><h2>{editingId ? 'Редагування вправи' : 'Нова вправа'}</h2><p>{editingId ? 'Змініть назву або опис вправи.' : 'Відео поки зберігається як UI-заглушка.'}</p></div><span className="card__header-icon"><CheckIcon /></span></div>
+        <section className="card"><div className="card__header"><div><h2>{editingId ? 'Редагування вправи' : 'Нова вправа'}</h2><p>{editingId ? 'Змініть назву або опис вправи.' : 'Додайте назву, опис і відео вправи.'}</p></div><span className="card__header-icon"><CheckIcon /></span></div>
           <form className="therapist-form" onSubmit={handleSubmit}>
             <label className="therapist-form__field"><span>Назва *</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required minLength={2} /></label>
             <label className="therapist-form__field"><span>Опис</span><textarea rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-            {!editingId && <label className="therapist-form__field"><span>Відео *</span><input type="file" accept="video/*" onChange={(event) => setForm({ ...form, video: event.target.files?.[0]?.name || '' })} required /></label>}
+            <div className="therapist-form__field">
+              <span>Частини тіла *</span>
+
+              <div className="therapist-form__body-parts">
+                {availableBodyParts.map((part) => (
+                  <label className="therapist-form__body-part" key={part.value}>
+                    <input
+                      type="checkbox"
+                      checked={bodyParts.includes(part.value)}
+                      onChange={() => toggleBodyPart(part.value)}
+                    />
+                    {part.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="therapist-form__field"><span>Відео {(!editingId || !editingExercise?.reference_video_key) && '*'}</span><input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" onChange={(event) => {
+              setVideoFile(event.target.files?.[0] || null)
+              setVideoError(null)
+              setError(null)
+            }} required={!editingId || !Boolean(editingExercise?.reference_video_key)} /></label>
+            {videoError && <p className="error-message">{videoError}</p>}
             <button className="button button--primary" disabled={busy}>{busy ? 'Зберігаємо…' : editingId ? 'Зберегти зміни' : 'Створити вправу'}</button>
             {editingId && <button type="button" className="button button--ghost" onClick={cancelEditing}>Скасувати</button>}
           </form>
@@ -108,7 +262,37 @@ export function TherapistExercisesPage() {
                 <div>
                   <h3>{item.name}</h3>
                   <p>{item.description || 'Опис не додано.'}</p>
-                  {item.reference_video_key && <small>Відео: {item.reference_video_key}</small>}
+                  {item.reference_video_key && (
+                    <div className="exercise-card__video">
+                      {videoUrls[item.id] ? (
+                        <div>
+                          <video
+                            key={videoUrls[item.id]}
+                            src={videoUrls[item.id]}
+                            controls
+                            preload="metadata"
+                            style={{ width: '100%', maxWidth: '360px', maxHeight: '220px', objectFit: 'contain' }}
+                          />
+                          <button
+                            type="button"
+                            className="button button--ghost"
+                            onClick={() => handleHideVideo(item.id)}
+                          >
+                            Сховати відео
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => void handleViewVideo(item.id)}
+                          disabled={videoLoading !== null}
+                        >
+                          {videoLoading === item.id ? 'Завантажуємо…' : 'Переглянути відео'}
+                        </button>
+                      )}
+                    </div>
+                )}
                 </div>
                 <div className="exercise-card__actions">
                   <button type="button" className="icon-button" aria-label={`Змінити ${item.name}`} title="Змінити" onClick={() => startEditing(item)} disabled={busy}><PencilIcon /></button>

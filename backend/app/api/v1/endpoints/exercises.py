@@ -28,11 +28,11 @@ def list_exercises(
 @router.post("/", response_model=ExerciseRead, status_code=201)
 def create_exercise(
     payload: ExerciseCreate,
-    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ExerciseRead:
-    return exercise.create_exercise(db, payload, user)
+    return exercise.create_exercise(db, payload, user, extract_roles(claims))
 
 
 @router.get("/{exercise_id}", response_model=ExerciseRead)
@@ -69,3 +69,18 @@ def delete_exercise(
     exercise.delete_exercise(
         db, exercise_id, user, extract_roles(claims)
     )
+
+@router.get("/{exercise_id}/video")
+def get_exercise_video(
+    exercise_id: UUID,
+    claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
+    ),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    return {
+        "url": exercise.get_exercise_video_url(
+            db, exercise_id, user, extract_roles(claims)
+        )
+    }

@@ -1576,7 +1576,7 @@ code {
   font-weight: 700;
 }
 
-.therapist-form__field input,
+.therapist-form__field input:not([type="checkbox"]),
 .therapist-form__field select,
 .therapist-form__field textarea {
   width: 100%;
@@ -1587,6 +1587,26 @@ code {
   background: var(--surface-soft);
   font-size: 0.92rem;
   font-weight: 400;
+}
+
+.therapist-form__body-part input {
+  width: auto;
+  padding: 0;
+}
+
+.therapist-form__body-parts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.therapist-form__body-part {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  margin: 0;
 }
 
 .therapist-form__field textarea {
