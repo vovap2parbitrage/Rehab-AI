@@ -179,6 +179,12 @@ services:
       keycloak-init:
         condition: service_completed_successfully
 
+  frontend-test:
+    profiles: ["test"]
+    build:
+      context: ./frontend
+      target: test
+
   s3:
     image: rustfs/rustfs:latest
     restart: unless-stopped
@@ -213,4 +219,3 @@ volumes:
   redis_data:
   keycloak_data:
   s3_data:
-

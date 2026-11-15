@@ -23,9 +23,49 @@ npm run typecheck  # tsc -b
 npm run lint       # oxlint
 npm run build      # tsc -b && vite build
 npm run preview    # http://localhost:4173
+npm run test       # одноразовий запуск UI-тестів
+npm run test:watch # інтерактивний режим тестів
 ```
 
 > У Windows PowerShell, якщо `npm` блокується політикою виконання, використовуйте `npm.cmd`.
+
+## Автоматизовані тести сторінок пацієнта
+
+Тести Login, Register і кабінету пацієнта написані на Vitest та React Testing Library.
+Вони перевіряють перенаправлення, вибір ролі, помилки Keycloak, доступ за роллю,
+запрошення, список і виконання вправ та запитання лікарю. Keycloak і API підмінені,
+тому для запуску тестів не потрібно стартувати Docker, backend чи Keycloak.
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+Для запуску одного набору тестів:
+
+```bash
+npm test -- src/test/patient-pages.test.tsx
+```
+
+### Запуск через Docker
+
+З кореня репозиторію виконайте:
+
+```powershell
+docker compose --profile test run --build --rm frontend-test
+```
+
+Docker збере окремий тестовий образ і запустить тести в контейнері. Backend, Keycloak
+та інші сервіси запускати не потрібно; `--rm` видалить контейнер після завершення.
+Щоб передати Vitest параметри, наприклад запустити один файл:
+
+```powershell
+docker compose --profile test run --build --rm frontend-test npm run test -- src/test/patient-pages.test.tsx
+```
+
+У Windows PowerShell замініть `npm` на `npm.cmd`, якщо цього вимагає політика виконання.
+Тестовий файл: [`src/test/patient-pages.test.tsx`](src/test/patient-pages.test.tsx).
 
 ## Змінні середовища
 
@@ -131,4 +171,4 @@ a
 - Frontend не має власного стану ролей: після зміни ролі в Keycloak потрібно оновити
   профіль або повторно увійти, щоб отримати новий токен.
 - Використано лише наявні endpoint'и backend; нові API не створювалися.
-- Автоматизованих UI-тестів (Playwright/Vitest) поки немає — перевірено вручну в браузері.
+- UI-тести сторінок пацієнта запускаються командою `npm test` у каталозі `frontend`.
