@@ -48,6 +48,7 @@ class PatientSessionRead(BaseModel):
     completed_at: datetime | None = None
     score: float | None = None
     joint_deviations: dict[str, Any] = Field(default_factory=dict)
+    has_video: bool = False
     created_at: datetime
 
 

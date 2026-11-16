@@ -17,7 +17,12 @@ def record_session(
     task_id: str,
     pain_score: int | None,
     report: dict,
-) -> bool:
+    video_key: str | None = None,
+) -> str:
+    """Create the session for a successful analysis and return its id.
+
+    If this analysis was already saved, the existing session's id is returned.
+    """
     deviations = {
         key: report[key]
         for key in (
@@ -35,6 +40,7 @@ def record_session(
         score=report.get("score"),
         joint_deviations=deviations,
         pain_score=pain_score,
+        video_key=video_key,
         completed_at=datetime.now(UTC),
     )
     with SessionLocal() as db:
@@ -44,5 +50,10 @@ def record_session(
         except IntegrityError:
             db.rollback()
             logger.info("Session for comparison %s already exists", task_id)
-            return False
-    return True
+            existing = (
+                db.query(TrainingSession.id)
+                .filter(TrainingSession.comparison_task_id == task_id)
+                .one()
+            )
+            return str(existing.id)
+        return str(session.id)

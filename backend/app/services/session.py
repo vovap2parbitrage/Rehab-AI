@@ -10,6 +10,7 @@ from app.models.assignment import Assignment
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
+from app.services import storage
 from app.services.patient_access import can_access_patient_id, require_patient_access
 from app.services.assignment import complete_finished_assignments
 
@@ -83,6 +84,24 @@ def complete_assignment_session(
     db.commit()
     db.refresh(session)
     return SessionRead.model_validate(session, from_attributes=True)
+
+
+def get_session_video_url(
+    db: Session,
+    session_id: UUID,
+    user: User,
+    claims: dict,
+) -> str:
+    session = db.get(TrainingSession, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_patient_access(_patient_id_of(session), user, extract_roles(claims), db)
+    if session.video_key is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        return storage.create_video_url(session.video_key)
+    except storage.StorageError as exc:
+        raise HTTPException(status_code=502, detail="Could not open video") from exc
 
 
 def get_session(

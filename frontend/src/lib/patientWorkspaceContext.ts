@@ -16,6 +16,8 @@ export interface PatientWorkspaceContextValue {
   actionPending: string | null
   error: string | null
   refresh: () => void
+  /** Reloads the data in the background, without the loading screen. */
+  reload: () => Promise<void>
   respondToInvitation: (invitationId: string, status: 'accepted' | 'declined') => void
   completeAssignment: (assignmentId: string, painScore: number | null) => Promise<PatientSession | null>
   askForHelp: (sessionId: string, message: string) => Promise<boolean>

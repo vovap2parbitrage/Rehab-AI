@@ -8,7 +8,12 @@ from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
+from app.schemas.session import (
+    PatientSessionCreate,
+    SessionCreate,
+    SessionRead,
+    SessionVideoRead,
+)
 from app.services import session
 
 router = APIRouter()
@@ -63,3 +68,15 @@ def get_session(
     db: Session = Depends(get_db),
 ) -> SessionRead:
     return session.get_session(db, session_id, user, claims)
+
+
+@router.get("/{session_id}/video", response_model=SessionVideoRead)
+def get_session_video(
+    session_id: UUID,
+    claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
+    ),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> SessionVideoRead:
+    return SessionVideoRead(url=session.get_session_video_url(db, session_id, user, claims))
