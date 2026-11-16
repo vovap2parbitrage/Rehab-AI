@@ -26,7 +26,10 @@ import {
 } from '../api/patient'
 import { createHelpRequest, listMyHelpRequests } from '../api/helpRequests'
 import { getMyHistory, type PatientHistory } from '../api/history'
-import { getExerciseVideoUrl } from '../api/uploads'
+import { ApiError } from '../api/client'
+import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
+import { getSessionVideoUrl } from '../api/sessions'
+import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { fetchCurrentUser } from '../api/auth'
 
 vi.mock('../api/patient', () => ({
@@ -40,6 +43,15 @@ vi.mock('../api/patient', () => ({
 vi.mock('../api/history', () => ({
   getMyHistory: vi.fn(),
   getPatientHistory: vi.fn(),
+}))
+
+vi.mock('../api/comparisons', () => ({
+  startComparison: vi.fn(),
+  getComparison: vi.fn(),
+}))
+
+vi.mock('../api/sessions', () => ({
+  getSessionVideoUrl: vi.fn(),
 }))
 
 vi.mock('../api/uploads', () => ({
@@ -176,7 +188,23 @@ const session: PatientSession = {
   completed_at: '2026-01-04T10:00:00Z',
   score: null,
   joint_deviations: {},
+  has_video: false,
   created_at: '2026-01-04T10:00:00Z',
+}
+
+const doneResult: ComparisonResult = {
+  task_id: 'task-1',
+  status: 'done',
+  score: 8.5,
+  worst_repetition_score: 7,
+  repetitions: 7,
+  repetition_scores: [8, 9],
+  joint_scores: { r_knee: 8.1 },
+  errors: [
+    { joint: 'r_knee', start_s: 1, end_s: 1.5, peak_deviation_deg: 18.4, direction: 'too_bent' },
+  ],
+  message: null,
+  session_id: 'session-9',
 }
 
 const helpRequest: HelpRequest = {
@@ -203,6 +231,9 @@ beforeEach(() => {
   vi.mocked(respondToPatientInvitation).mockResolvedValue(pendingInvitation)
   vi.mocked(completePatientAssignment).mockResolvedValue(session)
   vi.mocked(createHelpRequest).mockResolvedValue(helpRequest)
+  vi.mocked(uploadVideo).mockResolvedValue('videos/u/' + 'c'.repeat(32) + '.mp4')
+  vi.mocked(startComparison).mockResolvedValue({ task_id: 'task-1' })
+  vi.mocked(getComparison).mockResolvedValue(doneResult)
   vi.mocked(fetchCurrentUser).mockResolvedValue({
     id: 'patient-1',
     email: 'olena@example.com',
@@ -541,7 +572,7 @@ describe('Patient access and cabinet pages', () => {
       await screen.findByLabelText('Рівень болю після вправи (необов’язково)'),
       '7',
     )
-    await user.click(screen.getByRole('button', { name: 'Завершити сесію' }))
+    await user.click(screen.getByRole('button', { name: 'Завершити без відео' }))
 
     expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
       .toBeInTheDocument()
@@ -556,7 +587,7 @@ describe('Patient access and cabinet pages', () => {
       <PatientExerciseExecutionPage />,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Завершити сесію' }))
+    await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
     expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
       .toBeInTheDocument()
@@ -572,10 +603,10 @@ describe('Patient access and cabinet pages', () => {
       <PatientExerciseExecutionPage />,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Завершити сесію' }))
+    await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Збереження не вдалося')
-    expect(screen.getByRole('button', { name: 'Завершити сесію' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Завершити без відео' })).toBeEnabled()
   })
 
   it('submits a trimmed question to the doctor after saving the session', async () => {
@@ -585,7 +616,7 @@ describe('Patient access and cabinet pages', () => {
       '/patient/exercises/assignment-1/execute',
       <PatientExerciseExecutionPage />,
     )
-    await user.click(await screen.findByRole('button', { name: 'Завершити сесію' }))
+    await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
     await user.type(await screen.findByLabelText('Ваше запитання'), '  Потрібна порада  ')
     await user.click(screen.getByRole('button', { name: 'Надіслати запитання' }))
@@ -602,13 +633,157 @@ describe('Patient access and cabinet pages', () => {
       '/patient/exercises/assignment-1/execute',
       <PatientExerciseExecutionPage />,
     )
-    await user.click(await screen.findByRole('button', { name: 'Завершити сесію' }))
+    await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
     const question = await screen.findByLabelText('Ваше запитання')
     await user.type(question, 'Допоможіть, будь ласка')
     await user.click(screen.getByRole('button', { name: 'Надіслати запитання' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не вдалося надіслати запитання')
     expect(question).toHaveValue('Допоможіть, будь ласка')
+  })
+
+  describe('video analysis', () => {
+    const openExecution = async () => {
+      vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+      renderPatientPage(
+        '/patient/exercises/assignment-1/execute',
+        <PatientExerciseExecutionPage />,
+      )
+      const user = userEvent.setup()
+      const input = await screen.findByLabelText(/Відеофайл/)
+      await user.upload(input, new File(['video'], 'squat.mp4', { type: 'video/mp4' }))
+      return user
+    }
+
+    it('uploads the video, starts the analysis and shows the saved result', async () => {
+      const user = await openExecution()
+      await user.selectOptions(
+        screen.getByLabelText('Рівень болю після вправи (необов’язково)'),
+        '3',
+      )
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
+        .toBeInTheDocument()
+      expect(startComparison).toHaveBeenCalledWith({
+        assignment_id: 'assignment-1',
+        patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
+        pain_score: 3,
+      })
+      expect(screen.getByText('8.5')).toBeInTheDocument()
+      expect(screen.getByText('Праве коліно')).toBeInTheDocument()
+      expect(screen.getByText(/Праве коліно: надто зігнуто/)).toBeInTheDocument()
+      expect(completePatientAssignment).not.toHaveBeenCalled()
+      await waitFor(() => expect(listPatientAssignments).toHaveBeenCalledTimes(2))
+    })
+
+    it('lets the patient ask the doctor about the session created by the analysis', async () => {
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      await user.type(await screen.findByLabelText('Ваше запитання'), 'Чи все гаразд?')
+      await user.click(screen.getByRole('button', { name: 'Надіслати запитання' }))
+
+      expect(createHelpRequest).toHaveBeenCalledWith('session-9', 'Чи все гаразд?')
+    })
+
+    it('waits while the analysis is pending and then shows the result', async () => {
+      vi.mocked(getComparison)
+        .mockResolvedValueOnce({ ...doneResult, status: 'pending', score: null, session_id: null })
+        .mockResolvedValueOnce(doneResult)
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText(/Аналізуємо відео/)).toBeInTheDocument()
+      expect(
+        await screen.findByRole('heading', { name: 'Виконання записано' }, { timeout: 6000 }),
+      ).toBeInTheDocument()
+      expect(getComparison).toHaveBeenCalledTimes(2)
+    }, 10000)
+
+    it('asks to record again when the body parts are not visible and saves nothing', async () => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'rerecord',
+        score: null,
+        session_id: null,
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText(/погано видно на відео/)).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Виконання записано' })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeDisabled()
+    })
+
+    it('explains when no repetitions were found', async () => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'no_repetitions',
+        score: null,
+        session_id: null,
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText(/не вдалося знайти повторень/)).toBeInTheDocument()
+    })
+
+    it('tells the patient to finish without a video when the exercise is not set up for analysis', async () => {
+      vi.mocked(startComparison).mockRejectedValue(
+        new ApiError('conflict', 'conflict', 409, 'The exercise has no reference video yet'),
+      )
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText(/аналіз відео ще не налаштований/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Завершити без відео' })).toBeEnabled()
+    })
+
+    it('shows the upload error and does not start the analysis', async () => {
+      vi.mocked(uploadVideo).mockRejectedValue(new Error('Максимальний розмір відео — 100 МБ.'))
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText('Максимальний розмір відео — 100 МБ.')).toBeInTheDocument()
+      expect(startComparison).not.toHaveBeenCalled()
+    })
+  })
+
+  it('shows the analysis details and the video of a saved session', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getSessionVideoUrl).mockResolvedValue('https://storage.test/session.mp4')
+    vi.mocked(listPatientAssignments).mockResolvedValue([
+      {
+        ...patientAssignment,
+        sessions: [
+          {
+            ...session,
+            score: 8.5,
+            has_video: true,
+            joint_deviations: {
+              repetitions: 7,
+              joint_scores: { r_knee: 8.1 },
+              errors: [],
+            },
+          },
+        ],
+      },
+    ])
+    renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+    await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+
+    await user.click(screen.getByText('Сесія 1'))
+    expect(screen.getByText('Праве коліно')).toBeInTheDocument()
+    expect(screen.getByText('Помилок техніки не виявлено.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Переглянути відео виконання' }))
+
+    expect(await screen.findByRole('button', { name: 'Сховати відео' })).toBeInTheDocument()
+    expect(getSessionVideoUrl).toHaveBeenCalledWith('session-1')
   })
 
   it('shows a workspace error when loading cabinet data fails and retries the request', async () => {
