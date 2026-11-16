@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError } from '../api/client'
+import { getErrorMessage } from '../lib/errorMessage'
 import {
   HELP_REQUESTS_CHANGED_EVENT,
   listNeedsAttention,
@@ -10,10 +10,6 @@ import {
 import { ErrorMessage } from './ErrorMessage'
 import { AlertTriangleIcon } from './Icons'
 import { Loading } from './Loading'
-
-function errorText(reason: unknown, fallback: string): string {
-  return reason instanceof ApiError ? reason.detail || reason.message : fallback
-}
 
 /** Therapist: unanswered questions about their assignments ("Needs attention"). */
 export function NeedsAttentionSection() {
@@ -29,7 +25,7 @@ export function NeedsAttentionSection() {
       .then(setRequests)
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) {
-          setError(errorText(reason, 'Не вдалося завантажити запитання пацієнтів.'))
+          setError(getErrorMessage(reason, 'Не вдалося завантажити запитання пацієнтів.'))
         }
       })
       .finally(() => {
@@ -47,7 +43,7 @@ export function NeedsAttentionSection() {
       setRequests((current) => current.filter((item) => item.id !== id))
       window.dispatchEvent(new Event(HELP_REQUESTS_CHANGED_EVENT))
     } catch (reason: unknown) {
-      setError(errorText(reason, 'Не вдалося надіслати відповідь.'))
+      setError(getErrorMessage(reason, 'Не вдалося надіслати відповідь.'))
     } finally {
       setBusyId(null)
     }

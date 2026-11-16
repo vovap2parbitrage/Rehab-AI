@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError } from '../api/client'
+import { getErrorMessage } from '../lib/errorMessage'
 import { listPatients, sendInvitation, type Patient } from '../api/therapist'
 import { MailIcon, UserIcon } from '../components/Icons'
 import { ErrorMessage } from '../components/ErrorMessage'
@@ -14,7 +14,7 @@ export function TherapistPatientsPage() {
 
   useEffect(() => {
     listPatients().then(setPatients).catch((reason: unknown) => {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося завантажити пацієнтів.')
+      setError(getErrorMessage(reason, 'Не вдалося завантажити пацієнтів.'))
     })
   }, [])
 
@@ -27,7 +27,7 @@ export function TherapistPatientsPage() {
       setInvite({ email: '' })
       setNotice('Запрошення пацієнту надіслано.')
     } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося надіслати запрошення.')
+      setError(getErrorMessage(reason, 'Не вдалося надіслати запрошення.'))
     } finally {
       setBusy(false)
     }

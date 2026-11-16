@@ -25,6 +25,8 @@ import {
   respondToPatientInvitation,
 } from '../api/patient'
 import { createHelpRequest, listMyHelpRequests } from '../api/helpRequests'
+import { getMyHistory, type PatientHistory } from '../api/history'
+import { getExerciseVideoUrl } from '../api/uploads'
 import { fetchCurrentUser } from '../api/auth'
 
 vi.mock('../api/patient', () => ({
@@ -33,6 +35,16 @@ vi.mock('../api/patient', () => ({
   listPatientInvitations: vi.fn(),
   listPatientTherapists: vi.fn(),
   respondToPatientInvitation: vi.fn(),
+}))
+
+vi.mock('../api/history', () => ({
+  getMyHistory: vi.fn(),
+  getPatientHistory: vi.fn(),
+}))
+
+vi.mock('../api/uploads', () => ({
+  uploadVideo: vi.fn(),
+  getExerciseVideoUrl: vi.fn(),
 }))
 
 vi.mock('../api/helpRequests', () => ({
@@ -120,14 +132,33 @@ const acceptedInvitation: PatientInvitation = {
   responded_at: '2026-01-03T10:00:00Z',
 }
 
+const emptyHistory: PatientHistory = {
+  patient_id: 'patient-1',
+  period: '30d',
+  date_from: '2026-01-01',
+  date_to: '2026-01-31',
+  kpis: {
+    total_sessions: 0,
+    planned_sessions: 0,
+    adherence_pct: null,
+    avg_pain: null,
+    pain_trend: null,
+    avg_score: null,
+    last_session_at: null,
+  },
+  pain_series: [],
+  score_series: [],
+  adherence_weeks: [],
+}
+
 const patientAssignment: PatientAssignment = {
   id: 'assignment-1',
   patient_id: 'patient-1',
   exercise_id: 'exercise-1',
   repetitions: 12,
-  sessions_per_week: 3,
+  duration_weeks: 4,
+  weekdays: [0, 2, 4],
   starts_on: '2026-01-01',
-  ends_on: null,
   status: 'active',
   exercise: {
     id: 'exercise-1',
@@ -164,6 +195,7 @@ const helpRequest: HelpRequest = {
 }
 
 beforeEach(() => {
+  vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
@@ -456,16 +488,38 @@ describe('Patient access and cabinet pages', () => {
     await waitFor(() => expect(listPatientInvitations).toHaveBeenCalledTimes(2))
   })
 
-  it('renders active exercises and omits the execution action for inactive ones', async () => {
+  it('lists active and completed assignments and offers execution only for active ones', async () => {
+    const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([
       patientAssignment,
-      { ...patientAssignment, id: 'assignment-2', exercise: { ...patientAssignment.exercise, name: 'Пасивне розгинання' }, status: 'inactive' },
+      { ...patientAssignment, id: 'assignment-2', exercise: { ...patientAssignment.exercise, name: 'Пасивне розгинання' }, status: 'completed' },
     ])
     renderPatientPage('/patient/exercises', <PatientExercisesPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Розгинання коліна' })).toBeInTheDocument()
-    expect(screen.getByText('Пасивне розгинання')).toBeInTheDocument()
+    await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+
+    expect(screen.getByRole('heading', { name: 'Розгинання коліна' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Пасивне розгинання' })).toBeInTheDocument()
+    expect(screen.getByText('Завершене')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /Виконати вправу/ })).toHaveLength(1)
+  })
+
+  it('shows the reference video after the patient asks for it', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getExerciseVideoUrl).mockResolvedValue('https://storage.test/reference.mp4')
+    vi.mocked(listPatientAssignments).mockResolvedValue([
+      {
+        ...patientAssignment,
+        exercise: { ...patientAssignment.exercise, reference_video_key: 'videos/u/' + 'a'.repeat(32) + '.mp4' },
+      },
+    ])
+    renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+    await user.click(screen.getByRole('button', { name: 'Переглянути еталонне відео' }))
+
+    expect(await screen.findByRole('button', { name: 'Сховати відео' })).toBeInTheDocument()
+    expect(getExerciseVideoUrl).toHaveBeenCalledWith('exercise-1')
   })
 
   it('shows an empty state when no exercises have been assigned', async () => {

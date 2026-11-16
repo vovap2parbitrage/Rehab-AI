@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.statuses import AssignmentStatus
 from app.db.base import Base
 
 
@@ -50,7 +51,7 @@ class Assignment(Base):
 
     status: Mapped[str] = mapped_column(
         String(20),
-        default="active",
+        default=AssignmentStatus.ACTIVE.value,
         nullable=False,
     )
 

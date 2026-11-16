@@ -2,12 +2,10 @@ from datetime import UTC, date, datetime, time, timedelta
 from statistics import mean
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.assignment import Assignment
-from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.history import (
@@ -17,7 +15,7 @@ from app.schemas.history import (
     HistoryPoint,
     PatientHistoryRead,
 )
-from app.services.patient_access import require_patient_access
+from app.services.patient_access import get_patient_profile, require_patient_access
 
 PERIOD_DAYS = {
     HistoryPeriod.last_30_days: 30,
@@ -206,10 +204,5 @@ def get_patient_history(
 
 
 def get_my_history(db: Session, user: User, period: HistoryPeriod) -> PatientHistoryRead:
-    patient = db.query(Patient).filter(Patient.user_id == user.id).first()
-    if patient is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Patient profile not found",
-        )
+    patient = get_patient_profile(db, user)
     return build_patient_history(db, patient.id, period)

@@ -169,7 +169,7 @@ def test_completed_assignment_cannot_be_canceled(
     response = api.post(f"/api/v1/assignments/{assignment.id}/cancel")
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "You can cancel only cancel active assignments"
+    assert response.json()["detail"] == "You can cancel only active assignments"
 
 
 def test_therapist_list_without_patient_id_returns_only_own_patients(
@@ -214,3 +214,22 @@ def test_assignment_read_schema_matches_model_columns():
     columns = {column.name for column in Assignment.__table__.columns}
 
     assert set(AssignmentRead.model_fields) <= columns
+
+
+def test_cancelled_assignment_is_hidden_from_the_patient_but_not_the_therapist(
+    api, login, therapist, patient_user, seed_patient, seed_assignment
+):
+    patient = seed_patient(patient_user, therapist)
+    assignment = seed_assignment(patient)
+    login(therapist)
+    assert api.post(f"/api/v1/assignments/{assignment.id}/cancel").status_code == 204
+
+    login(patient_user)
+    assert api.get("/api/v1/assignments/mine").json() == []
+    assert api.get("/api/v1/assignments/").json() == []
+
+    login(therapist)
+    listed = api.get(f"/api/v1/assignments/?patient_id={patient.id}").json()
+    assert [(item["id"], item["status"]) for item in listed] == [
+        (str(assignment.id), "cancelled")
+    ]

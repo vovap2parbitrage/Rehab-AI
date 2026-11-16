@@ -11,7 +11,7 @@ from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.help_request import HelpRequestCreate, HelpRequestRead
-from app.services.patient_access import get_patient_for_therapist
+from app.services.patient_access import get_patient_for_therapist, treated_by
 
 
 def _query(db: Session) -> Query:
@@ -35,7 +35,7 @@ def _for_therapist(query: Query, user: User) -> Query:
         return query
     return query.filter(
         Assignment.therapist_id == user.id,
-        HelpRequest.patient.has(Patient.therapists.any(User.id == user.id)),
+        HelpRequest.patient.has(treated_by(user.id)),
     )
 
 

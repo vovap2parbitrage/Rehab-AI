@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { createExercise, deleteExercise, getExerciseVideoUrl, listExercises, updateExercise, type Exercise } from '../api/therapist'
+import { createExercise, deleteExercise, listExercises, updateExercise, type Exercise } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { ReferenceVideo } from '../components/ReferenceVideo'
 import { ArrowRightIcon, CheckIcon, PencilIcon, TrashIcon } from '../components/Icons'
 import { deleteUploadedVideo, uploadVideo } from '../api/uploads'
+import { BODY_PARTS } from '../lib/bodyParts'
+import { getErrorMessage } from '../lib/errorMessage'
+import { useVideoPreview } from '../lib/useVideoPreview'
 
 function getVideoDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -34,13 +38,12 @@ export function TherapistExercisesPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({})
-  const [videoLoading, setVideoLoading] = useState<string | null>(null)
+  const videoPreview = useVideoPreview()
   const editingExercise = exercises.find((item) => item.id === editingId)
 
   useEffect(() => {
     listExercises().then(setExercises).catch((reason: unknown) => {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося завантажити вправи.')
+      setError(getErrorMessage(reason, 'Не вдалося завантажити вправи.'))
     })
   }, [])
 
@@ -65,28 +68,6 @@ export function TherapistExercisesPage() {
     if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
-  const handleViewVideo = async (exerciseId: string) => {
-    setVideoLoading(exerciseId)
-    setError(null)
-
-    try {
-      const url = await getExerciseVideoUrl(exerciseId)
-      setVideoUrls((current) => ({ ...current, [exerciseId]: url }))
-    } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося відкрити відео.')
-    } finally {
-      setVideoLoading(null)
-    }
-  }
-
-  const handleHideVideo = (exerciseId: string) => {
-    setVideoUrls((current) => {
-      const next = { ...current }
-      delete next[exerciseId]
-      return next
-    })
-  }
-
   const handleDelete = async (exercise: Exercise) => {
     if (!window.confirm(`Видалити вправу «${exercise.name}»?`)) return
     setBusy(true)
@@ -97,7 +78,7 @@ export function TherapistExercisesPage() {
       if (editingId === exercise.id) cancelEditing()
       setNotice('Вправу видалено.')
     } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося видалити вправу.')
+      setError(getErrorMessage(reason, 'Не вдалося видалити вправу.'))
     } finally {
       setBusy(false)
     }
@@ -110,13 +91,6 @@ export function TherapistExercisesPage() {
       setBodyParts([...bodyParts, part])
     }
   }
-  const availableBodyParts = [
-    { value: 'left_arm', label: 'Ліва рука' },
-    { value: 'right_arm', label: 'Права рука' },
-    { value: 'left_leg', label: 'Ліва нога' },
-    { value: 'right_leg', label: 'Права нога' },
-    { value: 'torso', label: 'Тулуб' },
-  ]
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault()
@@ -158,20 +132,9 @@ export function TherapistExercisesPage() {
       })
       setExercises((current) => current.map((item) => item.id === updated.id ? updated : item))
       if (videoFile) {
-        setVideoUrls((current) => {
-          const next = { ...current }
-          delete next[updated.id]
-          return next
-        })
-        try {
-          const updatedVideoUrl = await getExerciseVideoUrl(updated.id)
-          setVideoUrls((current) => ({ ...current, [updated.id]: updatedVideoUrl }))
-        } catch (reason: unknown) {
-          const detail = reason instanceof ApiError
-            ? reason.detail || reason.message
-            : reason instanceof Error ? reason.message : 'Невідома помилка'
-          setError(`Вправу збережено, але не вдалося оновити відеопрогравач: ${detail}`)
-        }
+        // The old link points at the replaced video: drop it and load the new one.
+        videoPreview.hide(updated.id)
+        await videoPreview.show(updated.id)
       }
       cancelEditing()
       setNotice('Вправу змінено.')
@@ -191,11 +154,7 @@ export function TherapistExercisesPage() {
       setNotice('Вправу додано до бібліотеки.')
     }
   } catch (reason: unknown) {
-    let message = reason instanceof ApiError
-      ? reason.detail || reason.message
-      : reason instanceof Error
-        ? reason.message
-        : 'Не вдалося зберегти вправу.'
+    let message = getErrorMessage(reason, 'Не вдалося зберегти вправу.')
     if (uploadedVideoKey) {
       try {
         await deleteUploadedVideo(uploadedVideoKey)
@@ -203,11 +162,7 @@ export function TherapistExercisesPage() {
         if (cleanupReason instanceof ApiError && cleanupReason.status === 409) {
           message += ' Нове відео вже прив’язане до вправи, тому його не видалено.'
         } else {
-          const cleanupMessage = cleanupReason instanceof ApiError
-            ? cleanupReason.detail || cleanupReason.message
-            : cleanupReason instanceof Error
-              ? cleanupReason.message
-              : 'невідома помилка'
+          const cleanupMessage = getErrorMessage(cleanupReason, 'невідома помилка')
           message += ` Не вдалося видалити нове відео: ${cleanupMessage}`
         }
       }
@@ -224,6 +179,7 @@ export function TherapistExercisesPage() {
       <header className="page-heading workspace-heading"><div><p className="eyebrow">Кабінет лікаря</p><h1>Бібліотека вправ</h1><p className="page-heading__lead">Створюйте та переглядайте вправи для планів пацієнтів.</p></div></header>
       {notice && <div className="success-message" role="status">{notice}</div>}
       {error && <ErrorMessage title="Помилка" message={error} />}
+      {videoPreview.error && <ErrorMessage title="Не вдалося відкрити відео" message={videoPreview.error} />}
       <div className="workspace-summary-grid therapist-page__grid">
         <section className="card"><div className="card__header"><div><h2>{editingId ? 'Редагування вправи' : 'Нова вправа'}</h2><p>{editingId ? 'Змініть назву або опис вправи.' : 'Додайте назву, опис і відео вправи.'}</p></div><span className="card__header-icon"><CheckIcon /></span></div>
           <form className="therapist-form" onSubmit={handleSubmit}>
@@ -233,7 +189,7 @@ export function TherapistExercisesPage() {
               <span>Частини тіла *</span>
 
               <div className="therapist-form__body-parts">
-                {availableBodyParts.map((part) => (
+                {BODY_PARTS.map((part) => (
                   <label className="therapist-form__body-part" key={part.value}>
                     <input
                       type="checkbox"
@@ -249,7 +205,7 @@ export function TherapistExercisesPage() {
               setVideoFile(event.target.files?.[0] || null)
               setVideoError(null)
               setError(null)
-            }} required={!editingId || !Boolean(editingExercise?.reference_video_key)} /></label>
+            }} required={!editingId || !editingExercise?.reference_video_key} /></label>
             {videoError && <p className="error-message">{videoError}</p>}
             <button className="button button--primary" disabled={busy}>{busy ? 'Зберігаємо…' : editingId ? 'Зберегти зміни' : 'Створити вправу'}</button>
             {editingId && <button type="button" className="button button--ghost" onClick={cancelEditing}>Скасувати</button>}
@@ -263,36 +219,8 @@ export function TherapistExercisesPage() {
                   <h3>{item.name}</h3>
                   <p>{item.description || 'Опис не додано.'}</p>
                   {item.reference_video_key && (
-                    <div className="exercise-card__video">
-                      {videoUrls[item.id] ? (
-                        <div>
-                          <video
-                            key={videoUrls[item.id]}
-                            src={videoUrls[item.id]}
-                            controls
-                            preload="metadata"
-                            style={{ width: '100%', maxWidth: '360px', maxHeight: '220px', objectFit: 'contain' }}
-                          />
-                          <button
-                            type="button"
-                            className="button button--ghost"
-                            onClick={() => handleHideVideo(item.id)}
-                          >
-                            Сховати відео
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="button button--ghost"
-                          onClick={() => void handleViewVideo(item.id)}
-                          disabled={videoLoading !== null}
-                        >
-                          {videoLoading === item.id ? 'Завантажуємо…' : 'Переглянути відео'}
-                        </button>
-                      )}
-                    </div>
-                )}
+                    <ReferenceVideo exerciseId={item.id} preview={videoPreview} showLabel="Переглянути відео" />
+                  )}
                 </div>
                 <div className="exercise-card__actions">
                   <button type="button" className="icon-button" aria-label={`Змінити ${item.name}`} title="Змінити" onClick={() => startEditing(item)} disabled={busy}><PencilIcon /></button>

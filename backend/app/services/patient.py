@@ -7,7 +7,7 @@ from app.core.roles import Role
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services.patient_access import require_patient_access
+from app.services.patient_access import is_patient_therapist, require_patient_access, treated_by
 
 
 def _to_read(patient: Patient) -> PatientRead:
@@ -25,7 +25,7 @@ def _to_read(patient: Patient) -> PatientRead:
 def list_patients(db: Session, *, is_admin: bool, therapist_id: UUID | None) -> list[PatientRead]:
     query = db.query(Patient)
     if not is_admin:
-        query = query.filter(Patient.therapists.any(User.id == therapist_id))
+        query = query.filter(treated_by(therapist_id))
     return [_to_read(patient) for patient in query.all()]
 
 
@@ -109,9 +109,7 @@ def remove_patient_from_therapist(
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if user.role != Role.ADMIN.value and not any(
-        therapist.id == user.id for therapist in patient.therapists
-    ):
+    if user.role != Role.ADMIN.value and not is_patient_therapist(patient, user):
         raise HTTPException(status_code=403, detail="Patient is not assigned to you")
     patient.therapists = [
         therapist for therapist in patient.therapists if therapist.id != user.id

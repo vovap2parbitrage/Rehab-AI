@@ -39,3 +39,11 @@ export function deleteUploadedVideo(key: string): Promise<void> {
     { method: 'DELETE' },
   )
 }
+
+/** Temporary link for playing an exercise's reference video (doctor and patient). */
+export async function getExerciseVideoUrl(exerciseId: string): Promise<string> {
+  const response = await apiRequest<{ url: string }>(
+    `/api/v1/exercises/${encodeURIComponent(exerciseId)}/video`,
+  )
+  return response.url
+}

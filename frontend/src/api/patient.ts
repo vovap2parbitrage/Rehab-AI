@@ -88,13 +88,6 @@ export function listPatientAssignments(options: { signal?: AbortSignal } = {}) {
   })
 }
 
-export async function getPatientExerciseVideoUrl(exerciseId: string): Promise<string> {
-  const response = await apiRequest<{ url: string }>(
-    `/api/v1/exercises/${encodeURIComponent(exerciseId)}/video`,
-  )
-  return response.url
-}
-
 export function completePatientAssignment(
   assignmentId: string,
   payload: { pain_score?: number },

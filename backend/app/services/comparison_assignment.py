@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
+from app.core.statuses import AssignmentStatus
 from app.models.user import User
 from app.schemas.comparison import KNOWN_JOINTS, MAX_TOLERANCE_DEG, ComparisonRequest
 from app.services import storage
@@ -34,7 +35,7 @@ def prepare_comparison(db: Session, req: ComparisonRequest, user: User) -> Prepa
     )
     if assignment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Assignment not found")
-    if assignment.status != "active":
+    if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status.HTTP_409_CONFLICT, "Assignment is not active")
     if not storage.is_owned_key(req.patient_key, str(user.id)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Video does not belong to you")

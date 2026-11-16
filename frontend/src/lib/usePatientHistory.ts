@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../api/client'
+import { getErrorMessage } from './errorMessage'
 import {
   getMyHistory,
   getPatientHistory,
   type HistoryPeriod,
   type PatientHistory,
 } from '../api/history'
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.detail ?? error.message
-  if (error instanceof Error) return error.message
-  return 'Не вдалося завантажити історію виконання.'
-}
 
 /** Loads the signed-in patient's history, or the given patient's when `patientId` is set. */
 export function usePatientHistory(patientId?: string) {
@@ -40,7 +35,7 @@ export function usePatientHistory(patientId?: string) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
         const notFound = reason instanceof ApiError && reason.kind === 'not-found'
-        setSettled({ key: requestKey, error: getErrorMessage(reason), notFound })
+        setSettled({ key: requestKey, error: getErrorMessage(reason, 'Не вдалося завантажити історію виконання.'), notFound })
       })
 
     return () => controller.abort()
