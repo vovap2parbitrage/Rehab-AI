@@ -2,8 +2,10 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.body_part import BodyPart
 
-BODY_PARTS = ("left_arm", "right_arm", "left_leg", "right_leg", "torso")
+
+BODY_PARTS = {part.value for part in BodyPart}
 
 
 class ExerciseCreate(BaseModel):
@@ -18,7 +20,7 @@ class ExerciseCreate(BaseModel):
     def body_parts_valid(cls, v: list[str]) -> list[str]:
         if len(set(v)) != len(v):
             raise ValueError("body_parts must not repeat")
-        unknown = set(v) - set(BODY_PARTS)
+        unknown = set(v) - BODY_PARTS
         if unknown:
             raise ValueError(f"unknown body parts: {sorted(unknown)}")
         return v

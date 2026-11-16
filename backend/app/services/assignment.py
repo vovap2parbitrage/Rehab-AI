@@ -12,14 +12,13 @@ from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
-from app.services.patient_access import get_patient_for_therapist, get_patient_for_user
-
-
-def _patient_for_user(db: Session, user: User) -> Patient:
-    patient = db.query(Patient).filter(Patient.user_id == user.id).first()
-    if patient is None:
-        raise HTTPException(status_code=404, detail="Patient profile not found")
-    return patient
+from app.core.statuses import AssignmentStatus
+from app.services.patient_access import (
+    get_patient_for_therapist,
+    get_patient_for_user,
+    get_patient_profile,
+    treated_by,
+)
 
 
 def planned_session_count(assignment: Assignment) -> int:
@@ -45,21 +44,24 @@ def complete_finished_assignments(db: Session, assignments: list[Assignment]) ->
             )
             .scalar()
         )
-        if item.status == "active" and (
+        if item.status == AssignmentStatus.ACTIVE.value and (
             ends_on < today or completed_sessions >= planned_session_count(item)
         ):
-            item.status = "completed"
+            item.status = AssignmentStatus.COMPLETED.value
             changed = True
     if changed:
         db.commit()
 
 
 def list_patient_assignments(db: Session, user: User) -> list[PatientAssignmentRead]:
-    patient = _patient_for_user(db, user)
+    patient = get_patient_profile(db, user)
     assignments = (
         db.query(Assignment)
         .options(joinedload(Assignment.exercise), selectinload(Assignment.sessions))
-        .filter(Assignment.patient_id == patient.id)
+        .filter(
+            Assignment.patient_id == patient.id,
+            Assignment.status != AssignmentStatus.CANCELLED.value,
+        )
         .order_by(Assignment.starts_on.desc())
         .all()
     )
@@ -81,14 +83,17 @@ def list_assignments(
         assignments = (
             db.query(Assignment)
             .join(Assignment.patient)
-            .filter(Patient.therapists.any(User.id == user.id))
+            .filter(treated_by(user.id))
             .all()
         )
     else:
         assignments = (
             db.query(Assignment)
             .join(Assignment.patient)
-            .filter(Patient.user_id == user.id and Assignment.status != "canceled")
+            .filter(
+                Patient.user_id == user.id,
+                Assignment.status != AssignmentStatus.CANCELLED.value,
+            )
             .all()
         )
     complete_finished_assignments(db, assignments)
@@ -130,9 +135,9 @@ def cancel_assignment(db: Session, assignment_id: UUID, user: User) -> None:
         raise HTTPException(status_code=404, detail="Assignment not found")
     if user.role != Role.ADMIN.value and assignment.therapist_id != user.id:
         raise HTTPException(status_code=403, detail="You can cancel only your assignments")
-    if assignment.status != "active":
-        raise HTTPException(status_code=403, detail="You can cancel only cancel active assignments")
+    if assignment.status != AssignmentStatus.ACTIVE.value:
+        raise HTTPException(status_code=403, detail="You can cancel only active assignments")
 
-    assignment.status = "cancelled"
+    assignment.status = AssignmentStatus.CANCELLED.value
 
     db.commit()

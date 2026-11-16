@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.auth import extract_roles
+from app.core.statuses import AssignmentStatus
 from app.models.assignment import Assignment
 from app.models.session import TrainingSession
 from app.models.user import User
@@ -68,7 +69,7 @@ def complete_assignment_session(
     )
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    if assignment.status != "active":
+    if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail="Assignment is not active")
 
     session = TrainingSession(

@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.statuses import AssignmentStatus
+
 
 class AssignmentCreate(BaseModel):
     patient_id: UUID
@@ -25,7 +27,7 @@ class AssignmentCreate(BaseModel):
 class AssignmentRead(AssignmentCreate):
     id: UUID = Field(default_factory=uuid4)
     therapist_id: UUID | None = None
-    status: str = Field(default="active", max_length=20)
+    status: str = Field(default=AssignmentStatus.ACTIVE.value, max_length=20)
 
 
 class PatientExerciseRead(BaseModel):

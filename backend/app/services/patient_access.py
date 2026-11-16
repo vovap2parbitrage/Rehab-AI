@@ -9,13 +9,29 @@ from app.models.user import User
 from app.schemas.patient import PatientRead
 
 
+def is_patient_therapist(patient: Patient, user: User) -> bool:
+    """True if the user is one of the patient's therapists."""
+    return any(therapist.id == user.id for therapist in patient.therapists)
+
+
+def treated_by(therapist_id: UUID | None):
+    """SQL condition: the patient is treated by this therapist."""
+    return Patient.therapists.any(User.id == therapist_id)
+
+
+def get_patient_profile(db: Session, user: User) -> Patient:
+    """The patient profile of a logged-in patient, or 404."""
+    patient = db.query(Patient).filter(Patient.user_id == user.id).first()
+    if patient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient profile not found")
+    return patient
+
+
 def _has_access(patient: Patient, user: User, roles: set[str]) -> bool:
     if Role.ADMIN.value in roles:
         return True
 
-    if Role.THERAPIST.value in roles and any(
-        therapist.id == user.id for therapist in patient.therapists
-    ):
+    if Role.THERAPIST.value in roles and is_patient_therapist(patient, user):
         return True
 
     return Role.PATIENT.value in roles and patient.user_id == user.id
@@ -70,9 +86,7 @@ def get_patient_for_therapist(
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if user.role != Role.ADMIN.value and not any(
-        therapist.id == user.id for therapist in patient.therapists
-    ):
+    if user.role != Role.ADMIN.value and not is_patient_therapist(patient, user):
         raise HTTPException(status_code=403, detail="Patient is not assigned to you")
     return patient
 
@@ -83,9 +97,7 @@ def get_patient_for_user(patient_id: UUID, user: User, db: Session) -> Patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     if user.role == Role.ADMIN.value:
         return patient
-    if user.role == Role.THERAPIST.value and any(
-        therapist.id == user.id for therapist in patient.therapists
-    ):
+    if user.role == Role.THERAPIST.value and is_patient_therapist(patient, user):
         return patient
     if user.role == Role.PATIENT.value and patient.user_id == user.id:
         return patient

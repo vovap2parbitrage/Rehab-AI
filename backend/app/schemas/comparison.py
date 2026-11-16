@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Literal
 from uuid import UUID
 
@@ -10,13 +9,6 @@ KNOWN_JOINTS = {*JOINT_TRIPLETS, TORSO_TILT}
 MAX_TOLERANCE_DEG = 90.0
 VIDEO_KEY_PATTERN = r"^videos/[A-Za-z0-9_-]{1,64}/[0-9a-f]{32}\.(mp4|mov)$"
 
-
-class BodyPart(str, Enum):
-    left_arm = "left_arm"
-    right_arm = "right_arm"
-    left_leg = "left_leg"
-    right_leg = "right_leg"
-    torso = "torso"
 
 class UploadRequest(BaseModel):
     content_type: Literal["video/mp4", "video/quicktime"]
