@@ -1,6 +1,8 @@
 import uuid
 from datetime import date
 
+from app.core.auth import get_current_claims
+from app.main import app
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.schemas.exercise import ExerciseRead
@@ -144,7 +146,8 @@ def test_patient_can_view_reference_video_for_assigned_exercise(
             patient_id=patient.id,
             exercise_id=uuid.UUID(created["id"]),
             repetitions=10,
-            sessions_per_week=3,
+            duration_weeks=4,
+            weekdays=[0, 2, 4],
             starts_on=date(2026, 1, 1),
         )
     )
@@ -177,7 +180,8 @@ def test_patient_cannot_view_video_for_unassigned_exercise(
             patient_id=other_patient.id,
             exercise_id=uuid.UUID(created["id"]),
             repetitions=10,
-            sessions_per_week=3,
+            duration_weeks=4,
+            weekdays=[0, 2, 4],
             starts_on=date(2026, 1, 1),
         )
     )
@@ -484,3 +488,25 @@ def test_exercise_rejects_unknown_or_repeated_body_parts(api, login, therapist):
             json=exercise_payload(str(therapist.id), body_parts=bad),
         )
         assert response.status_code == 422
+
+
+def test_therapist_with_the_default_patient_role_can_view_own_exercise_video(
+    api, login, therapist, monkeypatch
+):
+    login(therapist)
+    created = api.post(
+        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
+    ).json()
+    # Keycloak gives every account the "patient" role, so a therapist's token has both.
+    app.dependency_overrides[get_current_claims] = lambda: {
+        "sub": therapist.keycloak_sub,
+        "realm_access": {"roles": ["therapist", "patient"]},
+    }
+    monkeypatch.setattr(
+        "app.services.storage.create_video_url",
+        lambda key: f"https://videos.test/{key}",
+    )
+
+    response = api.get(f"/api/v1/exercises/{created['id']}/video")
+
+    assert response.status_code == 200

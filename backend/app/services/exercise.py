@@ -7,9 +7,9 @@ from app.services import storage
 from app.core.roles import Role
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
-from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.exercise import ExerciseCreate, ExerciseRead
+from app.services.patient_access import get_patient_profile
 
 
 def _to_read(exercise: Exercise) -> ExerciseRead:
@@ -141,10 +141,13 @@ def get_exercise_video_url(
         raise HTTPException(status_code=404, detail="Exercise not found")
 
     if Role.ADMIN.value not in roles:
-        if Role.PATIENT.value in roles:
-            patient = db.query(Patient).filter(Patient.user_id == user.id).first()
-            if patient is None:
-                raise HTTPException(status_code=404, detail="Patient profile not found")
+        # Keycloak gives every account the default "patient" role, so a therapist's
+        # token carries both roles. Check the higher role first, like login does.
+        if Role.THERAPIST.value in roles:
+            if exercise.created_by != user.id:
+                raise HTTPException(status_code=403, detail="You cannot view this exercise")
+        else:
+            patient = get_patient_profile(db, user)
             assigned = (
                 db.query(Assignment.id)
                 .filter(
@@ -158,8 +161,6 @@ def get_exercise_video_url(
                     status_code=403,
                     detail="You can view only exercises assigned to you",
                 )
-        elif exercise.created_by != user.id:
-            raise HTTPException(status_code=403, detail="You cannot view this exercise")
 
     if not exercise.reference_video_key:
         raise HTTPException(status_code=404, detail="Video not found")
