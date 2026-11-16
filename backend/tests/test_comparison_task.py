@@ -99,20 +99,34 @@ def test_unexpected_error_hides_details(monkeypatch):
 ASSIGNMENT = "11111111-1111-1111-1111-111111111111"
 
 
-def test_done_report_is_saved_as_a_session(monkeypatch):
+@pytest.fixture
+def deleted(monkeypatch):
+    """Videos the worker deletes from storage."""
+    keys = []
+    monkeypatch.setattr(comparison_analysis.storage, "delete_video", keys.append)
+    return keys
+
+
+def test_done_report_is_saved_as_a_session_with_the_video(monkeypatch, deleted):
     saved = []
+
+    def fake_record(*args):
+        saved.append(args)
+        return "session-1"
+
     monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
     monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "done", "score": 9.0})
-    monkeypatch.setattr(comparison_analysis, "record_session", lambda *a: saved.append(a))
+    monkeypatch.setattr(comparison_analysis, "record_session", fake_record)
 
     result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, 2, "task-1")
 
-    assert result == {"status": "done", "score": 9.0}
-    assert saved == [(ASSIGNMENT, "task-1", 2, {"status": "done", "score": 9.0})]
+    assert result == {"status": "done", "score": 9.0, "session_id": "session-1"}
+    assert saved == [(ASSIGNMENT, "task-1", 2, {"status": "done", "score": 9.0}, PAT)]
+    assert deleted == []  # the video now belongs to the session
 
 
 @pytest.mark.parametrize("status", ["rerecord", "no_repetitions"])
-def test_unfinished_report_is_not_saved(monkeypatch, status):
+def test_unfinished_report_is_not_saved_and_the_video_is_deleted(monkeypatch, deleted, status):
     saved = []
     monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
     monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": status})
@@ -122,9 +136,10 @@ def test_unfinished_report_is_not_saved(monkeypatch, status):
 
     assert result == {"status": status}
     assert saved == []
+    assert deleted == [PAT]
 
 
-def test_database_failure_returns_failed(monkeypatch):
+def test_database_failure_returns_failed_and_deletes_the_video(monkeypatch, deleted):
     def boom(*args):
         raise RuntimeError("db down")
 
@@ -135,3 +150,38 @@ def test_database_failure_returns_failed(monkeypatch):
     result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, None, "task-1")
 
     assert result == {"status": "failed", "message": "Could not save the result."}
+    assert deleted == [PAT]
+
+
+def test_failed_analysis_of_an_assignment_deletes_the_video(monkeypatch, deleted):
+    def failing(key, dest):
+        raise InvalidVideoError("The file is not a supported video (mp4 or mov).")
+
+    monkeypatch.setattr(comparison_analysis, "download_video", failing)
+
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, None, "task-1")
+
+    assert result["status"] == "failed"
+    assert deleted == [PAT]
+
+
+def test_a_failed_delete_does_not_hide_the_result(monkeypatch):
+    def cannot_delete(key):
+        raise StorageError("Could not delete the video.")
+
+    monkeypatch.setattr(comparison_analysis.storage, "delete_video", cannot_delete)
+    monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
+    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "rerecord"})
+
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, None, "task-1")
+
+    assert result == {"status": "rerecord"}
+
+
+def test_a_plain_comparison_never_deletes_anything(monkeypatch, deleted):
+    monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
+    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "rerecord"})
+
+    analyze_video_task.run(REF, PAT, ["torso"], {})
+
+    assert deleted == []

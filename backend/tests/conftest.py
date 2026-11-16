@@ -229,7 +229,7 @@ def seed_assignment(db_session):
 def seed_session(db_session):
     def _seed(assignment: AssignmentRead) -> SessionRead:
         session = SessionRead(assignment_id=assignment.id, pain_score=2)
-        db_session.add(TrainingSession(**session.model_dump()))
+        db_session.add(TrainingSession(**session.model_dump(exclude={"has_video"})))
         db_session.commit()
         return session
 

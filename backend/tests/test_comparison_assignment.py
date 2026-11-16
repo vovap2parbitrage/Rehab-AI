@@ -4,10 +4,11 @@ import uuid
 
 import pytest
 
-from app.api.v1.endpoints.comparisons import get_comparison_service
+from app.api.v1.endpoints.comparisons import get_comparison_service, get_storage
 from app.main import app
 from app.models.assignment import Assignment
 from app.models.session import TrainingSession
+from app.services import storage
 from app.services.comparison_session import record_session
 
 PREFIX = "/api/v1/comparisons"
@@ -22,8 +23,26 @@ class FakeService:
         return "task-1"
 
 
+class FakeStore:
+    StorageError = storage.StorageError
+    is_owned_key = staticmethod(storage.is_owned_key)
+
+    def __init__(self):
+        self.deleted = []
+
+    def delete_video(self, key):
+        self.deleted.append(key)
+
+
 @pytest.fixture
-def service():
+def store():
+    fake = FakeStore()
+    app.dependency_overrides[get_storage] = lambda: fake
+    return fake
+
+
+@pytest.fixture
+def service(store):
     fake = FakeService()
     app.dependency_overrides[get_comparison_service] = lambda: fake
     return fake
@@ -184,9 +203,14 @@ REPORT = {
 def test_record_session_stores_score_and_deviations(setup, db_session):
     assignment, _ = setup
 
-    assert record_session(str(assignment.id), "task-9", 4, REPORT) is True
+    video = f"videos/u/{'d' * 32}.mp4"
+
+    session_id = record_session(str(assignment.id), "task-9", 4, REPORT, video)
 
     saved = db_session.query(TrainingSession).one()
+    assert session_id == str(saved.id)
+    assert saved.video_key == video
+    assert saved.has_video
     assert saved.assignment_id == assignment.id
     assert saved.score == 8.5
     assert saved.pain_score == 4
@@ -200,7 +224,54 @@ def test_record_session_stores_score_and_deviations(setup, db_session):
 def test_same_analysis_creates_only_one_session(setup, db_session):
     assignment, _ = setup
 
-    assert record_session(str(assignment.id), "task-9", None, REPORT) is True
-    assert record_session(str(assignment.id), "task-9", None, REPORT) is False
+    first = record_session(str(assignment.id), "task-9", None, REPORT)
+    second = record_session(str(assignment.id), "task-9", None, REPORT)
 
+    assert first == second
     assert db_session.query(TrainingSession).count() == 1
+
+
+def test_a_refused_request_deletes_the_unused_upload(
+    api, login, service, store, setup, patient_user, db_session
+):
+    assignment, db_assignment = setup
+    db_assignment.exercise.body_parts = []  # the exercise is not ready for analysis
+    db_session.commit()
+    login(patient_user)
+    key = patient_key(patient_user)
+
+    response = api.post(PREFIX, json={"assignment_id": str(assignment.id), "patient_key": key})
+
+    assert response.status_code == 409
+    assert store.deleted == [key]
+
+
+def test_an_accepted_request_keeps_the_upload(api, login, service, store, setup, patient_user):
+    assignment, _ = setup
+    login(patient_user)
+
+    response = api.post(
+        PREFIX,
+        json={"assignment_id": str(assignment.id), "patient_key": patient_key(patient_user)},
+    )
+
+    assert response.status_code == 202
+    assert store.deleted == []
+
+
+def test_someone_elses_upload_is_never_deleted(
+    api, login, service, store, setup, patient_user, other_patient_user
+):
+    assignment, _ = setup
+    login(patient_user)
+
+    response = api.post(
+        PREFIX,
+        json={
+            "assignment_id": str(assignment.id),
+            "patient_key": patient_key(other_patient_user),
+        },
+    )
+
+    assert response.status_code == 403
+    assert store.deleted == []

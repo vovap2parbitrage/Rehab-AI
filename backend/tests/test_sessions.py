@@ -145,10 +145,91 @@ def test_session_schemas_match_model_columns():
     columns = {column.name for column in TrainingSession.__table__.columns}
 
     assert set(SessionCreate.model_fields) <= columns
-    assert set(SessionRead.model_fields) <= columns
+    # has_video is derived from video_key, so it is not a column itself.
+    assert set(SessionRead.model_fields) - {"has_video"} <= columns
+    assert "video_key" in columns
 
 
 def test_score_uses_the_zero_to_ten_scale():
     assert SessionRead(assignment_id=uuid.uuid4(), score=8.5).score == 8.5
     with pytest.raises(ValidationError):
         SessionRead(assignment_id=uuid.uuid4(), score=85)
+
+
+VIDEO_KEY = "videos/" + "a" * 8 + "/" + "b" * 32 + ".mp4"
+
+
+def _session_with_video(db_session, assignment, video_key=VIDEO_KEY):
+    session = TrainingSession(assignment_id=assignment.id, score=7.5, video_key=video_key)
+    db_session.add(session)
+    db_session.commit()
+    return session
+
+
+def test_patient_and_therapist_can_open_the_session_video(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session, monkeypatch
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    session = _session_with_video(db_session, assignment)
+    monkeypatch.setattr("app.services.storage.create_video_url", lambda key: f"https://v.test/{key}")
+
+    for user in (patient_user, therapist):
+        login(user)
+        response = api.get(f"/api/v1/sessions/{session.id}/video")
+        assert response.status_code == 200
+        assert response.json() == {"url": f"https://v.test/{VIDEO_KEY}"}
+
+
+def test_other_patient_cannot_open_the_session_video(
+    api, login, therapist, patient_user, other_patient_user, seed_patient, seed_assignment,
+    db_session, monkeypatch,
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    session = _session_with_video(db_session, assignment)
+    monkeypatch.setattr("app.services.storage.create_video_url", lambda key: "https://v.test/x")
+    login(other_patient_user)
+
+    assert api.get(f"/api/v1/sessions/{session.id}/video").status_code == 403
+
+
+def test_other_therapist_cannot_open_the_session_video(
+    api, login, therapist, other_therapist, patient_user, seed_patient, seed_assignment,
+    db_session, monkeypatch,
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    session = _session_with_video(db_session, assignment)
+    monkeypatch.setattr("app.services.storage.create_video_url", lambda key: "https://v.test/x")
+    login(other_therapist)
+
+    assert api.get(f"/api/v1/sessions/{session.id}/video").status_code == 403
+
+
+def test_session_without_a_video_has_no_video_url(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    session = _session_with_video(db_session, assignment, video_key=None)
+    login(patient_user)
+
+    assert api.get(f"/api/v1/sessions/{session.id}/video").status_code == 404
+    assert api.get(f"/api/v1/sessions/{session.id}").json()["has_video"] is False
+
+
+def test_session_read_says_when_it_has_a_video_but_never_shows_the_key(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    session = _session_with_video(db_session, assignment)
+    login(patient_user)
+
+    body = api.get(f"/api/v1/sessions/{session.id}").json()
+    mine = api.get("/api/v1/assignments/mine").json()[0]["sessions"][0]
+
+    assert body["has_video"] is True
+    assert mine["has_video"] is True
+    assert VIDEO_KEY not in str(body) + str(mine)
+
+
+def test_unknown_session_video_is_404(api, login, patient_user):
+    login(patient_user)
+    assert api.get(f"/api/v1/sessions/{uuid.uuid4()}/video").status_code == 404
