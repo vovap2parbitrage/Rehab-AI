@@ -102,6 +102,8 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
     void loadWorkspace()
   }, [loadWorkspace])
 
+  const reload = useCallback(() => loadWorkspace(), [loadWorkspace])
+
   const respond = useCallback(
     async (invitationId: string, status: 'accepted' | 'declined') => {
       setActionPending(invitationId)
@@ -172,6 +174,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       actionPending,
       error,
       refresh,
+      reload,
       respondToInvitation: respond,
       completeAssignment: complete,
       askForHelp,
@@ -185,6 +188,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       actionPending,
       error,
       refresh,
+      reload,
       respond,
       complete,
       askForHelp,

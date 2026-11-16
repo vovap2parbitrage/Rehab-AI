@@ -32,6 +32,7 @@ export interface PatientSession {
   completed_at: string | null
   score: number | null
   joint_deviations: Record<string, unknown>
+  has_video: boolean
   created_at: string
 }
 

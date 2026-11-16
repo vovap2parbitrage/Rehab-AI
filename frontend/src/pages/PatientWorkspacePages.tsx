@@ -7,11 +7,13 @@ import { HelpRequestList } from '../components/HelpRequestList'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import type { HelpRequest } from '../api/helpRequests'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
+import { AnalysisSummary } from '../components/AnalysisSummary'
 import { Loading } from '../components/Loading'
+import { SessionVideo } from '../components/SessionVideo'
 import { ReferenceVideo } from '../components/ReferenceVideo'
-import { uploadVideo } from '../api/uploads'
-import { getErrorMessage } from '../lib/errorMessage'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
+import { parseAnalysis } from '../lib/analysis'
+import { useVideoAnalysis } from '../lib/useVideoAnalysis'
 import { useVideoPreview } from '../lib/useVideoPreview'
 import { getDisplayName } from '../lib/profile'
 import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
@@ -59,6 +61,19 @@ function formatSessionDate(value: string | null, fallback: string): string {
   })
 }
 
+function SessionAnalysis({ session }: { session: PatientAssignment['sessions'][number] }) {
+  const details = parseAnalysis(session.joint_deviations)
+
+  return (
+    <AnalysisSummary
+      score={null}
+      repetitions={details.repetitions}
+      jointScores={details.jointScores}
+      errors={details.errors}
+    />
+  )
+}
+
 function SessionDetails({ assignment }: { assignment: PatientAssignment }) {
   if (!assignment.sessions.length) return null
 
@@ -89,13 +104,9 @@ function SessionDetails({ assignment }: { assignment: PatientAssignment }) {
                 <dt>Оцінка техніки</dt>
                 <dd>{session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}</dd>
               </div>
-              {Object.keys(session.joint_deviations).length > 0 && (
-                <div>
-                  <dt>Відхилення суглобів</dt>
-                  <dd>{JSON.stringify(session.joint_deviations)}</dd>
-                </div>
-              )}
             </dl>
+            {session.score !== null && <SessionAnalysis session={session} />}
+            {session.has_video && <SessionVideo sessionId={session.id} />}
           </details>
         ))}
     </div>
@@ -507,49 +518,46 @@ export function PatientExercisesPage() {
   )
 }
 
+const ANALYSIS_NOTICES: Record<string, string> = {
+  rerecord: 'Обрані частини тіла погано видно на відео. Запишіть відео ще раз так, щоб вас було видно повністю.',
+  no_repetitions: 'На відео не вдалося знайти повторень вправи. Запишіть ще раз і виконайте вправу кілька разів.',
+  failed: 'Не вдалося проаналізувати відео. Спробуйте ще раз.',
+}
+
 export function PatientExerciseExecutionPage() {
   const { assignmentId } = useParams()
-  const { assignments, loading, actionPending, completeAssignment } = usePatientWorkspace()
+  const { assignments, loading, actionPending, completeAssignment, reload } = usePatientWorkspace()
   const [painScore, setPainScore] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [recordingFile, setRecordingFile] = useState<File | null>(null)
-  const [recordingUploadError, setRecordingUploadError] = useState<string | null>(null)
-  const [recordingUploadKey, setRecordingUploadKey] = useState<string | null>(null)
-  const [uploadingRecording, setUploadingRecording] = useState(false)
   const recordingInputRef = useRef<HTMLInputElement>(null)
+  const analysis = useVideoAnalysis(assignmentId, () => void reload())
   const assignment = assignments.find((item) => item.id === assignmentId)
   const saving = actionPending === assignmentId
+  const analysing = analysis.phase === 'uploading' || analysis.phase === 'analyzing'
+  const painValue = painScore === '' ? null : Number(painScore)
+  const saved = analysis.result?.status === 'done' ? analysis.result : null
+  const savedSessionId = sessionId ?? saved?.session_id ?? null
 
-  const handleUploadRecording = async (event: FormEvent<HTMLFormElement>) => {
+  const handleAnalyse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!recordingFile) return
-
-    setRecordingUploadError(null)
-    setRecordingUploadKey(null)
-    setUploadingRecording(true)
-    try {
-      const key = await uploadVideo(recordingFile)
-      setRecordingUploadKey(key)
-      setRecordingFile(null)
-      if (recordingInputRef.current) recordingInputRef.current.value = ''
-    } catch (reason: unknown) {
-      setRecordingUploadError(getErrorMessage(reason, 'Не вдалося завантажити відео.'))
-    } finally {
-      setUploadingRecording(false)
-    }
+    await analysis.start(recordingFile, painValue)
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleCompleteWithoutVideo = async () => {
     if (!assignmentId) return
-    const saved = await completeAssignment(
-      assignmentId,
-      painScore === '' ? null : Number(painScore),
-    )
-    if (saved) setSessionId(saved.id)
+    const created = await completeAssignment(assignmentId, painValue)
+    if (created) setSessionId(created.id)
   }
 
-  if (loading) return <Loading label="Завантажуємо призначення…" />
+  const handleTryAgain = () => {
+    analysis.reset()
+    setRecordingFile(null)
+    if (recordingInputRef.current) recordingInputRef.current.value = ''
+  }
+
+  if (loading && !analysing && !saved) return <Loading label="Завантажуємо призначення…" />
   if (!assignment) {
     return (
       <div className="workspace-page">
@@ -573,7 +581,7 @@ export function PatientExerciseExecutionPage() {
       <PageHeading
         eyebrow="Виконання вправи"
         title={assignment.exercise.name}
-        lead="Після заняття зафіксуйте виконану сесію у своєму плані."
+        lead="Завантажте відео виконання: система оцінить техніку й збереже сесію у вашому плані."
       />
       <WorkspaceError />
 
@@ -589,47 +597,7 @@ export function PatientExerciseExecutionPage() {
         </span>
       </section>
 
-      <form className="card exercise-upload" onSubmit={handleUploadRecording}>
-        <div>
-          <p className="eyebrow">Відео виконання</p>
-          <h2>Завантажити своє відео</h2>
-          <p className="exercise-upload__description">
-            Відео завантажиться до сховища. Надсилання лікарю та результати додадуть окремо.
-          </p>
-        </div>
-        {recordingUploadError && (
-          <ErrorMessage title="Не вдалося завантажити відео" message={recordingUploadError} />
-        )}
-        {recordingUploadKey && (
-          <p className="success-message" role="status">
-            Відео завантажено до сховища. Ключ: <code>{recordingUploadKey}</code>
-          </p>
-        )}
-        <label className="exercise-upload__field">
-          <span>Відеофайл (MP4 або MOV, максимум 100 МБ)</span>
-          <input
-            ref={recordingInputRef}
-            type="file"
-            accept="video/mp4,video/quicktime"
-            required
-            disabled={uploadingRecording}
-            onChange={(event) => {
-              setRecordingFile(event.target.files?.[0] || null)
-              setRecordingUploadError(null)
-              setRecordingUploadKey(null)
-            }}
-          />
-        </label>
-        <button
-          type="submit"
-          className="button button--primary"
-          disabled={!recordingFile || uploadingRecording}
-        >
-          {uploadingRecording ? 'Завантажуємо…' : 'Завантажити відео'}
-        </button>
-      </form>
-
-      {sessionId ? (
+      {savedSessionId ? (
         <>
           <section className="card exercise-execution__success" role="status">
             <span className="workspace-empty-state__icon" aria-hidden="true">
@@ -638,27 +606,66 @@ export function PatientExerciseExecutionPage() {
             <div>
               <p className="eyebrow">Сесію збережено</p>
               <h2>Виконання записано</h2>
-              <p>Лікар побачить цю сесію у вашому прогресі.</p>
+              {saved ? (
+                <AnalysisSummary
+                  score={saved.score}
+                  repetitions={saved.repetitions}
+                  jointScores={saved.joint_scores}
+                  errors={saved.errors}
+                />
+              ) : (
+                <p>Лікар побачить цю сесію у вашому прогресі.</p>
+              )}
               <Link to="/patient/exercises" className="button button--primary">
                 Повернутися до призначень <ArrowRightIcon aria-hidden="true" />
               </Link>
             </div>
           </section>
-          <AskForHelpForm sessionId={sessionId} />
+          <AskForHelpForm sessionId={savedSessionId} />
         </>
       ) : (
-        <form className="card exercise-upload" onSubmit={handleSubmit}>
+        <form className="card exercise-upload" onSubmit={handleAnalyse}>
           <div>
-            <p className="eyebrow">Завершення заняття</p>
-            <h2>Позначте сесію виконаною</h2>
+            <p className="eyebrow">Відео виконання</p>
+            <h2>Надішліть відео на аналіз</h2>
             <p className="exercise-upload__description">
-              Запис зберігається у базі даних. Оцінка болю необов’язкова.
+              Відео порівнюється з еталоном лікаря. Результат і відео зберігаються у вашому плані.
             </p>
           </div>
+          {analysis.error && (
+            <ErrorMessage title="Не вдалося виконати аналіз" message={analysis.error} />
+          )}
+          {analysis.result && analysis.result.status !== 'done' && (
+            <ErrorMessage
+              title="Результат аналізу"
+              message={ANALYSIS_NOTICES[analysis.result.status] ?? ANALYSIS_NOTICES.failed}
+            />
+          )}
+          {analysing && (
+            <p className="analysis-progress" role="status">
+              {analysis.phase === 'uploading'
+                ? 'Завантажуємо відео…'
+                : 'Аналізуємо відео. Це може тривати до хвилини…'}
+            </p>
+          )}
+          <label className="exercise-upload__field">
+            <span>Відеофайл (MP4 або MOV, максимум 100 МБ)</span>
+            <input
+              ref={recordingInputRef}
+              type="file"
+              accept="video/mp4,video/quicktime"
+              disabled={analysing}
+              onChange={(event) => {
+                setRecordingFile(event.target.files?.[0] || null)
+                if (analysis.phase !== 'idle') analysis.reset()
+              }}
+            />
+          </label>
           <label className="exercise-upload__field">
             <span>Рівень болю після вправи (необов’язково)</span>
             <select
               value={painScore}
+              disabled={analysing}
               onChange={(event) => setPainScore(event.currentTarget.value)}
             >
               <option value="">Не вказувати</option>
@@ -669,10 +676,30 @@ export function PatientExerciseExecutionPage() {
               ))}
             </select>
           </label>
-          <button type="submit" className="button button--primary" disabled={saving}>
-            {saving ? 'Зберігаємо…' : 'Завершити сесію'}
-            <CheckIcon aria-hidden="true" />
-          </button>
+          <div className="exercise-upload__actions">
+            {analysis.phase === 'finished' || analysis.phase === 'failed' ? (
+              <button type="button" className="button button--primary" onClick={handleTryAgain}>
+                Спробувати ще раз
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="button button--primary"
+                disabled={!recordingFile || analysing}
+              >
+                {analysing ? 'Аналізуємо…' : 'Надіслати на аналіз'}
+              </button>
+            )}
+            <button
+              type="button"
+              className={analysis.notConfigured ? 'button button--primary' : 'button button--ghost'}
+              onClick={() => void handleCompleteWithoutVideo()}
+              disabled={analysing || saving}
+            >
+              {saving ? 'Зберігаємо…' : 'Завершити без відео'}
+              <CheckIcon aria-hidden="true" />
+            </button>
+          </div>
         </form>
       )}
     </div>
