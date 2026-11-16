@@ -77,13 +77,6 @@ export function listExercises(signal?: AbortSignal): Promise<Exercise[]> {
   return apiRequest<Exercise[]>('/api/v1/exercises/', { signal })
 }
 
-export async function getExerciseVideoUrl(id: string): Promise<string> {
-  const response = await apiRequest<{ url: string }>(
-    `/api/v1/exercises/${encodeURIComponent(id)}/video`,
-  )
-  return response.url
-}
-
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {
   return apiRequest<Exercise>('/api/v1/exercises/', {
     method: 'POST',

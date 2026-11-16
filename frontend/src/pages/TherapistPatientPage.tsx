@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
+import { getErrorMessage } from '../lib/errorMessage'
 import { createAssignment, getPatient, listAssignments, cancelAssignment, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Loading } from '../components/Loading'
@@ -40,7 +41,7 @@ export function TherapistPatientPage() {
         setNotFound(true)
         return
       }
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося завантажити дані пацієнта.')
+      setError(getErrorMessage(reason, 'Не вдалося завантажити дані пацієнта.'))
     }).finally(() => {
       if (!signal.aborted) setLoading(false)
     })
@@ -59,7 +60,7 @@ export function TherapistPatientPage() {
       setAssignments((current) => [assignment, ...current])
       setNotice('План призначено пацієнту.')
     } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося створити призначення.')
+      setError(getErrorMessage(reason, 'Не вдалося створити призначення.'))
     } finally {
       setBusy(false)
     }
@@ -78,7 +79,7 @@ export function TherapistPatientPage() {
       )
       setNotice('Призначення відмінено.')
     } catch (reason: unknown) {
-      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося відмінити призначення.')
+      setError(getErrorMessage(reason, 'Не вдалося скасувати призначення.'))
     } finally {
       setBusy(false)
     }

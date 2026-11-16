@@ -17,15 +17,9 @@ import {
   type PatientSession,
 } from '../api/patient'
 import { createHelpRequest, listMyHelpRequests, type HelpRequest } from '../api/helpRequests'
-import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
+import { getErrorMessage } from './errorMessage'
 import { PatientWorkspaceContext } from './patientWorkspaceContext'
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.detail ?? error.message
-  if (error instanceof Error) return error.message
-  return 'Не вдалося завантажити дані кабінету пацієнта.'
-}
 
 export function PatientWorkspaceProvider({ children }: { children: ReactNode }) {
   const { authenticated, initialized } = useAuth()
@@ -56,17 +50,17 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       if (invitationsResult.status === 'fulfilled') {
         setInvitations(invitations)
       } else {
-        failures.push(getErrorMessage(invitationsResult.reason))
+        failures.push(getErrorMessage(invitationsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
       }
       if (assignmentsResult.status === 'fulfilled') {
         setAssignments(assignments)
       } else {
-        failures.push(getErrorMessage(assignmentsResult.reason))
+        failures.push(getErrorMessage(assignmentsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
       }
       if (helpRequestsResult.status === 'fulfilled') {
         setHelpRequests(helpRequestsResult.value)
       } else {
-        failures.push(getErrorMessage(helpRequestsResult.reason))
+        failures.push(getErrorMessage(helpRequestsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
       }
 
       if (patientId) {
@@ -82,7 +76,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
             })),
           )
         } catch (caught) {
-          failures.push(getErrorMessage(caught))
+          failures.push(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
         }
       } else {
         setTherapists([])
@@ -119,7 +113,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
         )
         await loadWorkspace()
       } catch (caught) {
-        setError(getErrorMessage(caught))
+        setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
       } finally {
         setActionPending(null)
       }
@@ -144,7 +138,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
         )
         return session
       } catch (caught) {
-        setError(getErrorMessage(caught))
+        setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
         return null
       } finally {
         setActionPending(null)
@@ -161,7 +155,7 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       setHelpRequests((current) => [created, ...current])
       return true
     } catch (caught) {
-      setError(getErrorMessage(caught))
+      setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
       return false
     } finally {
       setActionPending(null)

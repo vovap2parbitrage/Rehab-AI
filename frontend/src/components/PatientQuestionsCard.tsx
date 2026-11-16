@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError } from '../api/client'
+import { getErrorMessage } from '../lib/errorMessage'
 import { listPatientHelpRequests, type HelpRequest } from '../api/helpRequests'
 import { HelpRequestList } from './HelpRequestList'
 import { MailIcon } from './Icons'
@@ -22,11 +22,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
       .then(setItems)
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
-        setError(
-          reason instanceof ApiError
-            ? reason.detail || reason.message
-            : 'Не вдалося завантажити запитання пацієнта.',
-        )
+        setError(getErrorMessage(reason, 'Не вдалося завантажити запитання пацієнта.'))
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)

@@ -1,7 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ApiError } from '../api/client'
-import { getPatientExerciseVideoUrl } from '../api/patient'
+import type { PatientAssignment } from '../api/patient'
 import { useAuth } from '../auth/useAuth'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { HelpRequestList } from '../components/HelpRequestList'
@@ -9,8 +8,11 @@ import { PatientHistorySection } from '../components/history/PatientHistorySecti
 import type { HelpRequest } from '../api/helpRequests'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, ClockIcon, UserIcon } from '../components/Icons'
 import { Loading } from '../components/Loading'
+import { ReferenceVideo } from '../components/ReferenceVideo'
 import { uploadVideo } from '../api/uploads'
+import { getErrorMessage } from '../lib/errorMessage'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
+import { useVideoPreview } from '../lib/useVideoPreview'
 import { getDisplayName } from '../lib/profile'
 import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
 
@@ -361,36 +363,67 @@ export function PatientInvitationsPage() {
 
 export function PatientExercisesPage() {
   const { assignments, helpRequests, loading } = usePatientWorkspace()
-  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({})
-  const [videoLoading, setVideoLoading] = useState<string | null>(null)
-  const [videoError, setVideoError] = useState<string | null>(null)
+  const videoPreview = useVideoPreview()
+  const [assignmentView, setAssignmentView] = useState<'today' | 'all'>('today')
+  const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
+  const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
+  const todayAssignments = activeAssignments.filter((assignment) =>
+    isAssignmentScheduledToday(
+      assignment.starts_on,
+      assignment.duration_weeks,
+      assignment.weekdays,
+    ),
+  )
 
-  const handleViewVideo = async (exerciseId: string) => {
-    setVideoLoading(exerciseId)
-    setVideoError(null)
-    try {
-      const url = await getPatientExerciseVideoUrl(exerciseId)
-      setVideoUrls((current) => ({ ...current, [exerciseId]: url }))
-    } catch (reason: unknown) {
-      setVideoError(
-        reason instanceof ApiError
-          ? reason.detail || reason.message
-          : reason instanceof Error
-            ? reason.message
-            : 'Не вдалося відкрити еталонне відео.',
-      )
-    } finally {
-      setVideoLoading(null)
-    }
-  }
-
-  const handleHideVideo = (exerciseId: string) => {
-    setVideoUrls((current) => {
-      const next = { ...current }
-      delete next[exerciseId]
-      return next
-    })
-  }
+  const renderAssignments = (items: typeof assignments) => items.map((assignment) => (
+    <article className="card exercise-card" key={assignment.id}>
+      <span className="exercise-card__icon" aria-hidden="true">
+        <ActivityIcon />
+      </span>
+      <div className="exercise-card__content">
+        <div className="exercise-card__title-row">
+          <h2>{assignment.exercise.name}</h2>
+          <span
+            className={
+              assignment.status === 'active'
+                ? 'status-pill status-pill--success status-pill--sm'
+                : 'status-pill status-pill--danger status-pill--sm'
+            }
+          >
+            {assignment.status === 'active' ? 'Активне' : 'Завершене'}
+          </span>
+        </div>
+        <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+        {assignment.exercise.reference_video_key && (
+          <ReferenceVideo
+            exerciseId={assignment.exercise.id}
+            preview={videoPreview}
+            showLabel="Переглянути еталонне відео"
+          />
+        )}
+        <div className="exercise-card__meta">
+          <span>
+            {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
+          </span>
+          <span>
+            {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
+          </span>
+        </div>
+        <SessionDetails assignment={assignment} />
+        <ExerciseQuestions
+          items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
+        />
+      </div>
+      {assignment.status === 'active' && (
+        <Link
+          to={`/patient/exercises/${assignment.id}/execute`}
+          className="button button--primary exercise-card__action"
+        >
+          Виконати вправу <ArrowRightIcon aria-hidden="true" />
+        </Link>
+      )}
+    </article>
+  ))
 
   return (
     <div className="workspace-page">
@@ -400,88 +433,52 @@ export function PatientExercisesPage() {
         lead="Переглядайте план лікаря та зберігайте кожну виконану сесію."
       />
       <WorkspaceError />
-      {videoError && <ErrorMessage title="Не вдалося відкрити відео" message={videoError} />}
+      {videoPreview.error && (
+        <ErrorMessage title="Не вдалося відкрити відео" message={videoPreview.error} />
+      )}
       {loading ? (
         <Loading label="Завантажуємо призначення…" />
       ) : assignments.length ? (
-        <div className="exercise-list">
-          {assignments.map((assignment) => (
-            <article className="card exercise-card" key={assignment.id}>
-              <span className="exercise-card__icon" aria-hidden="true">
-                <ActivityIcon />
-              </span>
-              <div className="exercise-card__content">
-                <div className="exercise-card__title-row">
-                  <h2>{assignment.exercise.name}</h2>
-                  <span
-                    className={
-                      assignment.status === 'active'
-                        ? 'status-pill status-pill--success status-pill--sm'
-                        : 'status-pill status-pill--danger status-pill--sm'
-                    }
-                  >
-                    {assignment.status === 'active' ? 'Активне' : 'Неактивне'}
-                  </span>
-                </div>
-                <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
-                {assignment.exercise.reference_video_key && (
-                  <div className="exercise-card__video">
-                    {videoUrls[assignment.exercise.id] ? (
-                      <div>
-                        <video
-                          key={videoUrls[assignment.exercise.id]}
-                          src={videoUrls[assignment.exercise.id]}
-                          controls
-                          preload="metadata"
-                          style={{
-                            width: '100%',
-                            maxWidth: '360px',
-                            maxHeight: '220px',
-                            objectFit: 'contain',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="button button--ghost"
-                          onClick={() => handleHideVideo(assignment.exercise.id)}
-                        >
-                          Сховати відео
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="button button--ghost"
-                        onClick={() => void handleViewVideo(assignment.exercise.id)}
-                        disabled={videoLoading !== null}
-                      >
-                        {videoLoading === assignment.exercise.id
-                          ? 'Завантажуємо…'
-                          : 'Переглянути еталонне відео'}
-                      </button>
-                    )}
+        <>
+          <div className="period-selector" role="tablist" aria-label="Призначення">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'today'}
+              className={assignmentView === 'today' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('today')}
+            >
+              На сьогодні
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={assignmentView === 'all'}
+              className={assignmentView === 'all' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              onClick={() => setAssignmentView('all')}
+            >
+              Усі призначення
+            </button>
+          </div>
+          {assignmentView === 'today' ? (
+            todayAssignments.length ? (
+              <div className="exercise-list">{renderAssignments(todayAssignments)}</div>
+            ) : (
+              <section className="card workspace-empty-state">
+                <span className="workspace-empty-state__icon" aria-hidden="true"><ClockIcon /></span>
+                <h2>На сьогодні вправ немає</h2>
+                <p>Перевірте розклад або відкрийте всі призначення.</p>
+              </section>
+            )
+          ) : (
+            <div className="exercise-assignment-groups">
+              {activeAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
                   </div>
-                )}
-                <div className="exercise-card__meta">
-                  <span>
-                    {assignment.sessions_per_week} занять на тиждень · {assignment.repetitions}{' '}
-                    повторень
-                  </span>
-                  <span>
-                    {assignment.sessions.length} сесій · до {formatDate(assignment.ends_on)}
-                  </span>
-                </div>
-                <ExerciseQuestions
-                  items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
-                />
-              </div>
-              {assignment.status === 'active' && (
-                <Link
-                  to={`/patient/exercises/${assignment.id}/execute`}
-                  className="button button--primary exercise-card__action"
-                >
-                  Виконати вправу <ArrowRightIcon aria-hidden="true" />
-                </Link>
+                  <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
+                </section>
               )}
               {completedAssignments.length > 0 && (
                 <section>
@@ -536,13 +533,7 @@ export function PatientExerciseExecutionPage() {
       setRecordingFile(null)
       if (recordingInputRef.current) recordingInputRef.current.value = ''
     } catch (reason: unknown) {
-      setRecordingUploadError(
-        reason instanceof ApiError
-          ? reason.detail || reason.message
-          : reason instanceof Error
-            ? reason.message
-            : 'Не вдалося завантажити відео.',
-      )
+      setRecordingUploadError(getErrorMessage(reason, 'Не вдалося завантажити відео.'))
     } finally {
       setUploadingRecording(false)
     }
