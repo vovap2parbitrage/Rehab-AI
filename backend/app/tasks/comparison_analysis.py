@@ -17,6 +17,14 @@ def download_video(key: str, dest: Path) -> None:
     validate_video_file(dest)
 
 
+def _discard_video(key: str) -> None:
+    """Delete a patient's video that did not become a session (best effort)."""
+    try:
+        storage.delete_video(key)
+    except StorageError:
+        logger.warning("Could not delete the unused video %s", key)
+
+
 @celery_app.task(
     name="comparison.analyze",
     soft_time_limit=540,
@@ -41,15 +49,28 @@ def analyze_video_task(
                 str(reference_path), str(patient_path), body_parts, tolerances_deg
             )
     except (StorageError, InvalidVideoError) as exc:
+        if assignment_id:
+            _discard_video(patient_key)
         return {"status": "failed", "message": str(exc)}
     except Exception:
         logger.exception("Video analysis failed")
+        if assignment_id:
+            _discard_video(patient_key)
         return {"status": "failed", "message": "Analysis failed."}
 
-    if report.get("status") == "done" and assignment_id and task_id:
+    # Without an assignment this is a plain comparison: nothing to save or clean up.
+    if not (assignment_id and task_id):
+        return report
+
+    if report.get("status") == "done":
         try:
-            record_session(assignment_id, task_id, pain_score, report)
+            session_id = record_session(assignment_id, task_id, pain_score, report, patient_key)
         except Exception:
             logger.exception("Could not save the session for comparison %s", task_id)
+            _discard_video(patient_key)
             return {"status": "failed", "message": "Could not save the result."}
+        return {**report, "session_id": session_id}
+
+    # rerecord / no_repetitions: no session, so the patient will record a new video.
+    _discard_video(patient_key)
     return report

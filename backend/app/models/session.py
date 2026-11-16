@@ -50,6 +50,13 @@ class TrainingSession(Base):
         nullable=True,
     )
 
+    # The patient's recorded video in storage. Empty for sessions saved without a video.
+    video_key: Mapped[str | None] = mapped_column(
+        String(512),
+        unique=True,
+        nullable=True,
+    )
+
     pain_score: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
@@ -70,3 +77,7 @@ class TrainingSession(Base):
         "Assignment",
         back_populates="sessions",
     )
+
+    @property
+    def has_video(self) -> bool:
+        return self.video_key is not None

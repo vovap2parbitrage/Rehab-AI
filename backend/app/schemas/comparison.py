@@ -55,3 +55,5 @@ class ComparisonResult(BaseModel):
     errors: list[ErrorSegment] | None = None
     quality: Quality | None = None
     message: str | None = None
+    # Set once the analysis has been saved as a training session.
+    session_id: str | None = None

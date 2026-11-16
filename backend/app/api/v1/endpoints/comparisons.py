@@ -73,9 +73,25 @@ def create_comparison(
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
     svc=Depends(get_comparison_service),
+    store=Depends(get_storage),
 ):
-    job = prepare_comparison(db, req, user)
+    try:
+        job = prepare_comparison(db, req, user)
+    except HTTPException:
+        # The request was refused, so the patient's upload will never be used.
+        _discard_upload(store, req.patient_key, str(user.id))
+        raise
     return ComparisonCreated(task_id=svc.submit_comparison(job, str(user.id)))
+
+
+def _discard_upload(store, key: str, user_id: str) -> None:
+    """Delete the caller's own unused upload; failures are not worth reporting."""
+    if not store.is_owned_key(key, user_id):
+        return
+    try:
+        store.delete_video(key)
+    except store.StorageError:
+        pass
 
 
 @router.get("/{task_id}", response_model=ComparisonResult)
