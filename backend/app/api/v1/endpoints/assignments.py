@@ -55,3 +55,15 @@ def get_assignment(
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
     return assignment.get_assignment(db, assignment_id, user)
+
+
+@router.post("/{assignment_id}/cancel", status_code=204)
+def cancel_assignment(
+    assignment_id: UUID,
+    _claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST)
+    ),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> None:
+    assignment.cancel_assignment(db, assignment_id, user)

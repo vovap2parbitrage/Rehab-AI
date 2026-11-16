@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { createAssignment, getPatient, listAssignments, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
+import { createAssignment, getPatient, listAssignments, cancelAssignment, listExercises, type Assignment, type Exercise, type Patient } from '../api/therapist'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { Loading } from '../components/Loading'
 import { PatientHistorySection } from '../components/history/PatientHistorySection'
 import { PatientQuestionsCard } from '../components/PatientQuestionsCard'
-import { ArrowRightIcon, CalendarIcon } from '../components/Icons'
+import { ArrowRightIcon, CalendarIcon, TrashIcon } from '../components/Icons'
+import { formatWeekdays, WEEKDAYS } from '../lib/assignmentSchedule'
 
 const today = new Date().toISOString().slice(0, 10)
-const monthFromToday = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 export function TherapistPatientPage() {
   const { patientId } = useParams()
@@ -21,7 +21,7 @@ export function TherapistPatientPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [form, setForm] = useState({ exercise_id: '', sessions_per_week: 3, repetitions: 10, starts_on: today, ends_on: monthFromToday })
+  const [form, setForm] = useState({ exercise_id: '', duration_weeks: 4, weekdays: [0, 2, 4], repetitions: 10, starts_on: today })
 
   useEffect(() => {
     if (!patientId) return
@@ -65,6 +65,25 @@ export function TherapistPatientPage() {
     }
   }
 
+  const handleCancel = async (assignment: Assignment) => {
+    if (!window.confirm(`Відмінити призначення «${exerciseNames.get(assignment.exercise_id)}»?`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      await cancelAssignment(assignment.id)
+      setAssignments((current) =>
+        current.map((item) =>
+          item.id === assignment.id ? { ...item, status: 'cancelled' } : item
+        )
+      )
+      setNotice('Призначення відмінено.')
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail || reason.message : 'Не вдалося відмінити призначення.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) return <Loading />
   if (error && !patient) return <ErrorMessage title="Помилка" message={error} />
   if (notFound || !patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
@@ -82,17 +101,57 @@ export function TherapistPatientPage() {
           <div className="card__header"><div><h2>Призначити план</h2><p>Оберіть вправу та параметри занять.</p></div><span className="card__header-icon"><CalendarIcon /></span></div>
           <form className="therapist-form" onSubmit={handleSubmit}>
             <label className="therapist-form__field"><span>Вправа *</span><select value={form.exercise_id} onChange={(event) => setForm({ ...form, exercise_id: event.target.value })} required><option value="">Оберіть вправу</option>{exercises.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-            <label className="therapist-form__field"><span>Занять на тиждень *</span><input type="number" min={1} max={14} value={form.sessions_per_week} onChange={(event) => setForm({ ...form, sessions_per_week: Number(event.target.value) })} required /></label>
+            <label className="therapist-form__field"><span>Тривалість (тижні) *</span><input type="number" min={1} value={form.duration_weeks} onChange={(event) => setForm({ ...form, duration_weeks: Number(event.target.value) })} required /></label>
+            <fieldset className="therapist-form__field">
+              <legend>План занять *</legend>
+              <div className="weekday-picker">
+                {WEEKDAYS.map((day, index) => (
+                  <label key={day}>
+                    <input
+                      type="checkbox"
+                      checked={form.weekdays.includes(index)}
+                      onChange={() => setForm({
+                        ...form,
+                        weekdays: form.weekdays.includes(index)
+                          ? form.weekdays.filter((item) => item !== index)
+                          : [...form.weekdays, index].sort((a, b) => a - b),
+                      })}
+                    />
+                    {day}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="therapist-form__field"><span>Повторень *</span><input type="number" min={1} max={500} value={form.repetitions} onChange={(event) => setForm({ ...form, repetitions: Number(event.target.value) })} required /></label>
             <label className="therapist-form__field"><span>Початок *</span><input type="date" value={form.starts_on} onChange={(event) => setForm({ ...form, starts_on: event.target.value })} required /></label>
-            <label className="therapist-form__field"><span>Завершення *</span><input type="date" value={form.ends_on} onChange={(event) => setForm({ ...form, ends_on: event.target.value })} required /></label>
-            <button className="button button--primary" disabled={busy || exercises.length === 0}>{busy ? 'Призначаємо…' : 'Призначити план'}</button>
+            <button className="button button--primary" disabled={busy || exercises.length === 0 || form.weekdays.length === 0}>{busy ? 'Призначаємо…' : 'Призначити план'}</button>
           </form>
         </section>
         <div className="therapist-page__column">
         <section className="card">
           <div className="card__header"><div><h2>Поточні призначення</h2><p>{assignments.length} активних планів</p></div></div>
-          <div className="patient-assignments">{assignments.map((item) => <div className="therapist-assignment" key={item.id}><strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong><span>{item.sessions_per_week} занять на тиждень · {item.repetitions} повторень</span><small>{item.starts_on} — {item.ends_on || 'без кінцевої дати'}</small></div>)}{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}</div>
+          <div className="patient-assignments">{assignments.map((item) => (
+            <div className="therapist-assignment" key={item.id}>
+              <strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong>
+              <span>{item.repetitions} повторень · {formatWeekdays(item.weekdays)}</span>
+              <small>{item.starts_on} · {item.duration_weeks} тиж.</small>
+              <span>· стан: {item.status}</span>
+              {item.status == 'active' && (
+                <button
+                  type="button"
+                  className="icon-button icon-button--danger"
+                  aria-label={`Відмінити ${exerciseNames.get(item.exercise_id)}`}
+                  title="Відмінити"
+                  onClick={() => void handleCancel(item)}
+                  disabled={busy}
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </div>)
+            )
+          }{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}
+          </div>
         </section>
         <PatientQuestionsCard patientId={patient.id} />
         </div>

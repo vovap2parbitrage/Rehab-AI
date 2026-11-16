@@ -12,6 +12,7 @@ import { Loading } from '../components/Loading'
 import { uploadVideo } from '../api/uploads'
 import { usePatientWorkspace } from '../lib/usePatientWorkspace'
 import { getDisplayName } from '../lib/profile'
+import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
 
 function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
   return (
@@ -39,11 +40,6 @@ function WorkspaceError() {
   )
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Без кінцевої дати'
-  return new Date(`${value}T00:00:00`).toLocaleDateString('uk-UA')
-}
-
 function getInitials(email: string): string {
   return email
     .split('@')[0]
@@ -52,6 +48,56 @@ function getInitials(email: string): string {
     .map((part) => part[0] ?? '')
     .join('')
     .toLocaleUpperCase('uk-UA')
+}
+
+function formatSessionDate(value: string | null, fallback: string): string {
+  return new Date(value ?? fallback).toLocaleString('uk-UA', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+function SessionDetails({ assignment }: { assignment: PatientAssignment }) {
+  if (!assignment.sessions.length) return null
+
+  return (
+    <div className="assignment-sessions">
+      <h3>Виконані сесії</h3>
+      {assignment.sessions
+        .slice()
+        .sort((left, right) => {
+          const leftDate = left.completed_at ?? left.created_at
+          const rightDate = right.completed_at ?? right.created_at
+          return rightDate.localeCompare(leftDate)
+        })
+        .map((session, index) => (
+          <details className="assignment-session" key={session.id}>
+            <summary>
+              <span>Сесія {assignment.sessions.length - index}</span>
+              <time dateTime={session.completed_at ?? session.created_at}>
+                {formatSessionDate(session.completed_at, session.created_at)}
+              </time>
+            </summary>
+            <dl className="assignment-session__details">
+              <div>
+                <dt>Біль</dt>
+                <dd>{session.pain_score === null ? 'Не вказано' : `${session.pain_score} із 10`}</dd>
+              </div>
+              <div>
+                <dt>Оцінка техніки</dt>
+                <dd>{session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}</dd>
+              </div>
+              {Object.keys(session.joint_deviations).length > 0 && (
+                <div>
+                  <dt>Відхилення суглобів</dt>
+                  <dd>{JSON.stringify(session.joint_deviations)}</dd>
+                </div>
+              )}
+            </dl>
+          </details>
+        ))}
+    </div>
+  )
 }
 
 export function PatientDashboardPage() {
@@ -437,9 +483,17 @@ export function PatientExercisesPage() {
                   Виконати вправу <ArrowRightIcon aria-hidden="true" />
                 </Link>
               )}
-            </article>
-          ))}
-        </div>
+              {completedAssignments.length > 0 && (
+                <section>
+                  <div className="card__header">
+                    <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
+                  </div>
+                  <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
+                </section>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <section className="card workspace-empty-state">
           <span className="workspace-empty-state__icon" aria-hidden="true">
@@ -540,7 +594,7 @@ export function PatientExerciseExecutionPage() {
         </div>
         <span className="exercise-execution__duration">
           <ClockIcon aria-hidden="true" />
-          {assignment.sessions_per_week} занять на тиждень
+          {assignment.duration_weeks} тиж. · {formatWeekdays(assignment.weekdays)}
         </span>
       </section>
 

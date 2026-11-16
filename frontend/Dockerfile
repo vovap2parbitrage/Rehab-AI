@@ -1,11 +1,18 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine AS build
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
+
+FROM deps AS test
+
+COPY . .
+CMD ["npm", "run", "test"]
+
+FROM deps AS build
 
 COPY . .
 
