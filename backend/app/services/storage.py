@@ -100,3 +100,32 @@ def download_video(key: str, dest: Path) -> None:
                 out.write(chunk)
     except (ClientError, BotoCoreError) as exc:
         raise StorageError("Could not download the video.") from exc
+
+def delete_video(key: str) -> None:
+    """Delete one video from the configured bucket."""
+    if not is_valid_key(key):
+        raise StorageError("Invalid video key.")
+    try:
+        _client(settings.s3_endpoint_url).delete_object(
+            Bucket=settings.s3_bucket,
+            Key=key,
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise StorageError("Could not delete the video.") from exc
+
+def create_video_url(key: str) -> str:
+    if not is_valid_key(key):
+        raise StorageError("Invalid video key.")
+    try:
+        return _client(
+            settings.s3_public_endpoint_url or settings.s3_endpoint_url
+        ).generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": settings.s3_bucket,
+                "Key": key,
+            },
+            ExpiresIn=3600,
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise StorageError("Could not create video URL.") from exc

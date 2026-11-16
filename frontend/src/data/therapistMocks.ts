@@ -16,6 +16,7 @@ export const MOCK_EXERCISE: Exercise = {
   description: 'Плавно зігнути ногу в коліні та повернути у вихідне положення.',
   reference_video_key: 'mock-knee-flexion.mp4',
   joint_tolerances: {},
+  body_parts: [],
   created_by: 'mock-therapist-1',
 }
 

@@ -1,9 +1,13 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.comparison_auth import require_user_id
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, require_roles
+from app.core.roles import Role
 from app.db.dependencies import get_db
+from app.models.exercise import Exercise
 from app.models.user import User
 from app.schemas.comparison import (
     ComparisonCreated,
@@ -34,6 +38,33 @@ def create_upload(
 ):
     """Presigned POST so the client uploads the video straight to storage."""
     return store.create_upload(user_id, req.content_type)
+
+
+@router.delete("/uploads", status_code=status.HTTP_204_NO_CONTENT)
+def delete_unreferenced_upload(
+    key: str,
+    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user_id: str = Depends(require_user_id),
+    db: Session = Depends(get_db),
+    store=Depends(get_storage),
+) -> None:
+    if not store.is_owned_key(key, user_id):
+        raise HTTPException(status_code=403, detail="Video does not belong to you")
+
+    referenced = (
+        db.query(Exercise.id)
+        .filter(Exercise.reference_video_key == key)
+        .first()
+    )
+    if referenced is not None:
+        raise HTTPException(status_code=409, detail="Video is already in use")
+
+    try:
+        store.delete_video(key)
+    except store.StorageError as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not delete the uploaded video"
+        ) from exc
 
 
 @router.post("", response_model=ComparisonCreated, status_code=status.HTTP_202_ACCEPTED)

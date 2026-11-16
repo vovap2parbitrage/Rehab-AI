@@ -16,6 +16,7 @@ export interface Exercise {
   description: string | null
   reference_video_key: string | null
   joint_tolerances: Record<string, number>
+  body_parts: string[]
   created_by: string
 }
 
@@ -45,6 +46,7 @@ export interface ExercisePayload {
   description: string | null
   reference_video_key: string | null
   joint_tolerances: Record<string, number>
+  body_parts: string[]
 }
 
 export interface AssignmentPayload {
@@ -73,6 +75,13 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
 
 export function listExercises(signal?: AbortSignal): Promise<Exercise[]> {
   return apiRequest<Exercise[]>('/api/v1/exercises/', { signal })
+}
+
+export async function getExerciseVideoUrl(id: string): Promise<string> {
+  const response = await apiRequest<{ url: string }>(
+    `/api/v1/exercises/${encodeURIComponent(id)}/video`,
+  )
+  return response.url
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {
