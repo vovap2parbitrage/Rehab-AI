@@ -17,13 +17,13 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ExerciseRead])
 def list_exercises(
-    _claims: dict[str, Any] = Depends(
-        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
+    claims: dict[str, Any] = Depends(
+        require_roles(Role.ADMIN, Role.THERAPIST)
     ),
+    user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[ExerciseRead]:
-    return exercise.list_exercises(db)
-
+    return exercise.list_exercises(db, user, extract_roles(claims))
 
 @router.post("/", response_model=ExerciseRead, status_code=201)
 def create_exercise(
@@ -38,12 +38,13 @@ def create_exercise(
 @router.get("/{exercise_id}", response_model=ExerciseRead)
 def get_exercise(
     exercise_id: UUID,
-    _claims: dict[str, Any] = Depends(
-        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
-    ),
+    claims: dict[str, Any] = Depends(
+            require_roles(Role.ADMIN, Role.THERAPIST)
+        ),
+    user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> ExerciseRead:
-    return exercise.get_exercise(db, exercise_id)
+    return exercise.get_exercise(db, exercise_id, user, extract_roles(claims))
 
 
 @router.put("/{exercise_id}", response_model=ExerciseRead)

@@ -219,7 +219,7 @@ export function TherapistExercisesPage() {
                   <h3>{item.name}</h3>
                   <p>{item.description || 'Опис не додано.'}</p>
                   {item.reference_video_key && (
-                    <ReferenceVideo exerciseId={item.id} preview={videoPreview} showLabel="Переглянути відео" />
+                    <ReferenceVideo exerciseId={item.id} preview={  videoPreview} showLabel="Переглянути відео" />
                   )}
                 </div>
                 <div className="exercise-card__actions">
