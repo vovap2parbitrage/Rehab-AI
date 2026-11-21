@@ -4,7 +4,9 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthContextValue } from '../auth/AuthContext'
 import { AuthContext } from '../auth/AuthContext'
+import { AuthProvider } from '../auth/AuthProvider'
 import { RoleRoute } from '../auth/RoleRoute'
+import { Header } from '../components/Header'
 import type { PatientAssignment, PatientInvitation, PatientSession } from '../api/patient'
 import type { HelpRequest } from '../api/helpRequests'
 import { LoginPage } from '../pages/LoginPage'
@@ -68,12 +70,22 @@ vi.mock('../api/auth', () => ({
   fetchCurrentUser: vi.fn(),
 }))
 
+vi.mock('../auth/keycloak', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../auth/keycloak')>(),
+  getKeycloak: () => ({ authenticated: true, tokenParsed: { sub: 'patient-1' } }),
+  initKeycloak: async () => true,
+}))
+
 function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     initialized: true,
     authenticated: false,
     tokenParsed: { preferred_username: 'olena' },
     initError: null,
+    role: null,
+    roleLoading: false,
+    roleError: null,
+    retryRole: vi.fn(),
     login: vi.fn().mockResolvedValue(undefined),
     register: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn().mockResolvedValue(undefined),
@@ -410,14 +422,6 @@ describe('Patient access and cabinet pages', () => {
   })
 
   it('redirects a therapist away from the patient cabinet', async () => {
-    vi.mocked(fetchCurrentUser).mockResolvedValueOnce({
-      id: 'therapist-1',
-      email: 'doctor@example.com',
-      role: 'therapist',
-      pending_role: null,
-      keycloak_sub: null,
-      is_active: true,
-    })
     renderWithAuth(
       <Routes>
         <Route path="/patient" element={
@@ -427,30 +431,42 @@ describe('Patient access and cabinet pages', () => {
         } />
         <Route path="/profile" element={<LocationDisplay />} />
       </Routes>,
-      createAuth({ authenticated: true }),
+      createAuth({ authenticated: true, role: 'therapist' }),
       ['/patient'],
     )
 
     expect(await screen.findByTestId('location')).toHaveTextContent('/profile')
   })
 
-  it('reports an API error if the user role cannot be checked', async () => {
-    vi.mocked(fetchCurrentUser).mockRejectedValueOnce(new Error('API unavailable'))
-    renderWithAuth(
-      <Routes>
-        <Route path="/patient" element={
+  it('shows a role error and restores the menu and protected route on retry', async () => {
+    const user = userEvent.setup()
+    vi.mocked(fetchCurrentUser)
+      .mockRejectedValueOnce(new ApiError('Сервер недоступний.', 'unavailable', 503))
+      .mockRejectedValueOnce(new Error('API unavailable'))
+
+    render(
+      <AuthProvider>
+        <MemoryRouter>
+          <Header />
           <RoleRoute allowedRoles={['patient']}>
-            <PatientDashboardPage />
+            <p>Кабінет пацієнта</p>
           </RoleRoute>
-        } />
-      </Routes>,
-      createAuth({ authenticated: true }),
-      ['/patient'],
+        </MemoryRouter>
+      </AuthProvider>,
     )
 
     expect(await screen.findByRole('heading', { name: 'Не вдалося перевірити доступ' }))
       .toBeInTheDocument()
     expect(screen.getByText('Не вдалося перевірити роль користувача.')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити меню.')
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
+
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Спробувати ще раз' }))
+
+    expect(await screen.findByRole('link', { name: 'Мій цикл вправ' })).toBeInTheDocument()
+    expect(screen.getByText('Кабінет пацієнта')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(3)
   })
 
   it('shows patient name, pending invitation, and exercise totals on the dashboard', async () => {

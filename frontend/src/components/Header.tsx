@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { fetchCurrentUser, type AppRole } from '../api/auth'
 import { HELP_REQUESTS_CHANGED_EVENT, listNeedsAttention } from '../api/helpRequests'
 import { useAuth } from '../auth/useAuth'
 import { getDisplayName, getInitials } from '../lib/profile'
@@ -11,32 +10,13 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function Header() {
-  const { initialized, authenticated, tokenParsed, initError } = useAuth()
-  const [role, setRole] = useState<AppRole | null>(null)
+  const { initialized, authenticated, tokenParsed, initError, role, roleLoading, roleError, retryRole } = useAuth()
   const displayName = getDisplayName(tokenParsed)
   const initials = getInitials(displayName)
   const isTherapist = role === 'therapist' || role === 'admin'
   const isPatient = role === 'patient'
   const { pathname } = useLocation()
   const [openQuestions, setOpenQuestions] = useState(0)
-
-  useEffect(() => {
-    if (!authenticated) {
-      setRole(null)
-      return
-    }
-
-    const controller = new AbortController()
-    fetchCurrentUser({ signal: controller.signal })
-      .then((user) => {
-        if (!controller.signal.aborted) setRole(user.role)
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setRole(null)
-      })
-
-    return () => controller.abort()
-  }, [authenticated])
 
   // Number of unanswered patient questions; refreshed on navigation and after a reply.
   useEffect(() => {
@@ -134,6 +114,24 @@ export function Header() {
           )}
         </div>
       </div>
+      {roleLoading && (
+        <div className="site-header__feedback">
+          <span className="header-status" role="status">
+            <span className="spinner spinner--sm" aria-hidden="true" />
+            Завантажуємо меню…
+          </span>
+        </div>
+      )}
+      {roleError && (
+        <div className="site-header__feedback">
+          <span className="header-status header-status--error" role="alert">
+            Не вдалося завантажити меню.
+          </span>
+          <button type="button" className="button button--ghost button--sm" onClick={retryRole}>
+            Спробувати ще раз
+          </button>
+        </div>
+      )}
     </header>
   )
 }

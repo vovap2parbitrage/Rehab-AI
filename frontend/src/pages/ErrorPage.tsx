@@ -7,9 +7,10 @@ interface ErrorPageProps {
   message?: string
   code?: string
   notFound?: boolean
+  onRetry?: () => void
 }
 
-export function ErrorPage({ title, message, code, notFound = false }: ErrorPageProps) {
+export function ErrorPage({ title, message, code, notFound = false, onRetry }: ErrorPageProps) {
   const [searchParams] = useSearchParams()
   const errorCode = code ?? searchParams.get('error') ?? searchParams.get('code')
   const description = errorCode ? describeAuthErrorCode(errorCode) : null
@@ -51,9 +52,9 @@ export function ErrorPage({ title, message, code, notFound = false }: ErrorPageP
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => window.location.reload()}
+            onClick={onRetry ?? (() => window.location.reload())}
           >
-            Оновити сторінку
+            {onRetry ? 'Спробувати ще раз' : 'Оновити сторінку'}
           </button>
         </div>
 
