@@ -339,13 +339,12 @@ def test_patient_cannot_delete_uploaded_video(api, login, patient_user):
     assert response.status_code == 403
 
 
-def test_every_role_can_list_and_get_exercises(api, login, therapist, patient_user):
+def test_therapist_can_get_his_exercise(api, login, therapist):
     login(therapist)
     created = api.post(
         "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
     ).json()
 
-    login(patient_user)
     listed = api.get("/api/v1/exercises/")
     fetched = api.get(f"/api/v1/exercises/{created['id']}")
 
@@ -354,12 +353,47 @@ def test_every_role_can_list_and_get_exercises(api, login, therapist, patient_us
     assert fetched.status_code == 200
 
 
-def test_unknown_exercise_returns_404(api, login, patient_user):
-    login(patient_user)
+def test_unknown_exercise_returns_404(api, login, therapist):
+    login(therapist)
 
     response = api.get(f"/api/v1/exercises/{uuid.uuid4()}")
 
     assert response.status_code == 404
+
+
+def test_list_exercises_returns_403_for_patient(api, login, patient_user):
+    login(patient_user)
+
+    response = api.get("/api/v1/exercises/")
+
+    assert response.status_code == 403
+
+
+def test_therapist_cannot_get_other_therapist_exercise(api, login, admin, therapist):
+    login(admin)
+    created = api.post(
+        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
+    ).json()
+    
+    login(therapist)
+
+    response = api.get(f"/api/v1/exercises/{created['id']}")
+
+    assert response.status_code == 403
+
+
+def test_admin_can_get_any_exercise(api, login, admin, therapist):
+    login(therapist)
+    created = api.post(
+        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
+    ).json()
+
+    login(admin)
+
+    response = api.get(f"/api/v1/exercises/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == created["id"]
 
 
 def test_reference_video_key_limit_matches_model(api, login, therapist):

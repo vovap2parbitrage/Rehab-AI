@@ -47,8 +47,18 @@ def _delete_video_if_unreferenced(db: Session, key: str | None) -> None:
         ) from exc
 
 
-def list_exercises(db: Session) -> list[ExerciseRead]:
-    return [_to_read(exercise) for exercise in db.query(Exercise).all()]
+def list_exercises(
+    db: Session,
+    user: User,
+    roles: set[str]
+    ) -> list[ExerciseRead]:
+    
+    if Role.ADMIN.value in roles:
+        return [_to_read(exercise) for exercise in db.query(Exercise).all()]
+
+    return [_to_read(exercise) 
+            for exercise in db.query(Exercise).filter(Exercise.created_by == user.id).all()
+    ]
 
 
 def create_exercise(
@@ -65,12 +75,20 @@ def create_exercise(
     return _to_read(exercise)
 
 
-def get_exercise(db: Session, exercise_id: UUID) -> ExerciseRead:
+def get_exercise(
+    db: Session,
+    exercise_id: UUID,
+    user: User,
+    roles: set[str],
+) -> ExerciseRead:
     exercise = db.get(Exercise, exercise_id)
+    
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    return _to_read(exercise)
+    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+        raise HTTPException(status_code=403, detail="You can see only your exercises")
 
+    return _to_read(exercise)
 
 def update_exercise(
     db: Session,
