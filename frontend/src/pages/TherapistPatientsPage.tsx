@@ -1,3 +1,6 @@
+import { EmptyState } from '../components/EmptyState'
+import { Loading } from '../components/Loading'
+import { PageHeading } from '../components/PageHeading'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '../lib/errorMessage'
@@ -8,14 +11,27 @@ import { ErrorMessage } from '../components/ErrorMessage'
 export function TherapistPatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [notice, setNotice] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState({ email: '' })
 
   useEffect(() => {
-    listPatients().then(setPatients).catch((reason: unknown) => {
-      setError(getErrorMessage(reason, 'Не вдалося завантажити пацієнтів.'))
-    })
+    const controller = new AbortController()
+    listPatients(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setPatients(items)
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setLoadError(getErrorMessage(reason, 'Не вдалося завантажити пацієнтів.'))
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
   }, [])
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
@@ -35,13 +51,11 @@ export function TherapistPatientsPage() {
 
   return (
     <div className="workspace-page">
-      <header className="page-heading workspace-heading">
-        <div>
-          <p className="eyebrow">Кабінет лікаря</p>
-          <h1>Мої пацієнти</h1>
-          <p className="page-heading__lead">Переглядайте пацієнтів і відкривайте їхні плани реабілітації.</p>
-        </div>
-      </header>
+      <PageHeading
+        eyebrow="Кабінет лікаря"
+        title="Мої пацієнти"
+        lead="Переглядайте пацієнтів і відкривайте їхні плани реабілітації."
+      />
 
       {notice && <div className="success-message" role="status">{notice}</div>}
       {error && <ErrorMessage title="Не вдалося завантажити дані" message={error} />}
@@ -64,7 +78,9 @@ export function TherapistPatientsPage() {
                 </span>
               </Link>
             ))}
-            {patients.length === 0 && <p className="therapist-list__empty">Пацієнтів поки немає.</p>}
+            {loading && <Loading label="Завантажуємо пацієнтів…" />}
+            {loadError && <ErrorMessage message={loadError} />}
+            {!loading && !loadError && patients.length === 0 && <EmptyState message="Пацієнтів поки немає." />}
           </div>
         </section>
 

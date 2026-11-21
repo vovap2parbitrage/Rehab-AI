@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/EmptyState'
+import { PageHeading } from '../components/PageHeading'
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { PatientAssignment } from '../api/patient'
@@ -18,30 +20,11 @@ import { useVideoPreview } from '../lib/useVideoPreview'
 import { getDisplayName } from '../lib/profile'
 import { formatWeekdays, isAssignmentScheduledToday } from '../lib/assignmentSchedule'
 
-function PageHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead: string }) {
-  return (
-    <header className="page-heading workspace-heading">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="page-heading__lead">{lead}</p>
-      </div>
-    </header>
-  )
-}
-
 function WorkspaceError() {
   const { error, refresh } = usePatientWorkspace()
   if (!error) return null
 
-  return (
-    <div className="workspace-error" role="alert">
-      <span>{error}</span>
-      <button type="button" className="button button--ghost" onClick={refresh}>
-        Спробувати ще раз
-      </button>
-    </div>
-  )
+  return <ErrorMessage message={error} onRetry={refresh} />
 }
 
 function getInitials(email: string): string {
@@ -252,13 +235,11 @@ export function PatientTherapistsPage() {
           ))}
         </div>
       ) : (
-        <section className="card workspace-empty-state">
-          <span className="workspace-empty-state__icon" aria-hidden="true">
-            <UserIcon />
-          </span>
-          <h2>У вас ще немає лікарів</h2>
-          <p>Коли лікар почне з вами працювати, він з’явиться у цьому списку.</p>
-        </section>
+        <EmptyState
+          title="У вас ще немає лікарів"
+          message="Коли лікар почне з вами працювати, він з’явиться у цьому списку."
+          icon={<UserIcon />}
+        />
       )}
     </div>
   )
@@ -357,16 +338,15 @@ export function PatientInvitationsPage() {
           })}
         </div>
       ) : (
-        <section className="card workspace-empty-state">
-          <span className="workspace-empty-state__icon" aria-hidden="true">
-            <UserIcon />
-          </span>
-          <h2>Поки немає запрошень</h2>
-          <p>Коли лікар надішле запрошення, воно з’явиться тут.</p>
+        <EmptyState
+          title="Поки немає запрошень"
+          message="Коли лікар надішле запрошення, воно з’явиться тут."
+          icon={<UserIcon />}
+        >
           <Link to="/patient/therapists" className="button button--primary">
             Переглянути лікарів <ArrowRightIcon aria-hidden="true" />
           </Link>
-        </section>
+        </EmptyState>
       )}
     </div>
   )
@@ -475,11 +455,11 @@ export function PatientExercisesPage() {
             todayAssignments.length ? (
               <div className="exercise-list">{renderAssignments(todayAssignments)}</div>
             ) : (
-              <section className="card workspace-empty-state">
-                <span className="workspace-empty-state__icon" aria-hidden="true"><ClockIcon /></span>
-                <h2>На сьогодні вправ немає</h2>
-                <p>Перевірте розклад або відкрийте всі призначення.</p>
-              </section>
+              <EmptyState
+                title="На сьогодні вправ немає"
+                message="Перевірте розклад або відкрийте всі призначення."
+                icon={<ClockIcon />}
+              />
             )
           ) : (
             <div className="exercise-assignment-groups">
@@ -503,16 +483,15 @@ export function PatientExercisesPage() {
           )}
         </>
       ) : (
-        <section className="card workspace-empty-state">
-          <span className="workspace-empty-state__icon" aria-hidden="true">
-            <ClockIcon />
-          </span>
-          <h2>Призначень поки немає</h2>
-          <p>Коли лікар додасть вправу до вашого плану, вона з’явиться тут.</p>
+        <EmptyState
+          title="Призначень поки немає"
+          message="Коли лікар додасть вправу до вашого плану, вона з’явиться тут."
+          icon={<ClockIcon />}
+        >
           <Link to="/patient/invitations" className="button button--primary">
             Переглянути запрошення <ArrowRightIcon aria-hidden="true" />
           </Link>
-        </section>
+        </EmptyState>
       )}
     </div>
   )
@@ -557,18 +536,27 @@ export function PatientExerciseExecutionPage() {
     if (recordingInputRef.current) recordingInputRef.current.value = ''
   }
 
-  if (loading && !analysing && !saved) return <Loading label="Завантажуємо призначення…" />
+  if (loading && !analysing && !saved) {
+    return (
+      <div className="workspace-page">
+        <PageHeading title="Виконання вправи" />
+        <Loading label="Завантажуємо призначення…" />
+      </div>
+    )
+  }
   if (!assignment) {
     return (
       <div className="workspace-page">
+        <PageHeading title="Виконання вправи" />
         <WorkspaceError />
-        <section className="card workspace-empty-state">
-          <h2>Призначення не знайдено</h2>
-          <p>Можливо, лікар видалив його або воно більше недоступне.</p>
+        <EmptyState
+          title="Призначення не знайдено"
+          message="Можливо, лікар видалив його або воно більше недоступне."
+        >
           <Link to="/patient/exercises" className="button button--primary">
             До призначень <ArrowRightIcon aria-hidden="true" />
           </Link>
-        </section>
+        </EmptyState>
       </div>
     )
   }

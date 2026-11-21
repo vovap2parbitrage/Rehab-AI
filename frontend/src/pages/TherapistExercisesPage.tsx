@@ -1,3 +1,6 @@
+import { EmptyState } from '../components/EmptyState'
+import { Loading } from '../components/Loading'
+import { PageHeading } from '../components/PageHeading'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
@@ -36,15 +39,28 @@ export function TherapistExercisesPage() {
   const [bodyParts, setBodyParts] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const videoPreview = useVideoPreview()
   const editingExercise = exercises.find((item) => item.id === editingId)
 
   useEffect(() => {
-    listExercises().then(setExercises).catch((reason: unknown) => {
-      setError(getErrorMessage(reason, 'Не вдалося завантажити вправи.'))
-    })
+    const controller = new AbortController()
+    listExercises(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setExercises(items)
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) {
+          setLoadError(getErrorMessage(reason, 'Не вдалося завантажити вправи.'))
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
   }, [])
 
   const startEditing = (exercise: Exercise) => {
@@ -176,7 +192,11 @@ export function TherapistExercisesPage() {
   return (
     <div className="workspace-page">
       <Link to="/therapist/patients" className="back-link"><ArrowRightIcon /> До пацієнтів</Link>
-      <header className="page-heading workspace-heading"><div><p className="eyebrow">Кабінет лікаря</p><h1>Бібліотека вправ</h1><p className="page-heading__lead">Створюйте та переглядайте вправи для планів пацієнтів.</p></div></header>
+      <PageHeading
+        eyebrow="Кабінет лікаря"
+        title="Бібліотека вправ"
+        lead="Створюйте та переглядайте вправи для планів пацієнтів."
+      />
       {notice && <div className="success-message" role="status">{notice}</div>}
       {error && <ErrorMessage title="Помилка" message={error} />}
       {videoPreview.error && <ErrorMessage title="Не вдалося відкрити відео" message={videoPreview.error} />}
@@ -228,7 +248,9 @@ export function TherapistExercisesPage() {
                 </div>
               </article>
             ))}
-            {exercises.length === 0 && <p className="therapist-list__empty">Вправ поки немає.</p>}
+            {loading && <Loading label="Завантажуємо вправи…" />}
+            {loadError && <ErrorMessage message={loadError} />}
+            {!loading && !loadError && exercises.length === 0 && <EmptyState message="Вправ поки немає." />}
           </div>
         </section>
       </div>

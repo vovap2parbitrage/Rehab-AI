@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/EmptyState'
+import { PageHeading } from '../components/PageHeading'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
@@ -31,6 +33,8 @@ export function TherapistPatientPage() {
     setLoading(true)
     setNotFound(false)
     Promise.all([getPatient(patientId, signal), listExercises(signal), listAssignments(patientId, signal)]).then(([loadedPatient, loadedExercises, loadedAssignments]) => {
+      if (signal.aborted) return
+      setError(null)
       setPatient(loadedPatient)
       setExercises(loadedExercises)
       setAssignments(loadedAssignments)
@@ -85,16 +89,36 @@ export function TherapistPatientPage() {
     }
   }
 
-  if (loading) return <Loading />
-  if (error && !patient) return <ErrorMessage title="Помилка" message={error} />
-  if (notFound || !patient) return <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
+  const backLink = (
+    <Link to="/therapist/patients" className="back-link">
+      <ArrowRightIcon aria-hidden="true" /> До всіх пацієнтів
+    </Link>
+  )
+
+  if (loading || notFound || patient?.id !== patientId || !patient) {
+    return (
+      <div className="workspace-page">
+        {backLink}
+        <PageHeading title="Профіль пацієнта" />
+        {loading ? (
+          <Loading label="Завантажуємо дані пацієнта…" />
+        ) : error && !notFound ? (
+          <ErrorMessage message={error} />
+        ) : (
+          <ErrorMessage title="Пацієнта не знайдено" message="Поверніться до списку пацієнтів." />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="workspace-page">
-      <Link to="/therapist/patients" className="back-link"><ArrowRightIcon /> До всіх пацієнтів</Link>
-      <header className="page-heading workspace-heading">
-        <div><p className="eyebrow">Профіль пацієнта</p><h1>{patient.first_name} {patient.last_name}</h1><p className="page-heading__lead">{patient.notes || 'Персональний план реабілітації та активні призначення.'}</p></div>
-      </header>
+      {backLink}
+      <PageHeading
+        eyebrow="Профіль пацієнта"
+        title={`${patient.first_name} ${patient.last_name}`}
+        lead={patient.notes || 'Персональний план реабілітації та активні призначення.'}
+      />
       {notice && <div className="success-message" role="status">{notice}</div>}
       {error && <ErrorMessage title="Помилка" message={error} />}
       <div className="workspace-summary-grid therapist-page__grid">
@@ -151,7 +175,7 @@ export function TherapistPatientPage() {
               )}
             </div>)
             )
-          }{assignments.length === 0 && <p className="therapist-list__empty">Призначень поки немає.</p>}
+          }{assignments.length === 0 && <EmptyState message="Призначень поки немає." />}
           </div>
         </section>
         <PatientQuestionsCard patientId={patient.id} />

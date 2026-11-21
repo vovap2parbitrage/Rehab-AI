@@ -1,3 +1,4 @@
+import { PageHeading } from '../components/PageHeading'
 import { useState, useEffect, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import {
@@ -235,14 +236,11 @@ export function ProfilePage() {
 
   return (
     <div className="profile-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">Особистий кабінет</p>
-          <h1>Мій профіль</h1>
-          <p className="page-heading__lead">
-            Дані облікового запису, роль і статус доступу до реабілітаційної платформи.
-          </p>
-        </div>
+      <PageHeading
+        eyebrow="Особистий кабінет"
+        title="Мій профіль"
+        lead="Дані облікового запису, роль і статус доступу до реабілітаційної платформи."
+      >
 
         <button
           type="button"
@@ -257,7 +255,7 @@ export function ProfilePage() {
           )}
           Оновити дані
         </button>
-      </header>
+      </PageHeading>
 
       {isLoading && <Loading fullPage label="Завантажуємо профіль…" />}
 

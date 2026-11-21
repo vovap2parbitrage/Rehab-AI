@@ -1,3 +1,4 @@
+import { EmptyState } from './EmptyState'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '../lib/errorMessage'
@@ -62,7 +63,7 @@ export function NeedsAttentionSection() {
       {loading ? (
         <Loading label="Завантажуємо запитання пацієнтів…" />
       ) : requests.length === 0 ? (
-        <p className="therapist-list__empty">Нових запитань від пацієнтів немає.</p>
+        error ? null : <EmptyState message="Нових запитань від пацієнтів немає." />
       ) : (
         <div className="help-request-list">
           {requests.map((item) => {

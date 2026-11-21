@@ -1,3 +1,4 @@
+import { EmptyState } from '../EmptyState'
 import { lazy, Suspense, useId } from 'react'
 import { usePatientHistory } from '../../lib/usePatientHistory'
 import { ErrorMessage } from '../ErrorMessage'
@@ -41,7 +42,7 @@ export function PatientHistorySection({
         }
       >
         {history && <HistoryKpiCards kpis={history.kpis} />}
-        {empty && <p className="history-section__empty">{emptyText}</p>}
+        {empty && <EmptyState message={emptyText} />}
         {history && (
           <Suspense fallback={<Loading label="Завантажуємо графіки…" />}>
             <HistoryCharts history={history} />
