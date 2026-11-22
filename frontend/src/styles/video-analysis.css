@@ -64,3 +64,144 @@
   color: var(--danger);
   font-size: 0.85rem;
 }
+
+/* ---------- Recording inside the app ---------- */
+
+.video-source {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  align-self: flex-start;
+}
+
+.video-source__option {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.video-source__option[aria-pressed='true'] {
+  color: var(--primary-strong);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(3, 32, 51, 0.1);
+}
+
+.video-source__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.video-recorder {
+  display: grid;
+  gap: 12px;
+}
+
+.video-recorder__frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: #102a43;
+}
+
+.video-recorder__video {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #102a43;
+}
+
+.video-recorder__video--mirrored {
+  transform: scaleX(-1);
+}
+
+.video-recorder__timer {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(16, 42, 67, 0.75);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.video-recorder__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f04438;
+  animation: video-recorder-blink 1s ease-in-out infinite;
+}
+
+@keyframes video-recorder-blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-recorder__dot {
+    animation: none;
+  }
+}
+
+.video-recorder__hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.video-recorder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.video-recorder__countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(16, 42, 67, 0.35);
+  font-size: clamp(4rem, 18vw, 9rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4px 24px rgba(3, 32, 51, 0.6);
+  pointer-events: none;
+}
+
+.video-recorder__countdown-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* Why the last video gave no score, shown right under the video. */
+.exercise-upload__problem {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin: 24px;
+}
+
+.exercise-upload__problem:empty {
+  display: none;
+}
