@@ -15,6 +15,7 @@ from app.schemas.invitation import (
     InvitationRead,
     PatientInvitationRead,
 )
+from app.services.plan import require_free_slot
 
 
 def _to_patient_read(invitation: TherapistInvitation) -> PatientInvitationRead:
@@ -66,6 +67,7 @@ def send_invitation(db: Session, payload: InvitationCreate, therapist: User) -> 
     ).first()
     if exists is not None:
         raise HTTPException(status_code=409, detail="Invitation already exists")
+    require_free_slot(db, therapist.id)
 
     invitation = TherapistInvitation(
         patient_id=patient.id,
@@ -119,9 +121,13 @@ def respond_to_invitation(
             detail="Only pending invitations can be answered",
         )
 
+    joins = response_status == "accepted" and invitation.therapist not in patient.therapists
+    if joins:
+        require_free_slot(db, invitation.therapist_id, exclude_invitation_id=invitation.id)
+
     invitation.status = response_status
     invitation.responded_at = datetime.now(UTC)
-    if response_status == "accepted" and invitation.therapist not in patient.therapists:
+    if joins:
         patient.therapists.append(invitation.therapist)
 
     db.commit()

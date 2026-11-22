@@ -6,6 +6,7 @@ from app.models import (
     Assignment,
     Exercise,
     Patient,
+    Plan,
     TherapistInvitation,
     TrainingSession,
     User,
@@ -98,6 +99,8 @@ def test_patient_can_have_multiple_therapists_and_invitation():
     Base.metadata.create_all(engine)
 
     with Session(engine) as db:
+        db.add(Plan(code="free", name="Free", max_active_patients=5, price_uah=0))
+        db.flush()
         patient_user = User(
             email="patient@example.com",
             role="patient",
