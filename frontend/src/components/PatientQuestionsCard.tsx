@@ -1,3 +1,5 @@
+import { ErrorMessage } from './ErrorMessage'
+import { EmptyState } from './EmptyState'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '../lib/errorMessage'
@@ -18,7 +20,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
 
   useEffect(() => {
     const controller = new AbortController()
-    listPatientHelpRequests(patientId, controller.signal)
+    listPatientHelpRequests(patientId, { signal: controller.signal })
       .then(setItems)
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
@@ -37,13 +39,15 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
           <h2 id="patient-questions-title">Запитання пацієнта ({items.length})</h2>
           <p>Останнє запитання після виконання ваших призначень.</p>
         </div>
-        <span className="card__header-icon"><MailIcon /></span>
+        <span className="card__header-icon">
+          <MailIcon />
+        </span>
       </div>
-      {error && <p className="exercise-upload__error">{error}</p>}
+      {error && <ErrorMessage message={error} />}
       {loading ? (
         <Loading label="Завантажуємо запитання…" />
-      ) : items.length === 0 ? (
-        <p className="therapist-list__empty">Пацієнт ще не ставив запитань.</p>
+      ) : error ? null : items.length === 0 ? (
+        <EmptyState message="Пацієнт ще не ставив запитань." />
       ) : (
         <>
           <HelpRequestList items={items.slice(0, PREVIEW_COUNT)} showExercise compact />

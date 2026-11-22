@@ -16,8 +16,8 @@ FROM deps AS build
 
 COPY . .
 
-ARG VITE_API_BASE_URL=http://localhost:8000
-ARG VITE_KEYCLOAK_URL=http://localhost:8080
+ARG VITE_API_BASE_URL=http://localhost:8001
+ARG VITE_KEYCLOAK_URL=http://localhost:8081
 ARG VITE_KEYCLOAK_REALM=rehab-ai
 ARG VITE_KEYCLOAK_CLIENT_ID=rehab-ai-web
 

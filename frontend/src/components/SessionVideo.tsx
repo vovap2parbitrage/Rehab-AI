@@ -39,10 +39,19 @@ export function SessionVideo({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="session-video">
-      <button type="button" className="button button--ghost" onClick={() => void show()} disabled={loading}>
+      <button
+        type="button"
+        className="button button--ghost"
+        onClick={() => void show()}
+        disabled={loading}
+      >
         {loading ? 'Завантажуємо…' : 'Переглянути відео виконання'}
       </button>
-      {error && <p className="session-video__error" role="alert">{error}</p>}
+      {error && (
+        <p className="session-video__error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

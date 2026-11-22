@@ -1,0 +1,313 @@
+/* ---------- Patient workspace ---------- */
+
+.patient-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: fade-up 0.35s ease both;
+}
+
+.workspace-storage-error {
+  padding: 12px 16px;
+  margin: -12px 0 0;
+  border: 1px solid #f1d2a8;
+  border-radius: 12px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 0.84rem;
+}
+
+.workspace-welcome {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: clamp(26px, 5vw, 48px);
+  background:
+    radial-gradient(circle at 90% 15%, rgba(14, 159, 143, 0.14), transparent 34%),
+    linear-gradient(120deg, #fff, #f1f8fb);
+}
+
+.workspace-welcome__copy {
+  position: relative;
+  z-index: 1;
+  max-width: 700px;
+}
+
+.workspace-welcome h2 {
+  margin-bottom: 12px;
+  font-size: clamp(1.5rem, 3vw, 2.15rem);
+}
+
+.workspace-welcome p:not(.eyebrow) {
+  max-width: 620px;
+  margin-bottom: 22px;
+  color: var(--text-soft);
+}
+
+.workspace-welcome__illustration {
+  display: grid;
+  flex-shrink: 0;
+  width: 116px;
+  height: 116px;
+  place-items: center;
+  border: 1px solid rgba(14, 159, 143, 0.16);
+  border-radius: 34px;
+  color: var(--teal-strong);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-md);
+  font-size: 3.2rem;
+  transform: rotate(5deg);
+}
+
+.workspace-summary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 230px;
+}
+
+.workspace-summary-card__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 18px;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 1.25rem;
+}
+
+.workspace-summary-card__icon--teal {
+  color: var(--teal-strong);
+  background: var(--teal-soft);
+}
+
+.workspace-summary-card .eyebrow {
+  margin-bottom: 6px;
+}
+
+.workspace-summary-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+}
+
+.workspace-summary-card > p:not(.eyebrow) {
+  margin-bottom: 16px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.workspace-summary-card .text-link {
+  margin-top: auto;
+}
+
+.workspace-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  margin: 7px 0 14px;
+  border-radius: 999px;
+  background: var(--bg-strong);
+}
+
+.workspace-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--teal));
+  transition: width 0.25s ease;
+}
+
+.workspace-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.workspace-profile-card__avatar {
+  display: grid;
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 17px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--teal));
+  font-weight: 750;
+}
+
+.workspace-profile-card h2 {
+  margin: 0 0 5px;
+  font-size: 1.12rem;
+}
+
+.workspace-profile-card p:not(.eyebrow) {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.workspace-profile-card .eyebrow {
+  margin-bottom: 5px;
+}
+
+.workspace-profile-card .button {
+  margin-left: auto;
+}
+
+.workspace-note {
+  margin-top: -6px;
+}
+
+.therapist-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.therapist-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 24px;
+}
+
+.therapist-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.therapist-card h2 {
+  margin: 0 0 5px;
+  font-size: 1.2rem;
+}
+
+.therapist-card__specialty {
+  margin: 0 0 4px;
+  color: var(--primary-strong);
+  font-size: 0.87rem;
+  font-weight: 700;
+}
+
+.therapist-card__experience,
+.therapist-card__description {
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.therapist-card__experience {
+  margin-bottom: 12px;
+}
+
+.therapist-card__description {
+  min-height: 68px;
+  margin-bottom: 22px;
+}
+
+.therapist-card__directory-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.therapist-card .button {
+  margin-top: auto;
+  white-space: normal;
+}
+
+.workspace-demo-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.79rem;
+  line-height: 1.55;
+}
+
+.invitation-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  max-width: 900px;
+  padding: 32px;
+}
+
+.patient-invitation-list {
+  display: grid;
+  gap: 18px;
+}
+
+.patient-invitation-date {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.invitation-card__body {
+  min-width: 0;
+}
+
+.invitation-card h2 {
+  margin: 16px 0 8px;
+}
+
+.invitation-card__body > p {
+  color: var(--text-soft);
+}
+
+.invitation-card__specialty {
+  margin-bottom: 20px;
+  color: var(--primary-strong) !important;
+  font-weight: 700;
+}
+
+.invitation-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .therapist-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .patient-workspace {
+    gap: 20px;
+  }
+
+  .therapist-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-welcome__illustration {
+    display: none;
+  }
+
+  .workspace-profile-card {
+    flex-wrap: wrap;
+  }
+
+  .workspace-profile-card > div:nth-child(2) {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .workspace-profile-card .button {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .invitation-card {
+    padding: 24px;
+  }
+}

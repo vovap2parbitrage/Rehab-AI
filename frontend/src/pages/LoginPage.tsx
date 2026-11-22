@@ -1,30 +1,18 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { useAuthRedirectBusy } from '../auth/useAuthRedirectBusy'
 import { describeAuthActionError, describeAuthErrorCode } from '../auth/errors'
+import { readReturnPath } from '../auth/returnPath'
 import { AuthLayout } from '../components/AuthLayout'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { LockIcon, ShieldCheckIcon } from '../components/Icons'
-
-interface LoginLocationState {
-  from?: unknown
-}
-
-function readReturnPath(state: unknown): string {
-  const from = (state as LoginLocationState | null)?.from
-
-  if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
-    return from
-  }
-
-  return '/profile'
-}
 
 export function LoginPage() {
   const { initialized, authenticated, initError, login } = useAuth()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useAuthRedirectBusy()
   const [actionError, setActionError] = useState<string | null>(null)
 
   const returnPath = readReturnPath(location.state)
@@ -55,9 +43,7 @@ export function LoginPage() {
       icon={<LockIcon />}
       asideTitle="Один захищений вхід до всіх даних"
       asideText="Захищений сервіс перевіряє ваш пароль і керує сесією."
-      asidePoints={[
-        'Пароль вводиться лише на захищеній сторінці входу'
-      ]}
+      asidePoints={['Пароль вводиться лише на захищеній сторінці входу']}
       footer={
         <>
           Ще не маєте облікового запису?{' '}

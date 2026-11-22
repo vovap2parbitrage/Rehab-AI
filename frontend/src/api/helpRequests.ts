@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, type RequestOptions } from './client'
 
 export interface HelpRequest {
   id: string
@@ -24,23 +24,23 @@ export function createHelpRequest(sessionId: string, message: string): Promise<H
 }
 
 /** Patient: own questions together with the therapist's replies. */
-export function listMyHelpRequests(options: { signal?: AbortSignal } = {}): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>('/api/v1/help-requests/mine', { signal: options.signal })
+export function listMyHelpRequests(options: RequestOptions = {}): Promise<HelpRequest[]> {
+  return apiRequest<HelpRequest[]>('/api/v1/help-requests/mine', options)
 }
 
-/** Fired after a therapist replies, so the header badge can refresh its count. */
-export const HELP_REQUESTS_CHANGED_EVENT = 'help-requests-changed'
-
 /** Therapist: unanswered questions of their patients ("Needs attention"). */
-export function listNeedsAttention(signal?: AbortSignal): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>('/api/v1/help-requests/needs-attention', { signal })
+export function listNeedsAttention(options: RequestOptions = {}): Promise<HelpRequest[]> {
+  return apiRequest<HelpRequest[]>('/api/v1/help-requests/needs-attention', options)
 }
 
 /** Therapist: all questions of one patient with replies, newest first. */
-export function listPatientHelpRequests(patientId: string, signal?: AbortSignal): Promise<HelpRequest[]> {
+export function listPatientHelpRequests(
+  patientId: string,
+  options: RequestOptions = {},
+): Promise<HelpRequest[]> {
   return apiRequest<HelpRequest[]>(
     `/api/v1/help-requests/?patient_id=${encodeURIComponent(patientId)}`,
-    { signal },
+    options,
   )
 }
 

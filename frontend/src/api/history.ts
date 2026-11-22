@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, type RequestOptions } from './client'
 
 export type HistoryPeriod = '30d' | '90d' | 'all'
 
@@ -37,16 +37,23 @@ export interface PatientHistory {
   adherence_weeks: AdherenceWeek[]
 }
 
-export function getMyHistory(period: HistoryPeriod, signal?: AbortSignal) {
+export function getMyHistory(
+  period: HistoryPeriod,
+  options: RequestOptions = {},
+): Promise<PatientHistory> {
   return apiRequest<PatientHistory>(
     `/api/v1/patients/me/history?period=${encodeURIComponent(period)}`,
-    { signal },
+    options,
   )
 }
 
-export function getPatientHistory(patientId: string, period: HistoryPeriod, signal?: AbortSignal) {
+export function getPatientHistory(
+  patientId: string,
+  period: HistoryPeriod,
+  options: RequestOptions = {},
+): Promise<PatientHistory> {
   return apiRequest<PatientHistory>(
     `/api/v1/patients/${encodeURIComponent(patientId)}/history?period=${encodeURIComponent(period)}`,
-    { signal },
+    options,
   )
 }

@@ -34,10 +34,9 @@ export async function uploadVideo(file: File): Promise<string> {
 }
 
 export function deleteUploadedVideo(key: string): Promise<void> {
-  return apiRequest<void>(
-    `/api/v1/comparisons/uploads?key=${encodeURIComponent(key)}`,
-    { method: 'DELETE' },
-  )
+  return apiRequest<void>(`/api/v1/comparisons/uploads?key=${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+  })
 }
 
 /** Temporary link for playing an exercise's reference video (doctor and patient). */

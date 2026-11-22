@@ -1,4 +1,5 @@
-import { apiRequest } from './client'
+import { apiRequest, type RequestOptions } from './client'
+import type { AssignmentStatus, InvitationStatus } from './statuses'
 
 export interface Patient {
   id: string
@@ -28,14 +29,14 @@ export interface Assignment {
   weekdays: number[]
   repetitions: number
   starts_on: string
-  status: string
+  status: AssignmentStatus
 }
 
 export interface Invitation {
   id: string
   patient_id: string
   therapist_id: string
-  status: string
+  status: InvitationStatus
   message: string | null
   created_at: string | null
   responded_at: string | null
@@ -58,12 +59,12 @@ export interface AssignmentPayload {
   starts_on: string
 }
 
-export function listPatients(signal?: AbortSignal): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/', { signal })
+export function listPatients(options: RequestOptions = {}): Promise<Patient[]> {
+  return apiRequest<Patient[]>('/api/v1/patients/', options)
 }
 
-export function getPatient(id: string, signal?: AbortSignal): Promise<Patient> {
-  return apiRequest<Patient>(`/api/v1/patients/${encodeURIComponent(id)}`, { signal })
+export function getPatient(id: string, options: RequestOptions = {}): Promise<Patient> {
+  return apiRequest<Patient>(`/api/v1/patients/${encodeURIComponent(id)}`, options)
 }
 
 export function sendInvitation(email: string, message?: string): Promise<Invitation> {
@@ -73,8 +74,8 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
   })
 }
 
-export function listExercises(signal?: AbortSignal): Promise<Exercise[]> {
-  return apiRequest<Exercise[]>('/api/v1/exercises/', { signal })
+export function listExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  return apiRequest<Exercise[]>('/api/v1/exercises/', options)
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {
@@ -97,10 +98,13 @@ export function deleteExercise(id: string): Promise<void> {
   })
 }
 
-export function listAssignments(patientId: string, signal?: AbortSignal): Promise<Assignment[]> {
+export function listAssignments(
+  patientId: string,
+  options: RequestOptions = {},
+): Promise<Assignment[]> {
   return apiRequest<Assignment[]>(
     `/api/v1/assignments/?patient_id=${encodeURIComponent(patientId)}`,
-    { signal },
+    options,
   )
 }
 

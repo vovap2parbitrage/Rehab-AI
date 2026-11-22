@@ -15,7 +15,9 @@ export function parseAnalysis(deviations: Record<string, unknown>): AnalysisDeta
   const rawScores = deviations.joint_scores
   const jointScores = isRecord(rawScores)
     ? Object.fromEntries(
-        Object.entries(rawScores).filter((entry): entry is [string, number] => typeof entry[1] === 'number'),
+        Object.entries(rawScores).filter(
+          (entry): entry is [string, number] => typeof entry[1] === 'number',
+        ),
       )
     : null
 

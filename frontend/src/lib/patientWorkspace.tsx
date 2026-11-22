@@ -1,199 +1,128 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
+import { createHelpRequest, listMyHelpRequests } from '../api/helpRequests'
 import {
   completePatientAssignment,
   listPatientAssignments,
-  listPatientTherapists,
   listPatientInvitations,
+  listPatientTherapists,
   respondToPatientInvitation,
-  type PatientAssignment,
   type PatientTherapist,
-  type PatientInvitation,
-  type PatientSession,
 } from '../api/patient'
-import { createHelpRequest, listMyHelpRequests, type HelpRequest } from '../api/helpRequests'
-import { useAuth } from '../auth/useAuth'
 import { getErrorMessage } from './errorMessage'
-import { PatientWorkspaceContext } from './patientWorkspaceContext'
+import { PatientWorkspaceContext, type PatientActionResource } from './patientWorkspaceContext'
+import { useCachedResource } from './useCachedResource'
+
+const WORKSPACE_ERROR = 'Не вдалося завантажити дані кабінету пацієнта.'
 
 export function PatientWorkspaceProvider({ children }: { children: ReactNode }) {
-  const { authenticated, initialized } = useAuth()
-  const [therapists, setTherapists] = useState<PatientTherapist[]>([])
-  const [invitations, setInvitations] = useState<PatientInvitation[]>([])
-  const [assignments, setAssignments] = useState<PatientAssignment[]>([])
-  const [helpRequests, setHelpRequests] = useState<HelpRequest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [actionPending, setActionPending] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const invitations = useCachedResource(listPatientInvitations, WORKSPACE_ERROR)
+  const assignments = useCachedResource(listPatientAssignments, WORKSPACE_ERROR)
+  const helpRequests = useCachedResource(listMyHelpRequests, WORKSPACE_ERROR)
+  const { load: loadInvitations } = invitations
+  const { load: loadAssignments } = assignments
 
-  const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [invitationsResult, assignmentsResult, helpRequestsResult] = await Promise.allSettled([
-        listPatientInvitations({ signal }),
-        listPatientAssignments({ signal }),
-        listMyHelpRequests({ signal }),
-      ])
-      if (signal?.aborted) return
+  const fetchTherapists = useCallback(
+    async ({ signal }: { signal: AbortSignal }): Promise<PatientTherapist[]> => {
+      const options = { refresh: true, background: true }
+      const patientInvitations = await loadInvitations(options)
+      if (signal.aborted) return []
 
-      const failures: string[] = []
-      const invitations =
-        invitationsResult.status === 'fulfilled' ? invitationsResult.value : []
-      const assignments =
-        assignmentsResult.status === 'fulfilled' ? assignmentsResult.value : []
-      const patientId = invitations[0]?.patient_id ?? assignments[0]?.patient_id
-
-      if (invitationsResult.status === 'fulfilled') {
-        setInvitations(invitations)
-      } else {
-        failures.push(getErrorMessage(invitationsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
-      }
-      if (assignmentsResult.status === 'fulfilled') {
-        setAssignments(assignments)
-      } else {
-        failures.push(getErrorMessage(assignmentsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
-      }
-      if (helpRequestsResult.status === 'fulfilled') {
-        setHelpRequests(helpRequestsResult.value)
-      } else {
-        failures.push(getErrorMessage(helpRequestsResult.reason, 'Не вдалося завантажити дані кабінету пацієнта.'))
-      }
-
-      if (patientId) {
-        try {
-          const therapists = await listPatientTherapists(patientId, { signal })
-          const emails = new Map(
-            invitations.map((invitation) => [invitation.therapist_id, invitation.therapist_email]),
-          )
-          setTherapists(
-            therapists.map((therapist) => ({
-              id: therapist.id,
-              email: emails.get(therapist.id) ?? therapist.id,
-            })),
-          )
-        } catch (caught) {
-          failures.push(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
+      let patientId = patientInvitations?.[0]?.patient_id
+      if (!patientId) {
+        const patientAssignments = await loadAssignments(options)
+        if (signal.aborted) return []
+        patientId = patientAssignments?.[0]?.patient_id
+        if (!patientId && (!patientInvitations || !patientAssignments)) {
+          throw new Error('Не вдалося визначити профіль пацієнта для списку лікарів.')
         }
-      } else {
-        setTherapists([])
       }
-      setError(failures[0] ?? null)
+      return patientId ? listPatientTherapists(patientId, { signal }) : []
+    },
+    [loadInvitations, loadAssignments],
+  )
+  const therapists = useCachedResource(fetchTherapists, WORKSPACE_ERROR)
+
+  const [actionPending, setActionPending] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<{
+    resource: PatientActionResource
+    message: string
+  } | null>(null)
+
+  const clearActionError = (resource: PatientActionResource) => {
+    setActionError((current) => (current?.resource === resource ? null : current))
+  }
+
+  const respondToInvitation = async (invitationId: string, status: 'accepted' | 'declined') => {
+    setActionPending(invitationId)
+    clearActionError('invitations')
+    try {
+      const updated = await respondToPatientInvitation(invitationId, status)
+      invitations.update((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      therapists.invalidate()
+      await loadInvitations({ refresh: true, background: true })
+    } catch (caught) {
+      setActionError({ resource: 'invitations', message: getErrorMessage(caught, WORKSPACE_ERROR) })
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      setActionPending(null)
     }
-  }, [])
+  }
 
-  useEffect(() => {
-    if (!initialized || !authenticated) return
-    const controller = new AbortController()
-    queueMicrotask(() => {
-      void loadWorkspace(controller.signal)
-    })
-    return () => controller.abort()
-  }, [authenticated, initialized, loadWorkspace])
+  const completeAssignment = async (assignmentId: string, painScore: number | null) => {
+    setActionPending(assignmentId)
+    clearActionError('assignments')
+    try {
+      const session = await completePatientAssignment(assignmentId, {
+        ...(painScore === null ? {} : { pain_score: painScore }),
+      })
+      assignments.update((current) =>
+        current.map((assignment) =>
+          assignment.id === assignmentId
+            ? { ...assignment, sessions: [...assignment.sessions, session] }
+            : assignment,
+        ),
+      )
+      return session
+    } catch (caught) {
+      setActionError({ resource: 'assignments', message: getErrorMessage(caught, WORKSPACE_ERROR) })
+      return null
+    } finally {
+      setActionPending(null)
+    }
+  }
 
-  const refresh = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    void loadWorkspace()
-  }, [loadWorkspace])
-
-  const reload = useCallback(() => loadWorkspace(), [loadWorkspace])
-
-  const respond = useCallback(
-    async (invitationId: string, status: 'accepted' | 'declined') => {
-      setActionPending(invitationId)
-      setError(null)
-      try {
-        const updated = await respondToPatientInvitation(invitationId, status)
-        setInvitations((current) =>
-          current.map((invitation) => (invitation.id === updated.id ? updated : invitation)),
-        )
-        await loadWorkspace()
-      } catch (caught) {
-        setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
-      } finally {
-        setActionPending(null)
-      }
-    },
-    [loadWorkspace],
-  )
-
-  const complete = useCallback(
-    async (assignmentId: string, painScore: number | null) => {
-      setActionPending(assignmentId)
-      setError(null)
-      try {
-        const session: PatientSession = await completePatientAssignment(assignmentId, {
-          ...(painScore === null ? {} : { pain_score: painScore }),
-        })
-        setAssignments((current) =>
-          current.map((assignment) =>
-            assignment.id === assignmentId
-              ? { ...assignment, sessions: [...assignment.sessions, session] }
-              : assignment,
-          ),
-        )
-        return session
-      } catch (caught) {
-        setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
-        return null
-      } finally {
-        setActionPending(null)
-      }
-    },
-    [],
-  )
-
-  const askForHelp = useCallback(async (sessionId: string, message: string) => {
+  const askForHelp = async (sessionId: string, message: string) => {
     setActionPending(sessionId)
-    setError(null)
+    clearActionError('assignments')
     try {
       const created = await createHelpRequest(sessionId, message)
-      setHelpRequests((current) => [created, ...current])
+      helpRequests.update((current) => [created, ...current])
       return true
     } catch (caught) {
-      setError(getErrorMessage(caught, 'Не вдалося завантажити дані кабінету пацієнта.'))
+      setActionError({ resource: 'assignments', message: getErrorMessage(caught, WORKSPACE_ERROR) })
       return false
     } finally {
       setActionPending(null)
     }
-  }, [])
+  }
 
-  const value = useMemo(
-    () => ({
-      therapists,
-      invitations,
-      assignments,
-      helpRequests,
-      loading,
-      actionPending,
-      error,
-      refresh,
-      reload,
-      respondToInvitation: respond,
-      completeAssignment: complete,
-      askForHelp,
-    }),
-    [
-      therapists,
-      invitations,
-      assignments,
-      helpRequests,
-      loading,
-      actionPending,
-      error,
-      refresh,
-      reload,
-      respond,
-      complete,
-      askForHelp,
-    ],
+  return (
+    <PatientWorkspaceContext.Provider
+      value={{
+        therapists,
+        invitations,
+        assignments,
+        helpRequests,
+        actionPending,
+        actionError,
+        clearActionError,
+        respondToInvitation,
+        completeAssignment,
+        askForHelp,
+      }}
+    >
+      {children}
+    </PatientWorkspaceContext.Provider>
   )
-
-  return <PatientWorkspaceContext.Provider value={value}>{children}</PatientWorkspaceContext.Provider>
 }

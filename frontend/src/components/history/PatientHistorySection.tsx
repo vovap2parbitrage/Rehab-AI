@@ -1,3 +1,4 @@
+import { EmptyState } from '../EmptyState'
 import { lazy, Suspense, useId } from 'react'
 import { usePatientHistory } from '../../lib/usePatientHistory'
 import { ErrorMessage } from '../ErrorMessage'
@@ -28,9 +29,7 @@ export function PatientHistorySection({
 
   let body
   if (error && !notFound) {
-    body = (
-      <ErrorMessage title="Не вдалося завантажити історію" message={error} onRetry={refresh} />
-    )
+    body = <ErrorMessage title="Не вдалося завантажити історію" message={error} onRetry={refresh} />
   } else if (!history && !notFound) {
     body = <Loading label="Завантажуємо історію виконання…" />
   } else {
@@ -41,7 +40,7 @@ export function PatientHistorySection({
         }
       >
         {history && <HistoryKpiCards kpis={history.kpis} />}
-        {empty && <p className="history-section__empty">{emptyText}</p>}
+        {empty && <EmptyState message={emptyText} />}
         {history && (
           <Suspense fallback={<Loading label="Завантажуємо графіки…" />}>
             <HistoryCharts history={history} />

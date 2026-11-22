@@ -2,6 +2,10 @@ import { AuthSessionError } from '../auth/errors'
 import { getValidAccessToken } from '../auth/keycloak'
 import { appConfig } from '../config/appConfig'
 
+export interface RequestOptions {
+  signal?: AbortSignal
+}
+
 export type ApiErrorKind =
   | 'network'
   | 'session'
@@ -139,7 +143,12 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 
   if (!response.ok) {
     const detail = await readErrorDetail(response)
-    throw new ApiError(messageForStatus(response.status), kindForStatus(response.status), response.status, detail)
+    throw new ApiError(
+      messageForStatus(response.status),
+      kindForStatus(response.status),
+      response.status,
+      detail,
+    )
   }
 
   if (response.status === 204) {

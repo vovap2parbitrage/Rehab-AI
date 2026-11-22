@@ -45,11 +45,7 @@ interface SeriesDatum {
   exercise: string
 }
 
-function SeriesTooltip({
-  active,
-  payload,
-  unit,
-}: TooltipContentProps & { unit: string }) {
+function SeriesTooltip({ active, payload, unit }: TooltipContentProps & { unit: string }) {
   const datum = payload?.[0]?.payload as SeriesDatum | undefined
   if (!active || !datum) return null
 

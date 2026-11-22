@@ -9,7 +9,11 @@ interface HelpRequestListProps {
 }
 
 /** Read-only list of patient questions with the therapist's replies. */
-export function HelpRequestList({ items, showExercise = false, compact = false }: HelpRequestListProps) {
+export function HelpRequestList({
+  items,
+  showExercise = false,
+  compact = false,
+}: HelpRequestListProps) {
   return (
     <div className={compact ? 'help-request-list help-request-list--compact' : 'help-request-list'}>
       {items.map((item) => (
@@ -33,7 +37,9 @@ export function HelpRequestList({ items, showExercise = false, compact = false }
           <p>{item.message}</p>
           {item.reply && (
             <p className="help-request__reply">
-              <strong>Відповідь лікаря{item.replied_by_email && ` (${item.replied_by_email})`}:</strong>{' '}
+              <strong>
+                Відповідь лікаря{item.replied_by_email && ` (${item.replied_by_email})`}:
+              </strong>{' '}
               {item.reply}
             </p>
           )}

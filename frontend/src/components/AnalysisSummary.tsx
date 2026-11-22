@@ -41,7 +41,8 @@ export function AnalysisSummary({ score, repetitions, jointScores, errors }: Ana
                   {jointLabel(error.joint)}: {directionLabel(error.direction)}
                 </span>
                 <span>
-                  {error.start_s.toFixed(1)}–{error.end_s.toFixed(1)} с · до {error.peak_deviation_deg.toFixed(0)}°
+                  {error.start_s.toFixed(1)}–{error.end_s.toFixed(1)} с · до{' '}
+                  {error.peak_deviation_deg.toFixed(0)}°
                 </span>
               </li>
             ))}

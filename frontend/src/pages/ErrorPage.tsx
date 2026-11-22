@@ -7,25 +7,23 @@ interface ErrorPageProps {
   message?: string
   code?: string
   notFound?: boolean
+  onRetry?: () => void
 }
 
-export function ErrorPage({ title, message, code, notFound = false }: ErrorPageProps) {
+export function ErrorPage({ title, message, code, notFound = false, onRetry }: ErrorPageProps) {
   const [searchParams] = useSearchParams()
   const errorCode = code ?? searchParams.get('error') ?? searchParams.get('code')
   const description = errorCode ? describeAuthErrorCode(errorCode) : null
 
   const heading =
     title ??
-    (notFound
-      ? 'Сторінку не знайдено'
-      : (description?.title ?? 'Не вдалося завершити дію'))
+    (notFound ? 'Сторінку не знайдено' : (description?.title ?? 'Не вдалося завершити дію'))
 
   const text =
     message ??
     (notFound
       ? 'Можливо, сторінку переміщено або адресу введено з помилкою. Скористайтеся навігацією, щоб продовжити.'
-      : (description?.message ??
-        'Спробуйте ще раз'))
+      : (description?.message ?? 'Спробуйте ще раз'))
 
   return (
     <section className="error-page" aria-labelledby="error-page-title">
@@ -51,9 +49,9 @@ export function ErrorPage({ title, message, code, notFound = false }: ErrorPageP
           <button
             type="button"
             className="button button--ghost"
-            onClick={() => window.location.reload()}
+            onClick={onRetry ?? (() => window.location.reload())}
           >
-            Оновити сторінку
+            {onRetry ? 'Спробувати ще раз' : 'Оновити сторінку'}
           </button>
         </div>
 

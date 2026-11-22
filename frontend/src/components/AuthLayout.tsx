@@ -57,9 +57,7 @@ export function AuthLayout({
           ))}
         </ul>
 
-        <p className="auth-aside__note">
-          Автентифікацію виконує захищений сервіс.
-        </p>
+        <p className="auth-aside__note">Автентифікацію виконує захищений сервіс.</p>
       </aside>
     </div>
   )

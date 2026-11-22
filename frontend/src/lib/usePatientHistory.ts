@@ -22,9 +22,10 @@ export function usePatientHistory(patientId?: string) {
 
   useEffect(() => {
     const controller = new AbortController()
+    const options = { signal: controller.signal }
     const request = patientId
-      ? getPatientHistory(patientId, period, controller.signal)
-      : getMyHistory(period, controller.signal)
+      ? getPatientHistory(patientId, period, options)
+      : getMyHistory(period, options)
 
     request
       .then((result) => {
@@ -35,7 +36,11 @@ export function usePatientHistory(patientId?: string) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
         const notFound = reason instanceof ApiError && reason.kind === 'not-found'
-        setSettled({ key: requestKey, error: getErrorMessage(reason, 'Не вдалося завантажити історію виконання.'), notFound })
+        setSettled({
+          key: requestKey,
+          error: getErrorMessage(reason, 'Не вдалося завантажити історію виконання.'),
+          notFound,
+        })
       })
 
     return () => controller.abort()

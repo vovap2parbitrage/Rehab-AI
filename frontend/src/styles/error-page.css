@@ -1,0 +1,87 @@
+/* ---------- Error page ---------- */
+
+.error-page {
+  display: grid;
+  min-height: 60vh;
+  padding: 24px 0;
+  place-items: center;
+  animation: fade-up 0.4s ease both;
+}
+
+.error-card {
+  width: 100%;
+  max-width: 640px;
+  padding: 46px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.error-card__icon {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border-radius: 20px;
+  color: var(--primary);
+  background: linear-gradient(135deg, var(--primary-soft), var(--teal-soft));
+  font-size: 1.8rem;
+}
+
+.error-card .eyebrow {
+  justify-content: center;
+}
+
+.error-card h1 {
+  margin: 8px 0 14px;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+
+.error-card__text {
+  max-width: 480px;
+  margin: 0 auto 18px;
+  color: var(--text-soft);
+}
+
+.error-card__code {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.error-card__code code {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+}
+
+.error-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+
+.error-card__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .error-card {
+    padding: 30px 22px;
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 540px) {
+  .error-card__actions .button {
+    width: 100%;
+  }
+}

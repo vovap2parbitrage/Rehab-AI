@@ -1,9 +1,12 @@
 import { Outlet } from 'react-router-dom'
-import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
+import { useAuth } from '../../auth/useAuth'
+import { PatientWorkspaceProvider } from '../../lib/patientWorkspace'
 
 export function PatientWorkspaceLayout() {
+  const { tokenParsed } = useAuth()
+
   return (
-    <PatientWorkspaceProvider>
+    <PatientWorkspaceProvider key={tokenParsed?.sub}>
       <div className="patient-workspace">
         <Outlet />
       </div>

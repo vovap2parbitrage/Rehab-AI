@@ -19,9 +19,7 @@ export function getUsername(tokenParsed: TokenClaims): string {
 }
 
 export function getDisplayName(tokenParsed: TokenClaims): string {
-  const fullName = [getFirstName(tokenParsed), getLastName(tokenParsed)]
-    .filter(Boolean)
-    .join(' ')
+  const fullName = [getFirstName(tokenParsed), getLastName(tokenParsed)].filter(Boolean).join(' ')
 
   if (fullName) {
     return fullName
