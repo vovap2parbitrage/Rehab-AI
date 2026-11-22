@@ -120,3 +120,20 @@ export function cancelAssignment(assignmentId: string): Promise<void> {
     method: 'POST',
   })
 }
+
+/** What a doctor can change in an assignment. The start date is fixed. */
+export interface AssignmentUpdatePayload {
+  duration_weeks?: number
+  weekdays?: number[]
+  repetitions?: number
+}
+
+export function updateAssignment(
+  assignmentId: string,
+  payload: AssignmentUpdatePayload,
+): Promise<Assignment> {
+  return apiRequest<Assignment>(`/api/v1/assignments/${assignmentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
