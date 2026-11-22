@@ -45,7 +45,9 @@ import {
   archivePatient,
   restorePatient,
 } from '../api/therapist'
-import { ApiError } from '../api/client'
+import { ApiError, apiRequest } from '../api/client'
+import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
+import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
@@ -80,6 +82,12 @@ vi.mock('../api/therapist', () => ({
   listExercises: vi.fn(),
   listPatients: vi.fn(),
   restorePatient: vi.fn(),
+}))
+
+vi.mock('../api/plans', () => ({
+  getMyPlan: vi.fn(),
+  listPlans: vi.fn(),
+  purchasePlan: vi.fn(),
 }))
 
 vi.mock('../api/comparisons', () => ({
@@ -1103,6 +1111,115 @@ describe('Archiving a patient', () => {
 
     expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
     expect(await screen.findByRole('button', { name: 'Призначити план' })).toBeInTheDocument()
+  })
+})
+
+const PLANS: Plan[] = [
+  { code: 'free', name: 'Безкоштовний', max_active_patients: 5, price_uah: 0 },
+  { code: 'standard', name: 'Стандарт', max_active_patients: 15, price_uah: 499 },
+  { code: 'pro', name: 'Професійний', max_active_patients: 30, price_uah: 899 },
+]
+
+const FREE_PLAN_USAGE: TherapistPlan = {
+  plan: 'free',
+  plan_name: 'Безкоштовний',
+  limit: 5,
+  active: 3,
+  pending: 1,
+  free: 2,
+}
+
+describe('Pricing page', () => {
+  beforeEach(() => {
+    vi.mocked(listPlans).mockResolvedValue(PLANS)
+    vi.mocked(getMyPlan).mockResolvedValue(FREE_PLAN_USAGE)
+  })
+
+  it('shows the plans without a login', async () => {
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: false }), ['/pricing'])
+
+    expect(await screen.findByRole('heading', { name: 'Стандарт' })).toBeInTheDocument()
+    expect(screen.getByText('499 ₴ / міс')).toBeInTheDocument()
+    expect(screen.getByText('До 30 активних пацієнтів')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Увійти, щоб обрати' })).toHaveLength(3)
+    expect(getMyPlan).not.toHaveBeenCalled()
+  })
+
+  it('lets a therapist buy a plan with the mock payment', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(getMyPlan)
+      .mockResolvedValueOnce(FREE_PLAN_USAGE)
+      .mockResolvedValue({ ...FREE_PLAN_USAGE, plan: 'standard', plan_name: 'Стандарт', limit: 15 })
+    vi.mocked(purchasePlan).mockResolvedValue({
+      payment_id: 'payment-1',
+      amount_uah: 499,
+      plan: { ...FREE_PLAN_USAGE, plan: 'standard', plan_name: 'Стандарт', limit: 15 },
+    })
+
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: true, role: 'therapist' }), [
+      '/pricing',
+    ])
+
+    expect(await screen.findByText('Ваш тариф')).toBeInTheDocument()
+    const buttons = screen.getAllByRole('button', { name: 'Обрати тариф' })
+    await user.click(buttons[0])
+
+    expect(purchasePlan).toHaveBeenCalledWith('standard')
+    expect(await screen.findByText('Тариф «Стандарт» активовано.')).toBeInTheDocument()
+  })
+
+  it('offers no purchase to a patient', async () => {
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: true, role: 'patient' }), [
+      '/pricing',
+    ])
+
+    expect(await screen.findByRole('heading', { name: 'Професійний' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Обрати тариф' })).not.toBeInTheDocument()
+    expect(getMyPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('Patient limit', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('turns the patient_limit_reached code into a clear message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'limit', code: 'patient_limit_reached' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiRequest('/api/v1/plans/', {}, { authenticated: false })).rejects.toMatchObject({
+      status: 409,
+      code: 'patient_limit_reached',
+      message: expect.stringContaining('ліміту активних пацієнтів'),
+    })
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).has('Authorization')).toBe(false)
+  })
+
+  it('shows the plan usage to a therapist on the patients page', async () => {
+    vi.mocked(listPatients).mockResolvedValue([MOCK_PATIENT])
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(getMyPlan).mockResolvedValue(FREE_PLAN_USAGE)
+
+    renderWithAuth(
+      <Routes>
+        <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
+          <Route path="patients" element={<TherapistPatientsPage />} />
+        </Route>
+      </Routes>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/patients'],
+    )
+
+    expect(await screen.findByText('Тариф «Безкоштовний»')).toBeInTheDocument()
+    expect(screen.getByText(/Активних пацієнтів: 3 з 5 · вільно 2/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Змінити тариф' })).toHaveAttribute('href', '/pricing')
   })
 })
 

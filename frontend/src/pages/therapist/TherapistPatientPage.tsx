@@ -142,6 +142,7 @@ export function TherapistPatientPage() {
       )
       workspace?.patients.invalidate()
       workspace?.archivedPatients.invalidate()
+      workspace?.plan.invalidate()
       setNotice('Пацієнта архівовано. Активні призначення скасовано.')
     } catch (reason: unknown) {
       setError(getErrorMessage(reason, 'Не вдалося архівувати пацієнта.'))
@@ -160,6 +161,7 @@ export function TherapistPatientPage() {
       setPatient({ ...patient, archived_at: null })
       workspace?.patients.invalidate()
       workspace?.archivedPatients.invalidate()
+      workspace?.plan.invalidate()
       setNotice('Пацієнта повернено до активного списку.')
     } catch (reason: unknown) {
       setError(getErrorMessage(reason, 'Не вдалося відновити пацієнта.'))

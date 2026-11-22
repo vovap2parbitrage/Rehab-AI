@@ -20,6 +20,7 @@ export function Footer() {
         </p>
 
         <nav className="site-footer__nav" aria-label="Додаткова навігація">
+          <Link to="/pricing">Тарифи</Link>
           {!initialized ? null : authenticated ? (
             <Link to="/profile">Мій профіль</Link>
           ) : (

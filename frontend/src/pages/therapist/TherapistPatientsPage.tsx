@@ -3,6 +3,7 @@ import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { useState, type FormEvent } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
+import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../lib/errorMessage'
 import { restorePatient, sendInvitation, type Patient } from '../../api/therapist'
 import { MailIcon, UserIcon } from '../../components/Icons'
@@ -11,10 +12,15 @@ import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
 export function TherapistPatientsPage() {
-  const { patients: resource, archivedPatients: archivedResource } =
-    useOutletContext<TherapistWorkspaceResources>()
+  const {
+    patients: resource,
+    archivedPatients: archivedResource,
+    plan,
+  } = useOutletContext<TherapistWorkspaceResources>()
+  const { role } = useAuth()
   useRefreshOnEntry(resource)
   useRefreshOnEntry(archivedResource)
+  useRefreshOnEntry(plan, role === 'therapist')
   const { data: patients = [], loading, error: loadError } = resource
   const { data: archivedPatients = [], error: archiveLoadError } = archivedResource
   const [notice, setNotice] = useState<string | null>(null)
@@ -30,6 +36,7 @@ export function TherapistPatientsPage() {
       await restorePatient(patient.id)
       archivedResource.update((current) => current.filter((item) => item.id !== patient.id))
       resource.invalidate()
+      plan.invalidate()
       setNotice('Пацієнта повернено до активного списку.')
     } catch (reason: unknown) {
       setError(getErrorMessage(reason, 'Не вдалося відновити пацієнта.'))
@@ -45,6 +52,7 @@ export function TherapistPatientsPage() {
     try {
       await sendInvitation(invite.email)
       setInvite({ email: '' })
+      plan.invalidate()
       setNotice('Запрошення пацієнту надіслано.')
     } catch (reason: unknown) {
       setError(getErrorMessage(reason, 'Не вдалося надіслати запрошення.'))
@@ -67,6 +75,22 @@ export function TherapistPatientsPage() {
         </div>
       )}
       {error && <ErrorMessage title="Не вдалося завантажити дані" message={error} />}
+
+      {plan.data && (
+        <section className="card plan-summary" aria-label="Ваш тариф">
+          <div>
+            <h2>Тариф «{plan.data.plan_name}»</h2>
+            <p>
+              Активних пацієнтів: {plan.data.active} з {plan.data.limit} · вільно {plan.data.free}
+              {plan.data.pending > 0 &&
+                ` · очікують відповіді запрошень: ${plan.data.pending} (займають місце)`}
+            </p>
+          </div>
+          <Link to="/pricing" className="button button--ghost">
+            Змінити тариф
+          </Link>
+        </section>
+      )}
 
       <div className="workspace-summary-grid therapist-page__grid">
         <section className="card">
