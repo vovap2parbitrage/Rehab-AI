@@ -122,7 +122,7 @@
     {
       "username": "admin",
       "enabled": true,
-      "email": "admin@rehab.local",
+      "email": "admin@gmail.com",
       "emailVerified": true,
       "firstName": "Admin",
       "lastName": "Rehab",
@@ -139,7 +139,7 @@
     {
       "username": "therapist",
       "enabled": true,
-      "email": "therapist@rehab.local",
+      "email": "therapist@gmail.com",
       "emailVerified": true,
       "firstName": "Тетяна",
       "lastName": "Лікар",
@@ -156,7 +156,7 @@
     {
       "username": "patient",
       "enabled": true,
-      "email": "patient@rehab.local",
+      "email": "patient@gmail.com",
       "emailVerified": true,
       "firstName": "Павло",
       "lastName": "Пацієнт",
