@@ -21,6 +21,7 @@ import { Loading } from '../../components/Loading'
 import { PatientHistorySection } from '../../components/history/PatientHistorySection'
 import { PageHeading } from '../../components/PageHeading'
 import { PatientQuestionsCard } from '../../components/PatientQuestionsCard'
+import { PatientSessionsCard } from '../../components/PatientSessionsCard'
 import {
   formatWeekdays,
   nextSessionDate,
@@ -469,6 +470,13 @@ export function TherapistPatientPage() {
         title="Історія виконання"
         description="Біль, регулярність занять та оцінка техніки пацієнта."
         emptyText="Пацієнт ще не завершив жодної сесії за цей період."
+      />
+      <PatientSessionsCard
+        patientId={patient.id}
+        exerciseNameFor={(assignmentId) => {
+          const item = assignments.find((assignment) => assignment.id === assignmentId)
+          return (item && exerciseNames.get(item.exercise_id)) || 'Вправа'
+        }}
       />
     </div>
   )
