@@ -1,5 +1,5 @@
-import { PageHeading } from '../components/PageHeading'
-import { NeedsAttentionSection } from '../components/NeedsAttentionSection'
+import { PageHeading } from '../../components/PageHeading'
+import { NeedsAttentionSection } from '../../components/NeedsAttentionSection'
 
 export function TherapistQuestionsPage() {
   return (

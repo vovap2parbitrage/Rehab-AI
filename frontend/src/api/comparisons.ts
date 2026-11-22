@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, type RequestOptions } from './client'
 
 export type ComparisonStatus = 'pending' | 'done' | 'rerecord' | 'no_repetitions' | 'failed'
 
@@ -38,8 +38,6 @@ export function startComparison(payload: ComparisonPayload): Promise<{ task_id: 
   })
 }
 
-export function getComparison(taskId: string, signal?: AbortSignal): Promise<ComparisonResult> {
-  return apiRequest<ComparisonResult>(`/api/v1/comparisons/${encodeURIComponent(taskId)}`, {
-    signal,
-  })
+export function getComparison(taskId: string, options: RequestOptions = {}): Promise<ComparisonResult> {
+  return apiRequest<ComparisonResult>(`/api/v1/comparisons/${encodeURIComponent(taskId)}`, options)
 }

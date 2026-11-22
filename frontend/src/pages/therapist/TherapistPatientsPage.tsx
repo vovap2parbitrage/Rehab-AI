@@ -1,12 +1,12 @@
-import { EmptyState } from '../components/EmptyState'
-import { Loading } from '../components/Loading'
-import { PageHeading } from '../components/PageHeading'
+import { EmptyState } from '../../components/EmptyState'
+import { Loading } from '../../components/Loading'
+import { PageHeading } from '../../components/PageHeading'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { getErrorMessage } from '../lib/errorMessage'
-import { listPatients, sendInvitation, type Patient } from '../api/therapist'
-import { MailIcon, UserIcon } from '../components/Icons'
-import { ErrorMessage } from '../components/ErrorMessage'
+import { getErrorMessage } from '../../lib/errorMessage'
+import { listPatients, sendInvitation, type Patient } from '../../api/therapist'
+import { MailIcon, UserIcon } from '../../components/Icons'
+import { ErrorMessage } from '../../components/ErrorMessage'
 
 export function TherapistPatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([])
@@ -19,7 +19,7 @@ export function TherapistPatientsPage() {
 
   useEffect(() => {
     const controller = new AbortController()
-    listPatients(controller.signal)
+    listPatients({ signal: controller.signal })
       .then((items) => {
         if (!controller.signal.aborted) setPatients(items)
       })

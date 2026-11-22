@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { StrictMode } from 'react'
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthContextValue } from '../auth/AuthContext'
 import { AuthContext } from '../auth/AuthContext'
@@ -12,13 +13,11 @@ import type { PatientAssignment, PatientInvitation, PatientSession } from '../ap
 import type { HelpRequest } from '../api/helpRequests'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
-import {
-  PatientDashboardPage,
-  PatientExerciseExecutionPage,
-  PatientExercisesPage,
-  PatientInvitationsPage,
-  PatientTherapistsPage,
-} from '../pages/PatientWorkspacePages'
+import { PatientDashboardPage } from '../pages/patient/PatientDashboardPage'
+import { PatientExerciseExecutionPage } from '../pages/patient/PatientExerciseExecutionPage'
+import { PatientExercisesPage } from '../pages/patient/PatientExercisesPage'
+import { PatientInvitationsPage } from '../pages/patient/PatientInvitationsPage'
+import { PatientTherapistsPage } from '../pages/patient/PatientTherapistsPage'
 import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
 import { TherapistQuestionsProvider } from '../lib/TherapistQuestionsProvider'
 import {
@@ -506,7 +505,7 @@ describe('Patient access and cabinet pages', () => {
     vi.mocked(listPatientInvitations).mockResolvedValue([pendingInvitation, acceptedInvitation])
     vi.mocked(listPatientAssignments).mockResolvedValue([
       { ...patientAssignment, sessions: [session] },
-      { ...patientAssignment, id: 'assignment-2', status: 'inactive', sessions: [session] },
+      { ...patientAssignment, id: 'assignment-2', status: 'completed', sessions: [session] },
     ])
     renderPatientPage('/patient', <PatientDashboardPage />, createAuth({
       authenticated: true,
@@ -529,7 +528,6 @@ describe('Patient access and cabinet pages', () => {
 
   it('lists connected therapists with the email from their accepted invitation', async () => {
     vi.mocked(listPatientInvitations).mockResolvedValue([acceptedInvitation])
-    vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
     vi.mocked(listPatientTherapists).mockResolvedValue([
       { id: 'therapist-2', role: 'therapist' },
     ])
@@ -538,6 +536,75 @@ describe('Patient access and cabinet pages', () => {
     expect(await screen.findByRole('heading', { name: 'second.doctor@example.com' }))
       .toBeInTheDocument()
     expect(screen.getByText('Ви прийняли запрошення цього лікаря.')).toBeInTheDocument()
+    expect(listPatientAssignments).not.toHaveBeenCalled()
+  })
+
+  it('uses the assignment patient ID to load doctors when invitations are unavailable', async () => {
+    vi.mocked(listPatientInvitations).mockRejectedValueOnce(new Error('Не вдалося завантажити запрошення'))
+    vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+    vi.mocked(listPatientTherapists).mockResolvedValue([{ id: 'therapist-2', role: 'therapist' }])
+    renderPatientPage('/patient/therapists', <PatientTherapistsPage />)
+
+    expect(await screen.findByRole('heading', { name: 'therapist-2' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити запрошення')
+    expect(listPatientTherapists).toHaveBeenCalledWith(patientAssignment.patient_id, expect.anything())
+  })
+
+  it('loads invitations independently and reuses them while navigating to and from doctors', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listPatientInvitations).mockResolvedValue([acceptedInvitation])
+    let finishDoctors!: (doctors: Awaited<ReturnType<typeof listPatientTherapists>>) => void
+    vi.mocked(listPatientTherapists).mockImplementationOnce(() => new Promise((resolve) => {
+      finishDoctors = resolve
+    }))
+    renderWithAuth(
+      <StrictMode>
+        <PatientWorkspaceProvider>
+          <Link to="/patient/invitations">До запрошень</Link>
+          <Link to="/patient/therapists">До лікарів</Link>
+          <Routes>
+            <Route path="/patient/invitations" element={<PatientInvitationsPage />} />
+            <Route path="/patient/therapists" element={<PatientTherapistsPage />} />
+          </Routes>
+        </PatientWorkspaceProvider>
+      </StrictMode>,
+      createAuth({ authenticated: true }),
+      ['/patient/invitations'],
+    )
+
+    expect(await screen.findByText('second.doctor@example.com')).toBeInTheDocument()
+    expect(listPatientTherapists).not.toHaveBeenCalled()
+    expect(listPatientAssignments).not.toHaveBeenCalled()
+    expect(listMyHelpRequests).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('link', { name: 'До лікарів' }))
+    await waitFor(() => expect(listPatientTherapists).toHaveBeenCalledTimes(1))
+    await user.click(screen.getByRole('link', { name: 'До запрошень' }))
+    expect(screen.getByText('second.doctor@example.com')).toBeInTheDocument()
+    expect(listPatientInvitations).toHaveBeenCalledTimes(1)
+
+    await act(async () => finishDoctors([{ id: 'therapist-2', role: 'therapist' }]))
+    await user.click(screen.getByRole('link', { name: 'До лікарів' }))
+    expect(screen.getByRole('heading', { name: 'second.doctor@example.com' })).toBeInTheDocument()
+    expect(listPatientTherapists).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows exercise assignments while the questions request is pending', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+    let finishQuestions!: (questions: HelpRequest[]) => void
+    vi.mocked(listMyHelpRequests).mockImplementationOnce(() => new Promise((resolve) => {
+      finishQuestions = resolve
+    }))
+    renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+    expect(screen.getByRole('heading', { name: 'Розгинання коліна' })).toBeInTheDocument()
+    expect(listPatientInvitations).not.toHaveBeenCalled()
+    expect(listPatientTherapists).not.toHaveBeenCalled()
+
+    await act(async () => finishQuestions([helpRequest]))
+    expect(screen.getByText(/Запитання до лікаря \(1\)/)).toBeInTheDocument()
   })
 
   it('accepts a pending therapist invitation', async () => {
@@ -837,10 +904,13 @@ describe('Patient access and cabinet pages', () => {
 
   it('shows a workspace error when loading cabinet data fails and retries the request', async () => {
     const user = userEvent.setup()
-    vi.mocked(listPatientInvitations).mockRejectedValueOnce(new Error('Не вдалося завантажити'))
+    vi.mocked(listPatientInvitations).mockRejectedValueOnce(
+      new ApiError('Не вдалося завантажити', 'server', 500, 'Internal error detail'),
+    )
     renderPatientPage('/patient', <PatientDashboardPage />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не вдалося завантажити')
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Internal error detail')
     await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
 
     await waitFor(() => expect(listPatientInvitations).toHaveBeenCalledTimes(2))

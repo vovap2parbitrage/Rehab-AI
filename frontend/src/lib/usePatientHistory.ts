@@ -22,9 +22,10 @@ export function usePatientHistory(patientId?: string) {
 
   useEffect(() => {
     const controller = new AbortController()
+    const options = { signal: controller.signal }
     const request = patientId
-      ? getPatientHistory(patientId, period, controller.signal)
-      : getMyHistory(period, controller.signal)
+      ? getPatientHistory(patientId, period, options)
+      : getMyHistory(period, options)
 
     request
       .then((result) => {

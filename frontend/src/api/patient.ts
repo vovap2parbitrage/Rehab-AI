@@ -1,11 +1,10 @@
-import { apiRequest } from './client'
+import { apiRequest, type RequestOptions } from './client'
+import type { AssignmentStatus, InvitationStatus } from './statuses'
 
 export interface PatientTherapist {
   id: string
-  email: string
+  role: string
 }
-
-export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked'
 
 export interface PatientInvitation {
   id: string
@@ -44,29 +43,23 @@ export interface PatientAssignment {
   duration_weeks: number
   weekdays: number[]
   starts_on: string
-  status: string
+  status: AssignmentStatus
   exercise: PatientExercise
   sessions: PatientSession[]
 }
 
 export function listPatientTherapists(
   patientId: string,
-  options: { signal?: AbortSignal } = {},
-) {
-  return apiRequest<Array<{ id: string; role: string }>>(
+  options: RequestOptions = {},
+): Promise<PatientTherapist[]> {
+  return apiRequest<PatientTherapist[]>(
     `/api/v1/patients/${encodeURIComponent(patientId)}/therapists`,
-    {
-    method: 'GET',
-    signal: options.signal,
-    },
+    options,
   )
 }
 
-export function listPatientInvitations(options: { signal?: AbortSignal } = {}) {
-  return apiRequest<PatientInvitation[]>('/api/v1/invitations/mine', {
-    method: 'GET',
-    signal: options.signal,
-  })
+export function listPatientInvitations(options: RequestOptions = {}): Promise<PatientInvitation[]> {
+  return apiRequest<PatientInvitation[]>('/api/v1/invitations/mine', options)
 }
 
 export function respondToPatientInvitation(
@@ -82,11 +75,8 @@ export function respondToPatientInvitation(
   )
 }
 
-export function listPatientAssignments(options: { signal?: AbortSignal } = {}) {
-  return apiRequest<PatientAssignment[]>('/api/v1/assignments/mine', {
-    method: 'GET',
-    signal: options.signal,
-  })
+export function listPatientAssignments(options: RequestOptions = {}): Promise<PatientAssignment[]> {
+  return apiRequest<PatientAssignment[]>('/api/v1/assignments/mine', options)
 }
 
 export function completePatientAssignment(

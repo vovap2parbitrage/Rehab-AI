@@ -6,18 +6,21 @@ import type {
   PatientSession,
 } from '../api/patient'
 import type { HelpRequest } from '../api/helpRequests'
+import type { CachedResource } from './useCachedResource'
 
-export interface PatientWorkspaceContextValue {
-  therapists: PatientTherapist[]
-  invitations: PatientInvitation[]
-  assignments: PatientAssignment[]
-  helpRequests: HelpRequest[]
-  loading: boolean
+export interface PatientWorkspaceResources {
+  therapists: CachedResource<PatientTherapist[]>
+  invitations: CachedResource<PatientInvitation[]>
+  assignments: CachedResource<PatientAssignment[]>
+  helpRequests: CachedResource<HelpRequest[]>
+}
+
+export type PatientActionResource = 'invitations' | 'assignments'
+
+export interface PatientWorkspaceContextValue extends PatientWorkspaceResources {
   actionPending: string | null
-  error: string | null
-  refresh: () => void
-  /** Reloads the data in the background, without the loading screen. */
-  reload: () => Promise<void>
+  actionError: { resource: PatientActionResource; message: string } | null
+  clearActionError: (resource: PatientActionResource) => void
   respondToInvitation: (invitationId: string, status: 'accepted' | 'declined') => void
   completeAssignment: (assignmentId: string, painScore: number | null) => Promise<PatientSession | null>
   askForHelp: (sessionId: string, message: string) => Promise<boolean>

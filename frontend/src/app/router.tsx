@@ -4,22 +4,21 @@ import { ProtectedRoute } from '../auth/ProtectedRoute'
 import { ErrorPage } from '../pages/ErrorPage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/profile/ProfilePage'
-import {
-  PatientDashboardPage,
-  PatientTherapistsPage,
-  PatientExerciseExecutionPage,
-  PatientExercisesPage,
-  PatientInvitationsPage,
-} from '../pages/PatientWorkspacePages'
-import { PatientWorkspaceLayout } from '../pages/PatientWorkspaceLayout'
+
+import { PatientDashboardPage } from '../pages/patient/PatientDashboardPage'
+import { PatientExerciseExecutionPage } from '../pages/patient/PatientExerciseExecutionPage'
+import { PatientExercisesPage } from '../pages/patient/PatientExercisesPage'
+import { PatientInvitationsPage } from '../pages/patient/PatientInvitationsPage'
+import { PatientTherapistsPage } from '../pages/patient/PatientTherapistsPage'
+import { PatientWorkspaceLayout } from '../pages/patient/PatientWorkspaceLayout'
 import { RegisterPage } from '../pages/RegisterPage'
 import { RoleRoute } from '../auth/RoleRoute'
-import { TherapistPatientsPage } from '../pages/TherapistPatientsPage'
-import { TherapistPatientPage } from '../pages/TherapistPatientPage'
-import { TherapistExercisesPage } from '../pages/TherapistExercisesPage'
-import { TherapistQuestionsPage } from '../pages/TherapistQuestionsPage'
+import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
+import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
+import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
+import { TherapistQuestionsPage } from '../pages/therapist/TherapistQuestionsPage'
 import { StartPage } from '../pages/StartPage'
-import { TherapistWorkspaceLayout } from '../pages/TherapistWorkspaceLayout'
+import { TherapistWorkspaceLayout } from '../pages/therapist/TherapistWorkspaceLayout'
 import { TherapistQuestionsProvider } from '../lib/TherapistQuestionsProvider'
 
 export const router = createBrowserRouter([
