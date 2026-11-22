@@ -45,6 +45,7 @@ const patient: Patient = {
   last_name: 'Коваль',
   date_of_birth: null,
   notes: null,
+  archived_at: null,
 }
 
 const exercise: Exercise = {

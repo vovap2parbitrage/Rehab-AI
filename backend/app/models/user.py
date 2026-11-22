@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, String, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.timezones import DEFAULT_TIMEZONE
@@ -54,6 +54,15 @@ class User(Base):
         nullable=True,
     )
 
+    # Subscription plan; only limits therapists (how many active patients they may have).
+    plan_code: Mapped[str] = mapped_column(
+        String(20),
+        ForeignKey("plans.code"),
+        nullable=False,
+        default="free",
+        server_default="free",
+    )
+
     # IANA time zone name: decides what "today" means for this user.
     timezone: Mapped[str] = mapped_column(
         String(64),
@@ -98,6 +107,8 @@ class User(Base):
         uselist=False,
         foreign_keys="Patient.user_id",
     )
+
+    plan: Mapped["Plan"] = relationship("Plan")
 
     patients_as_therapist: Mapped[list["Patient"]] = relationship(
         "Patient",

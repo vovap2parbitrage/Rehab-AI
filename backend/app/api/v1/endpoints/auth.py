@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
+from app.models.patient import Patient
 from app.models.user import User
-from app.schemas.auth import RoleAssignment, RoleRequest, UserRead
+from app.schemas.auth import RoleAssignment, RoleChoice, RoleRequest, UserRead
 from app.services import keycloak_admin
 from app.services.keycloak_admin import KeycloakAdminError
 
@@ -37,6 +38,55 @@ def _keycloak_failure(exc: KeycloakAdminError) -> HTTPException:
 def read_current_user(
     user: User = Depends(get_current_active_user),
 ) -> User:
+    return user
+
+
+@router.post("/me/role", response_model=UserRead)
+def choose_role(
+    payload: RoleChoice,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """A new account registers as a therapist: the role is granted at once, no approval.
+
+    Every account starts as a patient, so this only works while the account has no patient
+    data yet; the empty patient profile is dropped together with the role change.
+    """
+    user = db.get(User, user.id)
+    if user.role == Role.THERAPIST.value:
+        return user
+    if user.role != Role.PATIENT.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a new patient account can become a therapist",
+        )
+    if not user.keycloak_sub:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not linked to a Keycloak account",
+        )
+
+    profile = db.query(Patient).filter(Patient.user_id == user.id).first()
+    if profile is not None and (
+        profile.therapists or profile.assignments or profile.therapist_invitations
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account already has patient data",
+        )
+
+    try:
+        keycloak_admin.replace_app_role(user.keycloak_sub, Role.THERAPIST)
+    except KeycloakAdminError as exc:
+        raise _keycloak_failure(exc) from exc
+
+    if profile is not None:
+        db.delete(profile)
+    user.role = Role.THERAPIST.value
+    user.pending_role = None
+    db.commit()
+    db.refresh(user)
+
     return user
 
 

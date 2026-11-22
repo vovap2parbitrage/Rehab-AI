@@ -9,6 +9,7 @@ export interface Patient {
   last_name: string
   date_of_birth: string | null
   notes: string | null
+  archived_at: string | null
 }
 
 export interface Exercise {
@@ -61,6 +62,22 @@ export interface AssignmentPayload {
 
 export function listPatients(options: RequestOptions = {}): Promise<Patient[]> {
   return apiRequest<Patient[]>('/api/v1/patients/', options)
+}
+
+export function listArchivedPatients(options: RequestOptions = {}): Promise<Patient[]> {
+  return apiRequest<Patient[]>('/api/v1/patients/?archived=true', options)
+}
+
+export function archivePatient(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/patients/${encodeURIComponent(id)}/archive`, {
+    method: 'POST',
+  })
+}
+
+export function restorePatient(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/patients/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  })
 }
 
 export function getPatient(id: string, options: RequestOptions = {}): Promise<Patient> {

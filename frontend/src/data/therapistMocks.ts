@@ -8,6 +8,7 @@ export const MOCK_PATIENT: Patient = {
   last_name: 'Коваленко',
   date_of_birth: null,
   notes: 'Відновлення після травми коліна.',
+  archived_at: null,
 }
 
 export const MOCK_EXERCISE: Exercise = {

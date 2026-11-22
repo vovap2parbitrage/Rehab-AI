@@ -22,13 +22,15 @@ export class ApiError extends Error {
   readonly kind: ApiErrorKind
   readonly status: number
   readonly detail?: string
+  readonly code?: string
 
-  constructor(message: string, kind: ApiErrorKind, status = 0, detail?: string) {
+  constructor(message: string, kind: ApiErrorKind, status = 0, detail?: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.kind = kind
     this.status = status
     this.detail = detail
+    this.code = code
   }
 }
 
@@ -57,7 +59,15 @@ function kindForStatus(status: number): ApiErrorKind {
   return 'unknown'
 }
 
-function messageForStatus(status: number): string {
+export const PATIENT_LIMIT_REACHED = 'patient_limit_reached'
+
+const CODE_MESSAGES: Record<string, string> = {
+  [PATIENT_LIMIT_REACHED]:
+    'Досягнуто ліміту активних пацієнтів за тарифом лікаря. Щоб продовжити, лікарю потрібно звільнити місце (заархівувати пацієнта) або обрати вищий тариф.',
+}
+
+function messageForStatus(status: number, code?: string): string {
+  if (code && CODE_MESSAGES[code]) return CODE_MESSAGES[code]
   return (
     STATUS_MESSAGES[status] ??
     (status >= 500
@@ -66,55 +76,71 @@ function messageForStatus(status: number): string {
   )
 }
 
-async function readErrorDetail(response: Response): Promise<string | undefined> {
+async function readErrorBody(response: Response): Promise<{ detail?: string; code?: string }> {
   try {
     const body: unknown = await response.json()
 
-    if (typeof body === 'object' && body !== null && 'detail' in body) {
-      const detail = (body as { detail: unknown }).detail
+    if (typeof body === 'object' && body !== null) {
+      const code = 'code' in body && typeof body.code === 'string' ? body.code : undefined
 
-      if (typeof detail === 'string') {
-        return detail
+      if ('detail' in body) {
+        const detail = (body as { detail: unknown }).detail
+
+        if (typeof detail === 'string') {
+          return { detail, code }
+        }
+
+        if (Array.isArray(detail)) {
+          return {
+            detail: detail
+              .map((item) => {
+                if (typeof item === 'object' && item !== null && 'msg' in item) {
+                  return String((item as { msg: unknown }).msg)
+                }
+                return String(item)
+              })
+              .join('; '),
+            code,
+          }
+        }
       }
 
-      if (Array.isArray(detail)) {
-        return detail
-          .map((item) => {
-            if (typeof item === 'object' && item !== null && 'msg' in item) {
-              return String((item as { msg: unknown }).msg)
-            }
-            return String(item)
-          })
-          .join('; ')
-      }
+      return { code }
     }
   } catch {
     // The response body is not JSON; the status code is enough.
   }
 
-  return undefined
+  return {}
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let token: string
+export function isPatientLimitError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === PATIENT_LIMIT_REACHED
+}
 
-  try {
-    token = await getValidAccessToken()
-  } catch (error) {
-    if (error instanceof AuthSessionError) {
-      throw new ApiError(
-        'Сесія завершилася. Увійдіть знову, щоб отримати доступ до профілю.',
-        'session',
-        401,
-      )
-    }
-
-    throw error
-  }
-
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  { authenticated = true }: { authenticated?: boolean } = {},
+): Promise<T> {
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
-  headers.set('Authorization', `Bearer ${token}`)
+
+  if (authenticated) {
+    try {
+      headers.set('Authorization', `Bearer ${await getValidAccessToken()}`)
+    } catch (error) {
+      if (error instanceof AuthSessionError) {
+        throw new ApiError(
+          'Сесія завершилася. Увійдіть знову, щоб отримати доступ до профілю.',
+          'session',
+          401,
+        )
+      }
+
+      throw error
+    }
+  }
 
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -142,12 +168,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
 
   if (!response.ok) {
-    const detail = await readErrorDetail(response)
+    const { detail, code } = await readErrorBody(response)
     throw new ApiError(
-      messageForStatus(response.status),
+      messageForStatus(response.status, code),
       kindForStatus(response.status),
       response.status,
       detail,
+      code,
     )
   }
 

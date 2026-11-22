@@ -8,12 +8,16 @@ from app.api.v1.endpoints import (
     help_requests,
     invitations,
     patients,
+    plans,
     sessions,
+    therapists,
 )
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(patients.router, prefix="/patients", tags=["patients"])
+api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
+api_router.include_router(therapists.router, prefix="/therapists", tags=["therapists"])
 api_router.include_router(invitations.router, prefix="/invitations", tags=["invitations"])
 api_router.include_router(exercises.router, prefix="/exercises", tags=["exercises"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])

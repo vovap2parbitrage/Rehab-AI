@@ -32,6 +32,19 @@ class RoleRequest(BaseModel):
         return value
 
 
+class RoleChoice(BaseModel):
+    """The role a new account picks for itself at registration; only therapist needs a choice."""
+
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        if value != Role.THERAPIST.value:
+            raise ValueError("role must be therapist")
+        return value
+
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

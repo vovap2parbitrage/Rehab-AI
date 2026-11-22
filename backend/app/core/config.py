@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     max_video_mb: int = 100
     max_video_seconds: int = 120
 
+    # Provider that charges plan purchases; "mock" approves every payment without charging.
+    payment_provider: str = "mock"
+
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:3001,http://127.0.0.1:3001,"

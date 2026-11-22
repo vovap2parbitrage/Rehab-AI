@@ -1,11 +1,11 @@
-"""add a time zone to users
+"""let a therapist archive a patient
 
-Adds ``users.timezone`` (IANA name, default Europe/Kyiv). It decides what "today"
-means when a therapist picks the start date of an assignment.
+Adds ``patient_therapists.archived_at``: set when the therapist archives the patient,
+NULL while the patient is on the therapist's active list.
 
 Revision ID: 0006
 Revises: 0005
-Create Date: 2026-11-23 12:00:00
+Create Date: 2026-11-22 12:00:00
 
 """
 from collections.abc import Sequence
@@ -22,10 +22,10 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column(
-        'users',
-        sa.Column('timezone', sa.String(length=64), nullable=False, server_default='Europe/Kyiv'),
+        'patient_therapists',
+        sa.Column('archived_at', sa.DateTime(timezone=True), nullable=True),
     )
 
 
 def downgrade() -> None:
-    op.drop_column('users', 'timezone')
+    op.drop_column('patient_therapists', 'archived_at')

@@ -18,6 +18,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[PatientRead])
 def list_patients(
+    archived: bool = False,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -26,6 +27,7 @@ def list_patients(
         db,
         is_admin=Role.ADMIN.value in extract_roles(claims),
         therapist_id=user.id,
+        archived=archived,
     )
 
 
@@ -89,11 +91,21 @@ def list_patient_therapists(
     )
 
 
-@router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_patient_from_therapist_list(
+@router.post("/{patient_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+def archive_patient(
     patient_id: UUID,
     _claims: dict[str, Any] = Depends(require_roles(Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> None:
-    patient.remove_patient_from_therapist(db, patient_id, user)
+    patient.archive_patient(db, patient_id, user)
+
+
+@router.post("/{patient_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+def restore_patient(
+    patient_id: UUID,
+    _claims: dict[str, Any] = Depends(require_roles(Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> None:
+    patient.restore_patient(db, patient_id, user)

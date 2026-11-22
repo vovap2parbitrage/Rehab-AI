@@ -41,12 +41,18 @@ import {
   listAssignments,
   listExercises,
   listPatients,
+  listArchivedPatients,
+  archivePatient,
+  restorePatient,
 } from '../api/therapist'
-import { ApiError } from '../api/client'
+import { ApiError, apiRequest } from '../api/client'
+import { refreshAccessToken } from '../auth/keycloak'
+import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
+import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
-import { fetchCurrentUser, requestTherapistRole, type UserProfile } from '../api/auth'
+import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
 import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
@@ -68,11 +74,21 @@ vi.mock('../api/history', () => ({
 }))
 
 vi.mock('../api/therapist', () => ({
+  archivePatient: vi.fn(),
+  cancelAssignment: vi.fn(),
   createAssignment: vi.fn(),
   getPatient: vi.fn(),
+  listArchivedPatients: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
   listPatients: vi.fn(),
+  restorePatient: vi.fn(),
+}))
+
+vi.mock('../api/plans', () => ({
+  getMyPlan: vi.fn(),
+  listPlans: vi.fn(),
+  purchasePlan: vi.fn(),
 }))
 
 vi.mock('../api/comparisons', () => ({
@@ -100,13 +116,14 @@ vi.mock('../api/helpRequests', () => ({
 vi.mock('../api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth')>()),
   fetchCurrentUser: vi.fn(),
-  requestTherapistRole: vi.fn(),
+  chooseTherapistRole: vi.fn(),
 }))
 
 vi.mock('../auth/keycloak', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/keycloak')>()),
   getKeycloak: () => ({ authenticated: true, tokenParsed: { sub: 'patient-1' } }),
   initKeycloak: async () => true,
+  refreshAccessToken: vi.fn(),
 }))
 
 function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
@@ -284,6 +301,7 @@ beforeEach(() => {
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
   vi.mocked(listMyHelpRequests).mockResolvedValue([])
+  vi.mocked(listArchivedPatients).mockResolvedValue([])
   vi.mocked(listNeedsAttention).mockResolvedValue([])
   vi.mocked(respondToPatientInvitation).mockResolvedValue(pendingInvitation)
   vi.mocked(completePatientAssignment).mockResolvedValue(session)
@@ -407,7 +425,8 @@ describe('Register page', () => {
     renderWithAuth(<RegisterPage />, auth, [{ pathname: '/register', state: { from: '/patient' } }])
 
     await user.click(screen.getByRole('radio', { name: /Лікар/ }))
-    expect(screen.getByText(/Роль лікаря потребує підтвердження/)).toBeInTheDocument()
+    expect(screen.getByText(/Доступ лікаря активний одразу/)).toBeInTheDocument()
+    expect(screen.queryByText(/підтвердження/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Зареєструватися як лікар' }))
 
     expect(window.sessionStorage.getItem('airehab.registration-role')).toBe('therapist')
@@ -1045,6 +1064,172 @@ describe('Local assignment dates', () => {
   })
 })
 
+describe('Archiving a patient', () => {
+  const renderPatientPage = () =>
+    render(
+      <MemoryRouter initialEntries={[`/therapist/patients/${MOCK_PATIENT.id}`]}>
+        <Routes>
+          <Route path="/therapist/patients/:patientId" element={<TherapistPatientPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+  beforeEach(() => {
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+    vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
+  })
+
+  it('archives the patient, cancels active plans and blocks new assignments', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(getPatient).mockResolvedValue(MOCK_PATIENT)
+    vi.mocked(listAssignments).mockResolvedValue([{ ...MOCK_ASSIGNMENT, status: 'active' }])
+    vi.mocked(archivePatient).mockResolvedValue(undefined)
+
+    renderPatientPage()
+    await user.click(await screen.findByRole('button', { name: 'Архівувати пацієнта' }))
+
+    expect(archivePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(
+      await screen.findByText('Пацієнта архівовано. Активні призначення скасовано.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('· стан: cancelled')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Відновити пацієнта' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Призначити план' })).not.toBeInTheDocument()
+  })
+
+  it('shows an archived patient as read-only until restored', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPatient).mockResolvedValue({
+      ...MOCK_PATIENT,
+      archived_at: '2026-11-20T10:00:00Z',
+    })
+    vi.mocked(listAssignments).mockResolvedValue([])
+    vi.mocked(restorePatient).mockResolvedValue(undefined)
+
+    renderPatientPage()
+
+    expect(await screen.findByText(/Пацієнт в архіві/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Призначити план' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Відновити пацієнта' }))
+
+    expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(await screen.findByRole('button', { name: 'Призначити план' })).toBeInTheDocument()
+  })
+})
+
+const PLANS: Plan[] = [
+  { code: 'free', name: 'Безкоштовний', max_active_patients: 5, price_uah: 0 },
+  { code: 'standard', name: 'Стандарт', max_active_patients: 15, price_uah: 499 },
+  { code: 'pro', name: 'Професійний', max_active_patients: 30, price_uah: 899 },
+]
+
+const FREE_PLAN_USAGE: TherapistPlan = {
+  plan: 'free',
+  plan_name: 'Безкоштовний',
+  limit: 5,
+  active: 3,
+  pending: 1,
+  free: 2,
+}
+
+describe('Pricing page', () => {
+  beforeEach(() => {
+    vi.mocked(listPlans).mockResolvedValue(PLANS)
+    vi.mocked(getMyPlan).mockResolvedValue(FREE_PLAN_USAGE)
+  })
+
+  it('shows the plans without a login', async () => {
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: false }), ['/pricing'])
+
+    expect(await screen.findByRole('heading', { name: 'Стандарт' })).toBeInTheDocument()
+    expect(screen.getByText('0 ₴ / міс')).toBeInTheDocument()
+    expect(screen.getByText('499 ₴ / міс')).toBeInTheDocument()
+    expect(screen.getByText('До 30 активних пацієнтів')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Увійти, щоб обрати' })).toHaveLength(3)
+    expect(getMyPlan).not.toHaveBeenCalled()
+  })
+
+  it('lets a therapist buy a plan with the mock payment', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(getMyPlan)
+      .mockResolvedValueOnce(FREE_PLAN_USAGE)
+      .mockResolvedValue({ ...FREE_PLAN_USAGE, plan: 'standard', plan_name: 'Стандарт', limit: 15 })
+    vi.mocked(purchasePlan).mockResolvedValue({
+      payment_id: 'payment-1',
+      amount_uah: 499,
+      plan: { ...FREE_PLAN_USAGE, plan: 'standard', plan_name: 'Стандарт', limit: 15 },
+    })
+
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: true, role: 'therapist' }), [
+      '/pricing',
+    ])
+
+    expect(await screen.findByText('Ваш тариф')).toBeInTheDocument()
+    const buttons = screen.getAllByRole('button', { name: 'Обрати тариф' })
+    await user.click(buttons[0])
+
+    expect(purchasePlan).toHaveBeenCalledWith('standard')
+    expect(await screen.findByText('Тариф «Стандарт» активовано.')).toBeInTheDocument()
+  })
+
+  it('offers no purchase to a patient', async () => {
+    renderWithAuth(<PricingPage />, createAuth({ authenticated: true, role: 'patient' }), [
+      '/pricing',
+    ])
+
+    expect(await screen.findByRole('heading', { name: 'Професійний' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Обрати тариф' })).not.toBeInTheDocument()
+    expect(getMyPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('Patient limit', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('turns the patient_limit_reached code into a clear message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'limit', code: 'patient_limit_reached' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiRequest('/api/v1/plans/', {}, { authenticated: false })).rejects.toMatchObject({
+      status: 409,
+      code: 'patient_limit_reached',
+      message: expect.stringContaining('ліміту активних пацієнтів'),
+    })
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).has('Authorization')).toBe(false)
+  })
+
+  it('shows the plan usage to a therapist on the patients page', async () => {
+    vi.mocked(listPatients).mockResolvedValue([MOCK_PATIENT])
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(getMyPlan).mockResolvedValue(FREE_PLAN_USAGE)
+
+    renderWithAuth(
+      <Routes>
+        <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
+          <Route path="patients" element={<TherapistPatientsPage />} />
+        </Route>
+      </Routes>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/patients'],
+    )
+
+    expect(await screen.findByText('Тариф «Безкоштовний»')).toBeInTheDocument()
+    expect(screen.getByText(/Активних пацієнтів: 3 з 5 · вільно 2/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Змінити тариф' })).toHaveAttribute('href', '/pricing')
+  })
+})
+
 describe('Shared account data', () => {
   it('loads the profile once and updates navigation when the profile is refreshed', async () => {
     const user = userEvent.setup()
@@ -1076,21 +1261,54 @@ describe('Shared account data', () => {
     expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
   })
 
-  it('updates the shared profile with the automatic role request from registration', async () => {
+  it('grants the therapist role chosen at registration at once, without approval', async () => {
     window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    vi.mocked(requestTherapistRole).mockResolvedValueOnce({
-      ...currentPatient,
-      pending_role: 'therapist',
-    })
+    vi.mocked(chooseTherapistRole).mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
+    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
     render(
       <AuthProvider>
         <ProfilePage />
       </AuthProvider>,
     )
 
-    expect(await screen.findByRole('heading', { name: /Запит на роль «/ })).toBeInTheDocument()
-    expect(requestTherapistRole).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
+    expect(chooseTherapistRole).toHaveBeenCalledTimes(1)
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Запит на роль/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/очікує підтвердження/)).not.toBeInTheDocument()
+  })
+
+  it('lets the new therapist retry when the role could not be activated', async () => {
+    const user = userEvent.setup()
+    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
+    vi.mocked(chooseTherapistRole)
+      .mockRejectedValueOnce(new Error('Keycloak is down'))
+      .mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
+    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
+    render(
+      <AuthProvider>
+        <ProfilePage />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText('Keycloak is down')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+
+    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
+    expect(chooseTherapistRole).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not offer a role request to a patient', async () => {
+    render(
+      <AuthProvider>
+        <ProfilePage />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText(currentPatient.email)).toBeInTheDocument()
+    expect(screen.queryByText('Працюєте терапевтом?')).not.toBeInTheDocument()
+    expect(chooseTherapistRole).not.toHaveBeenCalled()
   })
 })
 
@@ -1139,6 +1357,31 @@ describe('Therapist workspace', () => {
 
     await act(async () => finishPatients([{ ...MOCK_PATIENT, first_name: 'Андрій' }]))
     expect(screen.getByRole('link', { name: /Андрій Коваленко/ })).toBeInTheDocument()
+  })
+
+  it('restores an archived patient to the active list', async () => {
+    const user = userEvent.setup()
+    const archived = { ...MOCK_PATIENT, archived_at: '2026-11-20T10:00:00Z' }
+    vi.mocked(listPatients).mockResolvedValueOnce([]).mockResolvedValueOnce([MOCK_PATIENT])
+    vi.mocked(listArchivedPatients).mockResolvedValue([archived])
+    vi.mocked(restorePatient).mockResolvedValue(undefined)
+
+    renderWithAuth(
+      <Routes>
+        <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
+          <Route path="patients" element={<TherapistPatientsPage />} />
+        </Route>
+      </Routes>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/patients'],
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Відновити Олександр Коваленко' }))
+
+    expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(await screen.findByText('Пацієнта повернено до активного списку.')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Відновити/ })).not.toBeInTheDocument()
   })
 })
 
