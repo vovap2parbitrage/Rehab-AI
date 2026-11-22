@@ -8,9 +8,9 @@ import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { getDisplayName, getFirstName, getLastName, getUsername } from '../../lib/profile'
 import { ProfileDataAccess, ProfileDetails } from './ProfileDetails'
-import { ProfileRoleRequest } from './ProfileRoleRequest'
+import { ProfileRoleStatus } from './ProfileRoleStatus'
 import { ProfileSidebar } from './ProfileSidebar'
-import { useProfileRoleRequest } from './useProfileRoleRequest'
+import { useRegistrationRole } from './useRegistrationRole'
 
 export function ProfilePage() {
   const {
@@ -22,8 +22,7 @@ export function ProfilePage() {
     userError: error,
     refreshUser,
   } = useAuth()
-  const { isRequestingRole, roleRequestError, roleRequestSuccess, handleRoleRequest } =
-    useProfileRoleRequest()
+  const { isApplyingRole, roleError, roleSuccess, retryRole } = useRegistrationRole()
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
@@ -65,7 +64,7 @@ export function ProfilePage() {
           type="button"
           className="button button--ghost button--sm"
           onClick={refreshUser}
-          disabled={userLoading || isRequestingRole}
+          disabled={userLoading || isApplyingRole}
         >
           {userLoading ? (
             <span className="spinner spinner--sm" aria-hidden="true" />
@@ -118,12 +117,11 @@ export function ProfilePage() {
               lastName={lastName}
               username={username}
             />
-            <ProfileRoleRequest
-              profile={profile}
-              isRequestingRole={isRequestingRole}
-              roleRequestError={roleRequestError}
-              roleRequestSuccess={roleRequestSuccess}
-              onRequest={handleRoleRequest}
+            <ProfileRoleStatus
+              roleError={roleError}
+              roleSuccess={roleSuccess}
+              isApplyingRole={isApplyingRole}
+              onRetry={() => void retryRole()}
             />
             <ProfileDataAccess role={profile.role} />
           </div>

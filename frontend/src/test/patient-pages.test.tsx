@@ -46,12 +46,13 @@ import {
   restorePatient,
 } from '../api/therapist'
 import { ApiError, apiRequest } from '../api/client'
+import { refreshAccessToken } from '../auth/keycloak'
 import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
 import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
-import { fetchCurrentUser, requestTherapistRole, type UserProfile } from '../api/auth'
+import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
 import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
@@ -115,13 +116,14 @@ vi.mock('../api/helpRequests', () => ({
 vi.mock('../api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth')>()),
   fetchCurrentUser: vi.fn(),
-  requestTherapistRole: vi.fn(),
+  chooseTherapistRole: vi.fn(),
 }))
 
 vi.mock('../auth/keycloak', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth/keycloak')>()),
   getKeycloak: () => ({ authenticated: true, tokenParsed: { sub: 'patient-1' } }),
   initKeycloak: async () => true,
+  refreshAccessToken: vi.fn(),
 }))
 
 function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
@@ -423,7 +425,8 @@ describe('Register page', () => {
     renderWithAuth(<RegisterPage />, auth, [{ pathname: '/register', state: { from: '/patient' } }])
 
     await user.click(screen.getByRole('radio', { name: /Лікар/ }))
-    expect(screen.getByText(/Роль лікаря потребує підтвердження/)).toBeInTheDocument()
+    expect(screen.getByText(/Доступ лікаря активний одразу/)).toBeInTheDocument()
+    expect(screen.queryByText(/підтвердження/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Зареєструватися як лікар' }))
 
     expect(window.sessionStorage.getItem('airehab.registration-role')).toBe('therapist')
@@ -1139,6 +1142,7 @@ describe('Pricing page', () => {
     renderWithAuth(<PricingPage />, createAuth({ authenticated: false }), ['/pricing'])
 
     expect(await screen.findByRole('heading', { name: 'Стандарт' })).toBeInTheDocument()
+    expect(screen.getByText('0 ₴ / міс')).toBeInTheDocument()
     expect(screen.getByText('499 ₴ / міс')).toBeInTheDocument()
     expect(screen.getByText('До 30 активних пацієнтів')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Увійти, щоб обрати' })).toHaveLength(3)
@@ -1254,21 +1258,54 @@ describe('Shared account data', () => {
     expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
   })
 
-  it('updates the shared profile with the automatic role request from registration', async () => {
+  it('grants the therapist role chosen at registration at once, without approval', async () => {
     window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    vi.mocked(requestTherapistRole).mockResolvedValueOnce({
-      ...currentPatient,
-      pending_role: 'therapist',
-    })
+    vi.mocked(chooseTherapistRole).mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
+    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
     render(
       <AuthProvider>
         <ProfilePage />
       </AuthProvider>,
     )
 
-    expect(await screen.findByRole('heading', { name: /Запит на роль «/ })).toBeInTheDocument()
-    expect(requestTherapistRole).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
+    expect(chooseTherapistRole).toHaveBeenCalledTimes(1)
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Запит на роль/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/очікує підтвердження/)).not.toBeInTheDocument()
+  })
+
+  it('lets the new therapist retry when the role could not be activated', async () => {
+    const user = userEvent.setup()
+    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
+    vi.mocked(chooseTherapistRole)
+      .mockRejectedValueOnce(new Error('Keycloak is down'))
+      .mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
+    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
+    render(
+      <AuthProvider>
+        <ProfilePage />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText('Keycloak is down')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+
+    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
+    expect(chooseTherapistRole).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not offer a role request to a patient', async () => {
+    render(
+      <AuthProvider>
+        <ProfilePage />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText(currentPatient.email)).toBeInTheDocument()
+    expect(screen.queryByText('Працюєте терапевтом?')).not.toBeInTheDocument()
+    expect(chooseTherapistRole).not.toHaveBeenCalled()
   })
 })
 

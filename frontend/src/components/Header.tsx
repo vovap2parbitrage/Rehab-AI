@@ -40,9 +40,6 @@ export function Header() {
         </Link>
 
         <nav className="site-nav" aria-label="Головна навігація">
-          <NavLink to="/pricing" className={navLinkClass}>
-            Тарифи
-          </NavLink>
           {authenticated && isPatient && (
             <>
               <NavLink to="/patient/therapists" className={navLinkClass}>

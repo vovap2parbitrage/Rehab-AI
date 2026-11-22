@@ -1,43 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { requestTherapistRole } from '../../api/auth'
+import { chooseTherapistRole } from '../../api/auth'
+import { refreshAccessToken } from '../../auth/keycloak'
 import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../lib/errorMessage'
 import { consumeRegistrationRole } from '../../lib/registrationRole'
 
-export function useProfileRoleRequest() {
+/**
+ * Applies the role chosen on the registration page. A therapist gets the role at once:
+ * the backend grants it in Keycloak, then the token is refreshed so it carries the new role.
+ */
+export function useRegistrationRole() {
   const { user, userLoading, userError, updateUser } = useAuth()
   const requestInFlight = useRef(false)
-  const [isRequestingRole, setIsRequestingRole] = useState(false)
-  const [roleRequestError, setRoleRequestError] = useState<string | null>(null)
-  const [roleRequestSuccess, setRoleRequestSuccess] = useState<string | null>(null)
+  const [isApplyingRole, setIsApplyingRole] = useState(false)
+  const [roleError, setRoleError] = useState<string | null>(null)
+  const [roleSuccess, setRoleSuccess] = useState<string | null>(null)
 
-  const submitRoleRequest = useCallback(
-    async (fromRegistration: boolean) => {
-      if (requestInFlight.current) return
-      requestInFlight.current = true
-      setIsRequestingRole(true)
-      setRoleRequestError(null)
-      setRoleRequestSuccess(null)
+  const applyTherapistRole = useCallback(async () => {
+    if (requestInFlight.current) return
+    requestInFlight.current = true
+    setIsApplyingRole(true)
+    setRoleError(null)
+    setRoleSuccess(null)
 
-      try {
-        const updated = await requestTherapistRole()
-        updateUser(updated)
-        setRoleRequestSuccess(
-          fromRegistration
-            ? 'Ви обрали роль лікаря під час реєстрації. Запит на роль терапевта надіслано — адміністратор розгляне його найближчим часом.'
-            : 'Запит на роль терапевта надіслано. Адміністратор розгляне його найближчим часом.',
-        )
-      } catch (caught) {
-        setRoleRequestError(
-          getErrorMessage(caught, 'Не вдалося надіслати запит на роль терапевта.'),
-        )
-      } finally {
-        requestInFlight.current = false
-        setIsRequestingRole(false)
-      }
-    },
-    [updateUser],
-  )
+    try {
+      const updated = await chooseTherapistRole()
+      await refreshAccessToken()
+      updateUser(updated)
+      setRoleSuccess('Ви зареєстровані як лікар. Кабінет лікаря вже доступний.')
+    } catch (caught) {
+      setRoleError(getErrorMessage(caught, 'Не вдалося активувати роль лікаря.'))
+    } finally {
+      requestInFlight.current = false
+      setIsApplyingRole(false)
+    }
+  }, [updateUser])
 
   useEffect(() => {
     if (!user || userLoading || userError) return
@@ -46,25 +43,15 @@ export function useProfileRoleRequest() {
     queueMicrotask(() => {
       if (!active) return
       const intent = consumeRegistrationRole()
-      if (
-        intent === 'therapist' &&
-        user.role === 'patient' &&
-        user.pending_role === null &&
-        user.is_active
-      ) {
-        void submitRoleRequest(true)
+      if (intent === 'therapist' && user.role === 'patient' && user.is_active) {
+        void applyTherapistRole()
       }
     })
 
     return () => {
       active = false
     }
-  }, [submitRoleRequest, user, userError, userLoading])
+  }, [applyTherapistRole, user, userError, userLoading])
 
-  return {
-    isRequestingRole,
-    roleRequestError,
-    roleRequestSuccess,
-    handleRoleRequest: () => submitRoleRequest(false),
-  }
+  return { isApplyingRole, roleError, roleSuccess, retryRole: applyTherapistRole }
 }

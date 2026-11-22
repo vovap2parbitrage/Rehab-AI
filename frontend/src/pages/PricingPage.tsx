@@ -11,7 +11,7 @@ import { getErrorMessage } from '../lib/errorMessage'
 import { useCachedResource, useRefreshOnEntry } from '../lib/useCachedResource'
 
 function formatPrice(plan: Plan): string {
-  return plan.price_uah === 0 ? 'Безкоштовно' : `${plan.price_uah} ₴ / міс`
+  return `${plan.price_uah} ₴ / міс`
 }
 
 export function PricingPage() {
