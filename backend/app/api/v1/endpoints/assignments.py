@@ -8,7 +8,12 @@ from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
+from app.schemas.assignment import (
+    AssignmentCreate,
+    AssignmentRead,
+    AssignmentUpdate,
+    PatientAssignmentRead,
+)
 from app.services import assignment
 
 router = APIRouter()
@@ -67,3 +72,14 @@ def cancel_assignment(
     db: Session = Depends(get_db),
 ) -> None:
     assignment.cancel_assignment(db, assignment_id, user)
+
+
+@router.patch("/{assignment_id}", response_model=AssignmentRead)
+def update_assignment(
+    assignment_id: UUID,
+    payload: AssignmentUpdate,
+    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> AssignmentRead:
+    return assignment.update_assignment(db, assignment_id, payload, user)

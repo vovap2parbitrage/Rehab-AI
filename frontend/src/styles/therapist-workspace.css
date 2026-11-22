@@ -240,3 +240,8 @@
   grid-template-rows: auto 1fr;
   gap: 20px;
 }
+
+.therapist-form__error {
+  color: var(--danger);
+  font-weight: 650;
+}

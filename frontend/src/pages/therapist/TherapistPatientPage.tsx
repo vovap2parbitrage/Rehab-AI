@@ -9,18 +9,24 @@ import {
   listAssignments,
   listExercises,
   restorePatient,
+  updateAssignment,
   type Assignment,
   type Exercise,
   type Patient,
 } from '../../api/therapist'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage'
-import { ArrowRightIcon, CalendarIcon, TrashIcon } from '../../components/Icons'
+import { ArrowRightIcon, CalendarIcon, PencilIcon, TrashIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
 import { PatientHistorySection } from '../../components/history/PatientHistorySection'
 import { PageHeading } from '../../components/PageHeading'
 import { PatientQuestionsCard } from '../../components/PatientQuestionsCard'
-import { formatWeekdays, getLocalDate, WEEKDAYS } from '../../lib/assignmentSchedule'
+import {
+  formatWeekdays,
+  nextSessionDate,
+  WEEKDAYS,
+  weekdayOf,
+} from '../../lib/assignmentSchedule'
 import { getErrorMessage } from '../../lib/errorMessage'
 import { useLocalToday } from '../../lib/useLocalToday'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
@@ -38,6 +44,8 @@ export function TherapistPatientPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [startDate, setStartDate] = useState<string | null>(null)
+  // The assignment being edited; null means the form creates a new assignment.
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     exercise_id: '',
     duration_weeks: 4,
@@ -83,21 +91,75 @@ export function TherapistPatientPage() {
     [exercises],
   )
 
+  // Until the doctor picks a date, the plan starts on the first day of the schedule.
+  const start = startDate ?? nextSessionDate(today, form.weekdays)
+  // "Today" here is the browser's date; the server checks it in the doctor's time zone.
+  const startError = editingId
+    ? null
+    : start < today
+      ? 'Дата початку не може бути раніше за сьогодні.'
+      : form.weekdays.length > 0 && !form.weekdays.includes(weekdayOf(start))
+        ? `Перше заняття має припадати на один із обраних днів: ${formatWeekdays(form.weekdays)}.`
+        : null
+
+  const resetForm = () => {
+    setEditingId(null)
+    setStartDate(null)
+    setForm({
+      exercise_id: exercises[0]?.id || '',
+      duration_weeks: 4,
+      weekdays: [0, 2, 4],
+      repetitions: 10,
+    })
+  }
+
+  const startEditing = (assignment: Assignment) => {
+    setEditingId(assignment.id)
+    setStartDate(assignment.starts_on)
+    setForm({
+      exercise_id: assignment.exercise_id,
+      duration_weeks: assignment.duration_weeks,
+      weekdays: assignment.weekdays,
+      repetitions: assignment.repetitions,
+    })
+    setNotice(null)
+    setError(null)
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!patientId) return
     setBusy(true)
     setNotice(null)
+    setError(null)
     try {
-      const assignment = await createAssignment({
-        ...form,
-        patient_id: patientId,
-        starts_on: startDate ?? getLocalDate(),
-      })
-      setAssignments((current) => [assignment, ...current])
-      setNotice('План призначено пацієнту.')
+      if (editingId) {
+        const updated = await updateAssignment(editingId, {
+          duration_weeks: form.duration_weeks,
+          weekdays: form.weekdays,
+          repetitions: form.repetitions,
+        })
+        setAssignments((current) =>
+          current.map((item) => (item.id === updated.id ? updated : item)),
+        )
+        resetForm()
+        setNotice('Призначення змінено.')
+      } else {
+        const assignment = await createAssignment({
+          ...form,
+          patient_id: patientId,
+          starts_on: start,
+        })
+        setAssignments((current) => [assignment, ...current])
+        setNotice('План призначено пацієнту.')
+      }
     } catch (reason: unknown) {
-      setError(getErrorMessage(reason, 'Не вдалося створити призначення.'))
+      setError(
+        getErrorMessage(
+          reason,
+          editingId ? 'Не вдалося змінити призначення.' : 'Не вдалося створити призначення.',
+        ),
+      )
     } finally {
       setBusy(false)
     }
@@ -110,6 +172,7 @@ export function TherapistPatientPage() {
     setError(null)
     try {
       await cancelAssignment(assignment.id)
+      if (editingId === assignment.id) resetForm()
       setAssignments((current) =>
         current.map((item) =>
           item.id === assignment.id ? { ...item, status: 'cancelled' } : item,
@@ -230,8 +293,12 @@ export function TherapistPatientPage() {
         <section className="card">
           <div className="card__header">
             <div>
-              <h2>Призначити план</h2>
-              <p>Оберіть вправу та параметри занять.</p>
+              <h2>{editingId ? 'Змінити призначення' : 'Призначити план'}</h2>
+              <p>
+                {editingId
+                  ? 'Змініть параметри занять. Вправу змінити не можна.'
+                  : 'Оберіть вправу та параметри занять.'}
+              </p>
             </div>
             <span className="card__header-icon">
               <CalendarIcon />
@@ -246,6 +313,7 @@ export function TherapistPatientPage() {
                 <select
                   value={form.exercise_id}
                   onChange={(event) => setForm({ ...form, exercise_id: event.target.value })}
+                  disabled={editingId !== null}
                   required
                 >
                   <option value="">Оберіть вправу</option>
@@ -297,9 +365,7 @@ export function TherapistPatientPage() {
                   min={1}
                   max={500}
                   value={form.repetitions}
-                  onChange={(event) =>
-                    setForm({ ...form, repetitions: Number(event.target.value) })
-                  }
+                  onChange={(event) => setForm({ ...form, repetitions: Number(event.target.value) })}
                   required
                 />
               </label>
@@ -307,18 +373,43 @@ export function TherapistPatientPage() {
                 <span>Початок *</span>
                 <input
                   type="date"
-                  value={startDate ?? today}
+                  value={start}
+                  min={today}
                   onChange={(event) => setStartDate(event.target.value)}
+                  disabled={editingId !== null}
+                  aria-invalid={startError !== null}
                   required
                 />
+                {startError && (
+                  <small className="therapist-form__error" role="alert">
+                    {startError}
+                  </small>
+                )}
+                {editingId && <small>Дату початку змінити не можна.</small>}
               </label>
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={busy || exercises.length === 0 || form.weekdays.length === 0}
+                disabled={
+                  busy || exercises.length === 0 || form.weekdays.length === 0 || startError !== null
+                }
               >
-                {busy ? 'Призначаємо…' : 'Призначити план'}
+                {busy
+                  ? 'Зберігаємо…'
+                  : editingId
+                    ? 'Зберегти зміни'
+                    : 'Призначити план'}
               </button>
+              {editingId && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={resetForm}
+                  disabled={busy}
+                >
+                  Скасувати редагування
+                </button>
+              )}
             </form>
           )}
         </section>
@@ -341,6 +432,18 @@ export function TherapistPatientPage() {
                     {item.starts_on} · {item.duration_weeks} тиж.
                   </small>
                   <span>· стан: {item.status}</span>
+                  {item.status === 'active' && (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Змінити ${exerciseNames.get(item.exercise_id)}`}
+                      title="Змінити"
+                      onClick={() => startEditing(item)}
+                      disabled={busy}
+                    >
+                      <PencilIcon />
+                    </button>
+                  )}
                   {item.status === 'active' && (
                     <button
                       type="button"

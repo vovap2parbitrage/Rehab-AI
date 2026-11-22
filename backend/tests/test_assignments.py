@@ -1,20 +1,32 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
+import pytest
+
+from app.core.timezones import today_in
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.session import TrainingSession
 from app.schemas.assignment import AssignmentRead
 
 
+def first_session_day(weekdays, timezone=None) -> date:
+    """The first day from today on (in the given time zone) that is a plan weekday."""
+    day = today_in(timezone)
+    while day.weekday() not in weekdays:
+        day += timedelta(days=1)
+    return day
+
+
 def assignment_payload(patient_id, **overrides) -> dict:
+    weekdays = overrides.get("weekdays", [0, 2, 4])
     payload = {
         "patient_id": str(patient_id),
         "exercise_id": str(uuid.uuid4()),
         "duration_weeks": 4,
-        "weekdays": [0, 2, 4],
+        "weekdays": weekdays,
         "repetitions": 10,
-        "starts_on": "2026-01-01",
+        "starts_on": first_session_day(weekdays).isoformat(),
     }
     payload.update(overrides)
     return payload
@@ -233,3 +245,177 @@ def test_cancelled_assignment_is_hidden_from_the_patient_but_not_the_therapist(
     assert [(item["id"], item["status"]) for item in listed] == [
         (str(assignment.id), "cancelled")
     ]
+
+
+def test_therapist_edits_an_active_assignment(
+    api, login, therapist, patient_user, seed_patient, seed_assignment
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    login(therapist)
+
+    response = api.patch(
+        f"/api/v1/assignments/{assignment.id}",
+        json={"repetitions": 20, "weekdays": [4, 1]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["repetitions"] == 20
+    assert body["weekdays"] == [1, 4]  # sorted by the validator
+    assert body["starts_on"] == str(assignment.starts_on)  # the start date never changes
+    assert body["duration_weeks"] == assignment.duration_weeks  # not sent, so unchanged
+
+
+def test_other_therapist_cannot_edit_the_assignment(
+    api, login, therapist, other_therapist, patient_user, seed_patient, seed_assignment
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    login(other_therapist)
+
+    response = api.patch(f"/api/v1/assignments/{assignment.id}", json={"repetitions": 20})
+
+    assert response.status_code == 403
+
+
+def test_only_active_assignments_can_be_edited(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    db_assignment = db_session.get(Assignment, assignment.id)
+    db_assignment.status = "completed"
+    db_session.commit()
+    login(therapist)
+
+    response = api.patch(f"/api/v1/assignments/{assignment.id}", json={"repetitions": 20})
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"repetitions": 0}, {"weekdays": [1, 1]}, {"weekdays": [7]}, {"duration_weeks": 0}],
+)
+def test_invalid_assignment_edit_is_rejected(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, body
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    login(therapist)
+
+    assert api.patch(f"/api/v1/assignments/{assignment.id}", json=body).status_code == 422
+
+
+def test_patient_cannot_edit_an_assignment(
+    api, login, therapist, patient_user, seed_patient, seed_assignment
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    login(patient_user)
+
+    assert api.patch(f"/api/v1/assignments/{assignment.id}", json={"repetitions": 20}).status_code == 403
+
+
+def test_the_start_date_of_an_assignment_cannot_be_changed(
+    api, login, therapist, patient_user, seed_patient, seed_assignment
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    login(therapist)
+
+    response = api.patch(
+        f"/api/v1/assignments/{assignment.id}",
+        json={"repetitions": 20, "starts_on": "2030-01-01"},
+    )
+
+    assert response.status_code == 422
+    unchanged = api.get(f"/api/v1/assignments/{assignment.id}").json()
+    assert unchanged["repetitions"] == assignment.repetitions
+    assert unchanged["starts_on"] == str(assignment.starts_on)
+
+
+def _create(api, therapist, patient_user, seed_patient, login, **overrides):
+    patient = seed_patient(patient_user, therapist)
+    login(therapist)
+    return api.post(
+        "/api/v1/assignments/", json=assignment_payload(patient.id, **overrides)
+    )
+
+
+def test_an_assignment_cannot_start_in_the_past(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
+    exercise = Exercise(name="Squat", created_by=therapist.id)
+    db_session.add(exercise)
+    db_session.commit()
+    yesterday = (today_in(None) - timedelta(days=1)).isoformat()
+
+    response = _create(
+        api, therapist, patient_user, seed_patient, login,
+        exercise_id=str(exercise.id),
+        weekdays=[0, 1, 2, 3, 4, 5, 6],
+        starts_on=yesterday,
+    )
+
+    assert response.status_code == 422
+    assert "before today" in response.json()["detail"]
+
+
+def test_an_assignment_can_start_today(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
+    exercise = Exercise(name="Squat", created_by=therapist.id)
+    db_session.add(exercise)
+    db_session.commit()
+    today = today_in(None)
+
+    response = _create(
+        api, therapist, patient_user, seed_patient, login,
+        exercise_id=str(exercise.id),
+        weekdays=[today.weekday()],
+        starts_on=today.isoformat(),
+    )
+
+    assert response.status_code == 201
+
+
+def test_the_start_date_must_be_a_weekday_of_the_plan(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
+    exercise = Exercise(name="Squat", created_by=therapist.id)
+    db_session.add(exercise)
+    db_session.commit()
+    start = first_session_day([0, 1, 2, 3, 4, 5, 6])
+    other_day = (start.weekday() + 1) % 7
+
+    response = _create(
+        api, therapist, patient_user, seed_patient, login,
+        exercise_id=str(exercise.id),
+        weekdays=[other_day],
+        starts_on=start.isoformat(),
+    )
+
+    assert response.status_code == 422
+    assert "weekdays of the plan" in response.json()["detail"]
+
+
+def test_today_is_taken_in_the_time_zone_of_the_therapist(
+    api, login, therapist, patient_user, seed_patient, db_session
+):
+    exercise = Exercise(name="Squat", created_by=therapist.id)
+    db_session.add(exercise)
+    db_session.commit()
+    patient = seed_patient(patient_user, therapist)
+    login(therapist)
+    # Pago Pago (UTC-11) is at least a calendar day behind Kiritimati (UTC+14).
+    behind = today_in("Pacific/Pago_Pago")
+    payload = assignment_payload(
+        patient.id,
+        exercise_id=str(exercise.id),
+        weekdays=[behind.weekday()],
+        starts_on=behind.isoformat(),
+    )
+
+    therapist.timezone = "Pacific/Kiritimati"
+    too_late = api.post("/api/v1/assignments/", json=payload)
+    therapist.timezone = "Pacific/Pago_Pago"
+    in_time = api.post("/api/v1/assignments/", json=payload)
+
+    assert too_late.status_code == 422
+    assert in_time.status_code == 201
