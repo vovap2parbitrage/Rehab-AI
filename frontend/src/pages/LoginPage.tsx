@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { useAuthRedirectBusy } from '../auth/useAuthRedirectBusy'
 import { describeAuthActionError, describeAuthErrorCode } from '../auth/errors'
 import { AuthLayout } from '../components/AuthLayout'
 import { ErrorMessage } from '../components/ErrorMessage'
@@ -24,7 +25,7 @@ export function LoginPage() {
   const { initialized, authenticated, initError, login } = useAuth()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useAuthRedirectBusy()
   const [actionError, setActionError] = useState<string | null>(null)
 
   const returnPath = readReturnPath(location.state)

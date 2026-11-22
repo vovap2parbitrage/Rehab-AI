@@ -3,6 +3,7 @@
   "enabled": true,
   "displayName": "Rehab AI",
   "displayNameHtml": "<strong>Rehab AI</strong>",
+  "loginTheme": "rehab-ai",
   "sslRequired": "none",
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,

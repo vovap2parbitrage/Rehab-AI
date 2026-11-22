@@ -292,6 +292,11 @@ describe('Login page', () => {
     expect(screen.getByRole('button', { name: 'Переходимо до захищеного входу…' })).toBeDisabled()
 
     await act(async () => finishLogin())
+    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })))
+    expect(screen.getByRole('button', { name: 'Переходимо до захищеного входу…' })).toBeDisabled()
+
+    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+    expect(screen.getByRole('button', { name: 'Увійти' })).toBeEnabled()
   })
 
   it('shows a recoverable error when Keycloak rejects login', async () => {
@@ -374,6 +379,10 @@ describe('Register page', () => {
 
     expect(window.sessionStorage.getItem('airehab.registration-role')).toBe('therapist')
     expect(auth.register).toHaveBeenCalledWith('/patient')
+
+    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+    expect(screen.getByRole('button', { name: 'Зареєструватися як лікар' })).toBeEnabled()
+    expect(window.sessionStorage.getItem('airehab.registration-role')).toBeNull()
   })
 
   it('removes the saved role and shows an error when registration cannot start', async () => {
@@ -394,6 +403,16 @@ describe('Register page', () => {
     renderWithAuth(<RegisterPage />, createAuth(), ['/register?error=temporarily_unavailable'])
 
     expect(screen.getByRole('alert')).toHaveTextContent('Сервіс авторизації недоступний')
+  })
+
+  it('clears the saved role when the user returns from Keycloak without registering', () => {
+    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
+    renderWithAuth(<RegisterPage />, createAuth(), ['/register?error=access_denied'])
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Реєстрацію скасовано')
+    expect(screen.getByRole('alert')).toHaveTextContent('Код помилки: access_denied')
+    expect(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' })).toBeEnabled()
+    expect(window.sessionStorage.getItem('airehab.registration-role')).toBeNull()
   })
 
   it('disables registration after an initialization failure', () => {

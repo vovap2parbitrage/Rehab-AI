@@ -47,6 +47,7 @@ services:
       - "${KEYCLOAK_MANAGEMENT_PORT:-9001}:9000"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/rehab-ai-realm.json:ro
+      - ./keycloak/themes/rehab-ai:/opt/keycloak/themes/rehab-ai:ro
       - keycloak_data:/opt/keycloak/data
     healthcheck:
       test:

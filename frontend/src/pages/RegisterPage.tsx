@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { useAuthRedirectBusy } from '../auth/useAuthRedirectBusy'
 import { describeAuthActionError, describeAuthErrorCode } from '../auth/errors'
 import { AuthLayout } from '../components/AuthLayout'
 import { ErrorMessage } from '../components/ErrorMessage'
@@ -29,13 +30,17 @@ export function RegisterPage() {
   const { authenticated, initError, register } = useAuth()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useAuthRedirectBusy(clearRegistrationRole)
   const [actionError, setActionError] = useState<string | null>(null)
   const [role, setRole] = useState<RegistrationRole>('patient')
 
   const returnPath = readReturnPath(location.state)
   const oauthCode = searchParams.get('error')
-  const oauthDescription = oauthCode ? describeAuthErrorCode(oauthCode) : null
+  const oauthDescription = oauthCode ? describeAuthErrorCode(oauthCode, 'register') : null
+
+  useEffect(() => {
+    if (oauthCode) clearRegistrationRole()
+  }, [oauthCode])
 
   if (authenticated) {
     return <Navigate to={returnPath} replace />

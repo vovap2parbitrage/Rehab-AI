@@ -60,7 +60,17 @@ const OAUTH_ERRORS: Record<string, AuthErrorDescription> = {
   },
 }
 
-export function describeAuthErrorCode(code: string | null | undefined): AuthErrorDescription {
+export function describeAuthErrorCode(
+  code: string | null | undefined,
+  flow: 'login' | 'register' = 'login',
+): AuthErrorDescription {
+  if (code === 'access_denied' && flow === 'register') {
+    return {
+      title: 'Реєстрацію скасовано',
+      message: 'Ви можете розпочати реєстрацію знову.',
+    }
+  }
+
   if (!code) {
     return {
       title: 'Не вдалося завершити авторизацію',
