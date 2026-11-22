@@ -29,14 +29,17 @@ def _query(db: Session) -> Query:
     )
 
 
-def _for_therapist(query: Query, user: User) -> Query:
-    """A therapist sees questions about their own assignments of their current patients."""
+def _for_therapist(query: Query, user: User, *, active_only: bool = True) -> Query:
+    """A therapist sees questions about their own assignments of their current patients.
+
+    With ``active_only=False`` archived patients are included, so history stays readable.
+    """
     if user.role == Role.ADMIN.value:
         return query
-    return query.filter(
-        Assignment.therapist_id == user.id,
-        HelpRequest.patient.has(treated_by(user.id)),
-    )
+    query = query.filter(Assignment.therapist_id == user.id)
+    if active_only:
+        query = query.filter(HelpRequest.patient.has(treated_by(user.id)))
+    return query
 
 
 def _to_read(help_request: HelpRequest) -> HelpRequestRead:
@@ -102,7 +105,9 @@ def list_needs_attention(db: Session, user: User) -> list[HelpRequestRead]:
 def list_for_patient(db: Session, patient_id: UUID, user: User) -> list[HelpRequestRead]:
     """All questions of one patient with replies, newest first (the therapist's history)."""
     get_patient_for_therapist(patient_id, user, db)
-    query = _for_therapist(_query(db).filter(HelpRequest.patient_id == patient_id), user)
+    query = _for_therapist(
+        _query(db).filter(HelpRequest.patient_id == patient_id), user, active_only=False
+    )
     return [_to_read(item) for item in query.order_by(HelpRequest.created_at.desc()).all()]
 
 
