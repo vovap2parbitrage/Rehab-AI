@@ -50,7 +50,7 @@ import { refreshAccessToken } from '../auth/keycloak'
 import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
 import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
-import { getSessionVideoUrl } from '../api/sessions'
+import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
@@ -98,6 +98,7 @@ vi.mock('../api/comparisons', () => ({
 
 vi.mock('../api/sessions', () => ({
   getSessionVideoUrl: vi.fn(),
+  listPatientSessions: vi.fn(),
 }))
 
 vi.mock('../api/uploads', () => ({
@@ -297,6 +298,7 @@ const currentPatient: UserProfile = {
 
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
+  vi.mocked(listPatientSessions).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
