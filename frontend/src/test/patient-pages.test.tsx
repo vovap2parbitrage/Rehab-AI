@@ -41,6 +41,9 @@ import {
   listAssignments,
   listExercises,
   listPatients,
+  listArchivedPatients,
+  archivePatient,
+  restorePatient,
 } from '../api/therapist'
 import { ApiError } from '../api/client'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
@@ -68,11 +71,15 @@ vi.mock('../api/history', () => ({
 }))
 
 vi.mock('../api/therapist', () => ({
+  archivePatient: vi.fn(),
+  cancelAssignment: vi.fn(),
   createAssignment: vi.fn(),
   getPatient: vi.fn(),
+  listArchivedPatients: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
   listPatients: vi.fn(),
+  restorePatient: vi.fn(),
 }))
 
 vi.mock('../api/comparisons', () => ({
@@ -284,6 +291,7 @@ beforeEach(() => {
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
   vi.mocked(listMyHelpRequests).mockResolvedValue([])
+  vi.mocked(listArchivedPatients).mockResolvedValue([])
   vi.mocked(listNeedsAttention).mockResolvedValue([])
   vi.mocked(respondToPatientInvitation).mockResolvedValue(pendingInvitation)
   vi.mocked(completePatientAssignment).mockResolvedValue(session)
@@ -1042,6 +1050,62 @@ describe('Local assignment dates', () => {
   })
 })
 
+describe('Archiving a patient', () => {
+  const renderPatientPage = () =>
+    render(
+      <MemoryRouter initialEntries={[`/therapist/patients/${MOCK_PATIENT.id}`]}>
+        <Routes>
+          <Route path="/therapist/patients/:patientId" element={<TherapistPatientPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+  beforeEach(() => {
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+    vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
+  })
+
+  it('archives the patient, cancels active plans and blocks new assignments', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(getPatient).mockResolvedValue(MOCK_PATIENT)
+    vi.mocked(listAssignments).mockResolvedValue([{ ...MOCK_ASSIGNMENT, status: 'active' }])
+    vi.mocked(archivePatient).mockResolvedValue(undefined)
+
+    renderPatientPage()
+    await user.click(await screen.findByRole('button', { name: 'Архівувати пацієнта' }))
+
+    expect(archivePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(
+      await screen.findByText('Пацієнта архівовано. Активні призначення скасовано.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('· стан: cancelled')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Відновити пацієнта' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Призначити план' })).not.toBeInTheDocument()
+  })
+
+  it('shows an archived patient as read-only until restored', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPatient).mockResolvedValue({
+      ...MOCK_PATIENT,
+      archived_at: '2026-11-20T10:00:00Z',
+    })
+    vi.mocked(listAssignments).mockResolvedValue([])
+    vi.mocked(restorePatient).mockResolvedValue(undefined)
+
+    renderPatientPage()
+
+    expect(await screen.findByText(/Пацієнт в архіві/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Призначити план' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Відновити пацієнта' }))
+
+    expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(await screen.findByRole('button', { name: 'Призначити план' })).toBeInTheDocument()
+  })
+})
+
 describe('Shared account data', () => {
   it('loads the profile once and updates navigation when the profile is refreshed', async () => {
     const user = userEvent.setup()
@@ -1136,6 +1200,31 @@ describe('Therapist workspace', () => {
 
     await act(async () => finishPatients([{ ...MOCK_PATIENT, first_name: 'Андрій' }]))
     expect(screen.getByRole('link', { name: /Андрій Коваленко/ })).toBeInTheDocument()
+  })
+
+  it('restores an archived patient to the active list', async () => {
+    const user = userEvent.setup()
+    const archived = { ...MOCK_PATIENT, archived_at: '2026-11-20T10:00:00Z' }
+    vi.mocked(listPatients).mockResolvedValueOnce([]).mockResolvedValueOnce([MOCK_PATIENT])
+    vi.mocked(listArchivedPatients).mockResolvedValue([archived])
+    vi.mocked(restorePatient).mockResolvedValue(undefined)
+
+    renderWithAuth(
+      <Routes>
+        <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
+          <Route path="patients" element={<TherapistPatientsPage />} />
+        </Route>
+      </Routes>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/patients'],
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Відновити Олександр Коваленко' }))
+
+    expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
+    expect(await screen.findByText('Пацієнта повернено до активного списку.')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Відновити/ })).not.toBeInTheDocument()
   })
 })
 

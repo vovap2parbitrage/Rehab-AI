@@ -4,20 +4,39 @@ import { PageHeading } from '../../components/PageHeading'
 import { useState, type FormEvent } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { getErrorMessage } from '../../lib/errorMessage'
-import { sendInvitation } from '../../api/therapist'
+import { restorePatient, sendInvitation, type Patient } from '../../api/therapist'
 import { MailIcon, UserIcon } from '../../components/Icons'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
 export function TherapistPatientsPage() {
-  const { patients: resource } = useOutletContext<TherapistWorkspaceResources>()
+  const { patients: resource, archivedPatients: archivedResource } =
+    useOutletContext<TherapistWorkspaceResources>()
   useRefreshOnEntry(resource)
+  useRefreshOnEntry(archivedResource)
   const { data: patients = [], loading, error: loadError } = resource
+  const { data: archivedPatients = [], error: archiveLoadError } = archivedResource
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState({ email: '' })
+
+  const handleRestore = async (patient: Patient) => {
+    setBusy(true)
+    setNotice(null)
+    setError(null)
+    try {
+      await restorePatient(patient.id)
+      archivedResource.update((current) => current.filter((item) => item.id !== patient.id))
+      resource.invalidate()
+      setNotice('Пацієнта повернено до активного списку.')
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason, 'Не вдалося відновити пацієнта.'))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -84,6 +103,34 @@ export function TherapistPatientsPage() {
               <EmptyState message="Пацієнтів поки немає." />
             )}
           </div>
+          {archiveLoadError && <ErrorMessage message={archiveLoadError} />}
+          {archivedPatients.length > 0 && (
+            <div className="patient-cards patient-cards--archived">
+              <h3>Архів ({archivedPatients.length})</h3>
+              {archivedPatients.map((patient) => (
+                <div className="patient-card patient-card--archived" key={patient.id}>
+                  <span className="avatar avatar--md" aria-hidden="true">
+                    {patient.first_name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <Link to={`/therapist/patients/${patient.id}`}>
+                    <strong>
+                      {patient.first_name} {patient.last_name}
+                    </strong>
+                    <small>Історія доступна для перегляду</small>
+                  </Link>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={() => void handleRestore(patient)}
+                    disabled={busy}
+                    aria-label={`Відновити ${patient.first_name} ${patient.last_name}`}
+                  >
+                    Відновити
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="card">

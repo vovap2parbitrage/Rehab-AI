@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import {
+  archivePatient,
   cancelAssignment,
   createAssignment,
   getPatient,
   listAssignments,
   listExercises,
+  restorePatient,
   type Assignment,
   type Exercise,
   type Patient,
@@ -21,10 +23,12 @@ import { PatientQuestionsCard } from '../../components/PatientQuestionsCard'
 import { formatWeekdays, getLocalDate, WEEKDAYS } from '../../lib/assignmentSchedule'
 import { getErrorMessage } from '../../lib/errorMessage'
 import { useLocalToday } from '../../lib/useLocalToday'
+import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
 export function TherapistPatientPage() {
   const { patientId } = useParams()
   const today = useLocalToday()
+  const workspace = useOutletContext<TherapistWorkspaceResources | undefined>()
   const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -119,6 +123,51 @@ export function TherapistPatientPage() {
     }
   }
 
+  const handleArchive = async () => {
+    if (!patient) return
+    if (
+      !window.confirm(
+        'Архівувати пацієнта? Усі ваші активні призначення для нього буде скасовано. Історію можна буде переглядати, а пацієнта — відновити.',
+      )
+    )
+      return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await archivePatient(patient.id)
+      setPatient({ ...patient, archived_at: new Date().toISOString() })
+      setAssignments((current) =>
+        current.map((item) => (item.status === 'active' ? { ...item, status: 'cancelled' } : item)),
+      )
+      workspace?.patients.invalidate()
+      workspace?.archivedPatients.invalidate()
+      setNotice('Пацієнта архівовано. Активні призначення скасовано.')
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason, 'Не вдалося архівувати пацієнта.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRestore = async () => {
+    if (!patient) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await restorePatient(patient.id)
+      setPatient({ ...patient, archived_at: null })
+      workspace?.patients.invalidate()
+      workspace?.archivedPatients.invalidate()
+      setNotice('Пацієнта повернено до активного списку.')
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason, 'Не вдалося відновити пацієнта.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const backLink = (
     <Link to="/therapist/patients" className="back-link">
       <ArrowRightIcon aria-hidden="true" /> До всіх пацієнтів
@@ -148,7 +197,27 @@ export function TherapistPatientPage() {
         eyebrow="Профіль пацієнта"
         title={`${patient.first_name} ${patient.last_name}`}
         lead={patient.notes || 'Персональний план реабілітації та активні призначення.'}
-      />
+      >
+        {patient.archived_at ? (
+          <button
+            type="button"
+            className="button button--ghost"
+            onClick={() => void handleRestore()}
+            disabled={busy}
+          >
+            Відновити пацієнта
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="button button--danger-ghost"
+            onClick={() => void handleArchive()}
+            disabled={busy}
+          >
+            Архівувати пацієнта
+          </button>
+        )}
+      </PageHeading>
       {notice && (
         <div className="success-message" role="status">
           {notice}
@@ -166,84 +235,90 @@ export function TherapistPatientPage() {
               <CalendarIcon />
             </span>
           </div>
-          <form className="therapist-form" onSubmit={handleSubmit}>
-            <label className="therapist-form__field">
-              <span>Вправа *</span>
-              <select
-                value={form.exercise_id}
-                onChange={(event) => setForm({ ...form, exercise_id: event.target.value })}
-                required
+          {patient.archived_at ? (
+            <EmptyState message="Пацієнт в архіві. Відновіть його, щоб призначати нові плани." />
+          ) : (
+            <form className="therapist-form" onSubmit={handleSubmit}>
+              <label className="therapist-form__field">
+                <span>Вправа *</span>
+                <select
+                  value={form.exercise_id}
+                  onChange={(event) => setForm({ ...form, exercise_id: event.target.value })}
+                  required
+                >
+                  <option value="">Оберіть вправу</option>
+                  {exercises.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="therapist-form__field">
+                <span>Тривалість (тижні) *</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.duration_weeks}
+                  onChange={(event) =>
+                    setForm({ ...form, duration_weeks: Number(event.target.value) })
+                  }
+                  required
+                />
+              </label>
+              <fieldset className="therapist-form__field">
+                <legend>План занять *</legend>
+                <div className="weekday-picker">
+                  {WEEKDAYS.map((day, index) => (
+                    <label key={day}>
+                      <input
+                        type="checkbox"
+                        checked={form.weekdays.includes(index)}
+                        onChange={() =>
+                          setForm({
+                            ...form,
+                            weekdays: form.weekdays.includes(index)
+                              ? form.weekdays.filter((item) => item !== index)
+                              : [...form.weekdays, index].sort((a, b) => a - b),
+                          })
+                        }
+                      />
+                      {day}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label className="therapist-form__field">
+                <span>Повторень *</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={form.repetitions}
+                  onChange={(event) =>
+                    setForm({ ...form, repetitions: Number(event.target.value) })
+                  }
+                  required
+                />
+              </label>
+              <label className="therapist-form__field">
+                <span>Початок *</span>
+                <input
+                  type="date"
+                  value={startDate ?? today}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                className="button button--primary"
+                disabled={busy || exercises.length === 0 || form.weekdays.length === 0}
               >
-                <option value="">Оберіть вправу</option>
-                {exercises.map((item) => (
-                  <option value={item.id} key={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="therapist-form__field">
-              <span>Тривалість (тижні) *</span>
-              <input
-                type="number"
-                min={1}
-                value={form.duration_weeks}
-                onChange={(event) =>
-                  setForm({ ...form, duration_weeks: Number(event.target.value) })
-                }
-                required
-              />
-            </label>
-            <fieldset className="therapist-form__field">
-              <legend>План занять *</legend>
-              <div className="weekday-picker">
-                {WEEKDAYS.map((day, index) => (
-                  <label key={day}>
-                    <input
-                      type="checkbox"
-                      checked={form.weekdays.includes(index)}
-                      onChange={() =>
-                        setForm({
-                          ...form,
-                          weekdays: form.weekdays.includes(index)
-                            ? form.weekdays.filter((item) => item !== index)
-                            : [...form.weekdays, index].sort((a, b) => a - b),
-                        })
-                      }
-                    />
-                    {day}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <label className="therapist-form__field">
-              <span>Повторень *</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={form.repetitions}
-                onChange={(event) => setForm({ ...form, repetitions: Number(event.target.value) })}
-                required
-              />
-            </label>
-            <label className="therapist-form__field">
-              <span>Початок *</span>
-              <input
-                type="date"
-                value={startDate ?? today}
-                onChange={(event) => setStartDate(event.target.value)}
-                required
-              />
-            </label>
-            <button
-              type="submit"
-              className="button button--primary"
-              disabled={busy || exercises.length === 0 || form.weekdays.length === 0}
-            >
-              {busy ? 'Призначаємо…' : 'Призначити план'}
-            </button>
-          </form>
+                {busy ? 'Призначаємо…' : 'Призначити план'}
+              </button>
+            </form>
+          )}
         </section>
         <div className="therapist-page__column">
           <section className="card">
