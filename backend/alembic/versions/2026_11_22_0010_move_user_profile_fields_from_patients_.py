@@ -1,7 +1,7 @@
 """move user profile fields from patients to users
 
-Revision ID: 0008
-Revises: 0007
+Revision ID: 0010
+Revises: 0009
 Create Date: 2026-11-22 22:56:52.969279
 
 """
@@ -12,8 +12,8 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0008'
-down_revision: str | Sequence[str] | None = '0007'
+revision: str = '0010'
+down_revision: str | Sequence[str] | None = '0009'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

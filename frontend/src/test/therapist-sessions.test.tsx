@@ -21,7 +21,13 @@ function makeSession(overrides: Partial<PatientSession>): PatientSession {
       repetitions: 7,
       joint_scores: { r_knee: 8.1 },
       errors: [
-        { joint: 'r_knee', start_s: 1, end_s: 1.5, peak_deviation_deg: 18.4, direction: 'too_bent' },
+        {
+          joint: 'r_knee',
+          start_s: 1,
+          end_s: 1.5,
+          peak_deviation_deg: 18.4,
+          direction: 'too_bent',
+        },
       ],
     },
     has_video: true,
@@ -63,8 +69,16 @@ describe('Sessions of a patient (therapist view)', () => {
 
   it('lists the newest session first', async () => {
     vi.mocked(listPatientSessions).mockResolvedValue([
-      makeSession({ id: 'old', assignment_id: 'assignment-1', completed_at: '2026-01-01T10:00:00Z' }),
-      makeSession({ id: 'new', assignment_id: 'assignment-2', completed_at: '2026-03-05T10:00:00Z' }),
+      makeSession({
+        id: 'old',
+        assignment_id: 'assignment-1',
+        completed_at: '2026-01-01T10:00:00Z',
+      }),
+      makeSession({
+        id: 'new',
+        assignment_id: 'assignment-2',
+        completed_at: '2026-03-05T10:00:00Z',
+      }),
     ])
     renderCard()
 
@@ -87,7 +101,9 @@ describe('Sessions of a patient (therapist view)', () => {
 
     await user.click(within(details).getByRole('button', { name: 'Переглянути відео виконання' }))
 
-    expect(await within(details).findByRole('button', { name: 'Сховати відео' })).toBeInTheDocument()
+    expect(
+      await within(details).findByRole('button', { name: 'Сховати відео' }),
+    ).toBeInTheDocument()
     expect(getSessionVideoUrl).toHaveBeenCalledWith('session-1')
   })
 
@@ -101,7 +117,9 @@ describe('Sessions of a patient (therapist view)', () => {
     await user.click(await screen.findByText('Присідання'))
 
     expect(screen.getByText('Аналіз ще не доступний')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Переглянути відео виконання' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Переглянути відео виконання' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows an empty message when the patient has no sessions', async () => {
