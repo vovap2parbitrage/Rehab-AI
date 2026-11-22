@@ -27,8 +27,25 @@ def test_new_keys_are_owned_and_unique():
 
 
 @pytest.mark.parametrize(
+    ("content_type", "extension"),
+    [("video/mp4", "mp4"), ("video/quicktime", "mov"), ("video/webm", "webm")],
+)
+def test_key_extension_follows_the_content_type(content_type, extension):
+    key = storage.new_video_key(OWNER, content_type)
+    assert key.endswith(f".{extension}")
+    assert storage.is_valid_key(key)
+
+
+def test_presigned_upload_accepts_browser_recordings():
+    upload = storage.create_upload(OWNER, "video/webm")
+    assert upload["key"].endswith(".webm")
+    assert upload["fields"]["Content-Type"] == "video/webm"
+
+
+@pytest.mark.parametrize(
     "key",
     [
+        "videos/user1/" + "a" * 32 + ".mkv",
         "videos/user1/../user2/" + "a" * 32 + ".mp4",
         "other/user1/" + "a" * 32 + ".mp4",
         "videos/user1/" + "a" * 32 + ".exe",
