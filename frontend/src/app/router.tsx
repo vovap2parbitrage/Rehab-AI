@@ -3,7 +3,7 @@ import { App } from './App'
 import { ProtectedRoute } from '../auth/ProtectedRoute'
 import { ErrorPage } from '../pages/ErrorPage'
 import { LoginPage } from '../pages/LoginPage'
-import { ProfilePage } from '../pages/ProfilePage'
+import { ProfilePage } from '../pages/profile/ProfilePage'
 import {
   PatientDashboardPage,
   PatientTherapistsPage,
@@ -20,11 +20,16 @@ import { TherapistExercisesPage } from '../pages/TherapistExercisesPage'
 import { TherapistQuestionsPage } from '../pages/TherapistQuestionsPage'
 import { StartPage } from '../pages/StartPage'
 import { TherapistWorkspaceLayout } from '../pages/TherapistWorkspaceLayout'
+import { TherapistQuestionsProvider } from '../lib/TherapistQuestionsProvider'
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <App />,
+    element: (
+      <TherapistQuestionsProvider>
+        <App />
+      </TherapistQuestionsProvider>
+    ),
     errorElement: (
       <ErrorPage
         title="Не вдалося відкрити сторінку"

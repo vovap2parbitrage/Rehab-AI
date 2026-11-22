@@ -11,17 +11,20 @@ interface RoleRouteProps {
 }
 
 export function RoleRoute({ allowedRoles, children }: RoleRouteProps) {
-  const { initialized, authenticated, role, roleError, retryRole } = useAuth()
+  const { initialized, authenticated, role, userError, refreshUser } = useAuth()
   const location = useLocation()
 
   if (!initialized) return <Loading fullPage label="Перевіряємо сесію…" />
   if (!authenticated) {
     return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
   }
-  if (roleError) {
-    return <ErrorPage title="Не вдалося перевірити доступ" message={roleError} onRetry={retryRole} />
+  if (role === null) {
+    return userError ? (
+      <ErrorPage title="Не вдалося перевірити доступ" message={userError.message} onRetry={refreshUser} />
+    ) : (
+      <Loading fullPage label="Перевіряємо права доступу…" />
+    )
   }
-  if (role === null) return <Loading fullPage label="Перевіряємо права доступу…" />
   if (!allowedRoles.includes(role)) {
     return <Navigate to="/profile" replace />
   }

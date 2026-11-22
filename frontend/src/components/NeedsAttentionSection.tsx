@@ -1,50 +1,31 @@
 import { EmptyState } from './EmptyState'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '../lib/errorMessage'
-import {
-  HELP_REQUESTS_CHANGED_EVENT,
-  listNeedsAttention,
-  replyToHelpRequest,
-  type HelpRequest,
-} from '../api/helpRequests'
+import { replyToHelpRequest } from '../api/helpRequests'
+import { useTherapistQuestions } from '../lib/therapistQuestionsContext'
 import { ErrorMessage } from './ErrorMessage'
 import { AlertTriangleIcon } from './Icons'
 import { Loading } from './Loading'
 
 /** Therapist: unanswered questions about their assignments ("Needs attention"). */
 export function NeedsAttentionSection() {
-  const [requests, setRequests] = useState<HelpRequest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data, loading, error: loadError, load, update } = useTherapistQuestions()
+  const requests = data ?? []
+  const [replyError, setReplyError] = useState<string | null>(null)
   const [replies, setReplies] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    listNeedsAttention(controller.signal)
-      .then(setRequests)
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(getErrorMessage(reason, 'Не вдалося завантажити запитання пацієнтів.'))
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
-  }, [])
 
   const handleReply = async (event: FormEvent<HTMLFormElement>, id: string) => {
     event.preventDefault()
     setBusyId(id)
-    setError(null)
+    setReplyError(null)
     try {
       await replyToHelpRequest(id, (replies[id] ?? '').trim())
-      setRequests((current) => current.filter((item) => item.id !== id))
-      window.dispatchEvent(new Event(HELP_REQUESTS_CHANGED_EVENT))
+      update((current) => current.filter((item) => item.id !== id))
+      void load({ refresh: true, background: true })
     } catch (reason: unknown) {
-      setError(getErrorMessage(reason, 'Не вдалося надіслати відповідь.'))
+      setReplyError(getErrorMessage(reason, 'Не вдалося надіслати відповідь.'))
     } finally {
       setBusyId(null)
     }
@@ -59,11 +40,14 @@ export function NeedsAttentionSection() {
         </div>
         <span className="card__header-icon"><AlertTriangleIcon /></span>
       </div>
-      {error && <ErrorMessage title="Помилка" message={error} />}
+      {loadError && (
+        <ErrorMessage title="Помилка" message={loadError} onRetry={() => void load({ refresh: true })} />
+      )}
+      {replyError && <ErrorMessage title="Помилка" message={replyError} />}
       {loading ? (
         <Loading label="Завантажуємо запитання пацієнтів…" />
       ) : requests.length === 0 ? (
-        error ? null : <EmptyState message="Нових запитань від пацієнтів немає." />
+        data && <EmptyState message="Нових запитань від пацієнтів немає." />
       ) : (
         <div className="help-request-list">
           {requests.map((item) => {

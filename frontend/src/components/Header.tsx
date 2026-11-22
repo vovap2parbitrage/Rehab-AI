@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
-import { HELP_REQUESTS_CHANGED_EVENT, listNeedsAttention } from '../api/helpRequests'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { getDisplayName, getInitials } from '../lib/profile'
+import { useTherapistQuestions } from '../lib/therapistQuestionsContext'
 import { LogoMark } from './Icons'
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
@@ -10,31 +9,13 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function Header() {
-  const { initialized, authenticated, tokenParsed, initError, role, roleLoading, roleError, retryRole } = useAuth()
+  const { initialized, authenticated, tokenParsed, initError, role, userLoading, userError, refreshUser } = useAuth()
   const displayName = getDisplayName(tokenParsed)
   const initials = getInitials(displayName)
   const isTherapist = role === 'therapist' || role === 'admin'
   const isPatient = role === 'patient'
-  const { pathname } = useLocation()
-  const [openQuestions, setOpenQuestions] = useState(0)
-
-  // Number of unanswered patient questions; refreshed on navigation and after a reply.
-  useEffect(() => {
-    if (!authenticated || !isTherapist) return
-
-    const controller = new AbortController()
-    const load = () => {
-      listNeedsAttention(controller.signal)
-        .then((items) => setOpenQuestions(items.length))
-        .catch(() => {})
-    }
-    load()
-    window.addEventListener(HELP_REQUESTS_CHANGED_EVENT, load)
-    return () => {
-      controller.abort()
-      window.removeEventListener(HELP_REQUESTS_CHANGED_EVENT, load)
-    }
-  }, [authenticated, isTherapist, pathname])
+  const { data: questions } = useTherapistQuestions()
+  const openQuestions = questions?.length ?? 0
 
   return (
     <header className="site-header">
@@ -114,7 +95,7 @@ export function Header() {
           )}
         </div>
       </div>
-      {roleLoading && (
+      {role === null && userLoading && (
         <div className="site-header__feedback">
           <span className="header-status" role="status">
             <span className="spinner spinner--sm" aria-hidden="true" />
@@ -122,12 +103,12 @@ export function Header() {
           </span>
         </div>
       )}
-      {roleError && (
+      {role === null && userError && (
         <div className="site-header__feedback">
           <span className="header-status header-status--error" role="alert">
             Не вдалося завантажити меню.
           </span>
-          <button type="button" className="button button--ghost button--sm" onClick={retryRole}>
+          <button type="button" className="button button--ghost button--sm" onClick={refreshUser}>
             Спробувати ще раз
           </button>
         </div>

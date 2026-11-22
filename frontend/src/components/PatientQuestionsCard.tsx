@@ -20,7 +20,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
 
   useEffect(() => {
     const controller = new AbortController()
-    listPatientHelpRequests(patientId, controller.signal)
+    listPatientHelpRequests(patientId, { signal: controller.signal })
       .then(setItems)
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return

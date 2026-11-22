@@ -1,4 +1,4 @@
-import { ApiError, apiRequest } from './client'
+import { ApiError, apiRequest, type RequestOptions } from './client'
 
 export type AppRole = 'patient' | 'therapist' | 'admin' | (string & {})
 
@@ -11,11 +11,8 @@ export interface UserProfile {
   is_active: boolean
 }
 
-export function fetchCurrentUser(options: { signal?: AbortSignal } = {}): Promise<UserProfile> {
-  return apiRequest<UserProfile>('/api/v1/auth/me', {
-    method: 'GET',
-    signal: options.signal,
-  })
+export function fetchCurrentUser(options: RequestOptions = {}): Promise<UserProfile> {
+  return apiRequest<UserProfile>('/api/v1/auth/me', options)
 }
 
 /**

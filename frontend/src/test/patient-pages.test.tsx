@@ -7,6 +7,7 @@ import { AuthContext } from '../auth/AuthContext'
 import { AuthProvider } from '../auth/AuthProvider'
 import { RoleRoute } from '../auth/RoleRoute'
 import { Header } from '../components/Header'
+import { NeedsAttentionSection } from '../components/NeedsAttentionSection'
 import type { PatientAssignment, PatientInvitation, PatientSession } from '../api/patient'
 import type { HelpRequest } from '../api/helpRequests'
 import { LoginPage } from '../pages/LoginPage'
@@ -19,6 +20,7 @@ import {
   PatientTherapistsPage,
 } from '../pages/PatientWorkspacePages'
 import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
+import { TherapistQuestionsProvider } from '../lib/TherapistQuestionsProvider'
 import {
   completePatientAssignment,
   listPatientAssignments,
@@ -26,13 +28,14 @@ import {
   listPatientTherapists,
   respondToPatientInvitation,
 } from '../api/patient'
-import { createHelpRequest, listMyHelpRequests } from '../api/helpRequests'
+import { createHelpRequest, listMyHelpRequests, listNeedsAttention, replyToHelpRequest } from '../api/helpRequests'
 import { getMyHistory, type PatientHistory } from '../api/history'
 import { ApiError } from '../api/client'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
-import { fetchCurrentUser } from '../api/auth'
+import { fetchCurrentUser, requestTherapistRole, type UserProfile } from '../api/auth'
+import { ProfilePage } from '../pages/profile/ProfilePage'
 
 vi.mock('../api/patient', () => ({
   completePatientAssignment: vi.fn(),
@@ -64,10 +67,14 @@ vi.mock('../api/uploads', () => ({
 vi.mock('../api/helpRequests', () => ({
   createHelpRequest: vi.fn(),
   listMyHelpRequests: vi.fn(),
+  listNeedsAttention: vi.fn(),
+  replyToHelpRequest: vi.fn(),
 }))
 
-vi.mock('../api/auth', () => ({
+vi.mock('../api/auth', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../api/auth')>(),
   fetchCurrentUser: vi.fn(),
+  requestTherapistRole: vi.fn(),
 }))
 
 vi.mock('../auth/keycloak', async (importOriginal) => ({
@@ -83,9 +90,11 @@ function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue
     tokenParsed: { preferred_username: 'olena' },
     initError: null,
     role: null,
-    roleLoading: false,
-    roleError: null,
-    retryRole: vi.fn(),
+    user: null,
+    userLoading: false,
+    userError: null,
+    refreshUser: vi.fn(),
+    updateUser: vi.fn(),
     login: vi.fn().mockResolvedValue(undefined),
     register: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn().mockResolvedValue(undefined),
@@ -234,26 +243,29 @@ const helpRequest: HelpRequest = {
   replied_at: null,
 }
 
+const currentPatient: UserProfile = {
+  id: 'patient-1',
+  email: 'olena@example.com',
+  role: 'patient',
+  pending_role: null,
+  keycloak_sub: null,
+  is_active: true,
+}
+
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
   vi.mocked(listMyHelpRequests).mockResolvedValue([])
+  vi.mocked(listNeedsAttention).mockResolvedValue([])
   vi.mocked(respondToPatientInvitation).mockResolvedValue(pendingInvitation)
   vi.mocked(completePatientAssignment).mockResolvedValue(session)
   vi.mocked(createHelpRequest).mockResolvedValue(helpRequest)
   vi.mocked(uploadVideo).mockResolvedValue('videos/u/' + 'c'.repeat(32) + '.mp4')
   vi.mocked(startComparison).mockResolvedValue({ task_id: 'task-1' })
   vi.mocked(getComparison).mockResolvedValue(doneResult)
-  vi.mocked(fetchCurrentUser).mockResolvedValue({
-    id: 'patient-1',
-    email: 'olena@example.com',
-    role: 'patient',
-    pending_role: null,
-    keycloak_sub: null,
-    is_active: true,
-  })
+  vi.mocked(fetchCurrentUser).mockResolvedValue(currentPatient)
 })
 
 afterEach(() => {
@@ -466,17 +478,19 @@ describe('Patient access and cabinet pages', () => {
     render(
       <AuthProvider>
         <MemoryRouter>
-          <Header />
-          <RoleRoute allowedRoles={['patient']}>
-            <p>Кабінет пацієнта</p>
-          </RoleRoute>
+          <TherapistQuestionsProvider>
+            <Header />
+            <RoleRoute allowedRoles={['patient']}>
+              <p>Кабінет пацієнта</p>
+            </RoleRoute>
+          </TherapistQuestionsProvider>
         </MemoryRouter>
       </AuthProvider>,
     )
 
     expect(await screen.findByRole('heading', { name: 'Не вдалося перевірити доступ' }))
       .toBeInTheDocument()
-    expect(screen.getByText('Не вдалося перевірити роль користувача.')).toBeInTheDocument()
+    expect(screen.getByText('Не вдалося завантажити дані облікового запису.')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити меню.')
     expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
 
@@ -830,5 +844,75 @@ describe('Patient access and cabinet pages', () => {
     await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
 
     await waitFor(() => expect(listPatientInvitations).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('Shared account data', () => {
+  it('loads the profile once and updates navigation when the profile is refreshed', async () => {
+    const user = userEvent.setup()
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/profile']}>
+          <TherapistQuestionsProvider>
+            <Header />
+            <ProfilePage />
+          </TherapistQuestionsProvider>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText(currentPatient.email)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Мій цикл вправ' })).toBeInTheDocument()
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+
+    vi.mocked(fetchCurrentUser).mockResolvedValueOnce({
+      ...currentPatient,
+      role: 'therapist',
+      email: 'doctor@example.com',
+    })
+    await user.click(screen.getByRole('button', { name: 'Оновити дані' }))
+
+    expect(await screen.findByText('doctor@example.com')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Пацієнти' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Мій цикл вправ' })).not.toBeInTheDocument()
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
+  })
+
+  it('updates the shared profile with the automatic role request from registration', async () => {
+    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
+    vi.mocked(requestTherapistRole).mockResolvedValueOnce({ ...currentPatient, pending_role: 'therapist' })
+    render(<AuthProvider><ProfilePage /></AuthProvider>)
+
+    expect(await screen.findByRole('heading', { name: /Запит на роль «/ })).toBeInTheDocument()
+    expect(requestTherapistRole).toHaveBeenCalledTimes(1)
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Therapist questions', () => {
+  it('shares one request and updates the header badge when a reply is sent', async () => {
+    const user = userEvent.setup()
+    vi.mocked(listNeedsAttention).mockResolvedValueOnce([helpRequest])
+    vi.mocked(replyToHelpRequest).mockResolvedValue({ ...helpRequest, reply: 'Так, усе правильно.' })
+    renderWithAuth(
+      <TherapistQuestionsProvider>
+        <Header />
+        <NeedsAttentionSection />
+      </TherapistQuestionsProvider>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/questions'],
+    )
+
+    expect(await screen.findByText(helpRequest.message)).toBeInTheDocument()
+    expect(screen.getByLabelText('1 нових запитань')).toBeInTheDocument()
+    expect(listNeedsAttention).toHaveBeenCalledTimes(1)
+
+    await user.type(screen.getByRole('textbox', { name: 'Відповідь пацієнту' }), 'Так, усе правильно.')
+    await user.click(screen.getByRole('button', { name: 'Відповісти' }))
+
+    expect(await screen.findByText('Нових запитань від пацієнтів немає.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('1 нових запитань')).not.toBeInTheDocument()
+    expect(replyToHelpRequest).toHaveBeenCalledWith(helpRequest.id, 'Так, усе правильно.')
+    expect(listNeedsAttention).toHaveBeenCalledTimes(2)
   })
 })

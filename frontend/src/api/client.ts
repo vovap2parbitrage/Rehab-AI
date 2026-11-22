@@ -2,6 +2,10 @@ import { AuthSessionError } from '../auth/errors'
 import { getValidAccessToken } from '../auth/keycloak'
 import { appConfig } from '../config/appConfig'
 
+export interface RequestOptions {
+  signal?: AbortSignal
+}
+
 export type ApiErrorKind =
   | 'network'
   | 'session'
