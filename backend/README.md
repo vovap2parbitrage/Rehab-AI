@@ -346,7 +346,8 @@ pytest -q tests/test_patient_archive.py     # один файл
 його відео. Еталон, частини тіла й допуски сервер бере з вправи цього призначення (дані лікаря),
 тому пацієнт не може їх підмінити.
 
-1. `POST /api/v1/comparisons/uploads` з `{"content_type": "video/mp4"}` (або `video/quicktime`)
+1. `POST /api/v1/comparisons/uploads` з `{"content_type": "video/mp4"}` (або `video/quicktime`,
+   `video/webm`)
    повертає короткоживучу підписану ціль завантаження `{key, url, fields}`.
 2. Застосунок завантажує відео пацієнта напряму в S3-бакет (multipart POST на `url` з `fields`
    і файлом).
@@ -384,8 +385,11 @@ pytest -q tests/test_patient_archive.py     # один файл
 ```
 
 Користувачі не передають URL, тому сервер ніколи не завантажує адреси, надані користувачем.
-Обмеження: `MAX_VIDEO_MB` (100) і `MAX_VIDEO_SECONDS` (120); лише mp4 і mov. Тип файлу
-перевіряється за вмістом. Усі ендпоінти вимагають входу (`app/api/comparison_auth.py`).
+Обмеження: `MAX_VIDEO_MB` (100) і `MAX_VIDEO_SECONDS` (120); лише mp4, mov і webm. Тип файлу
+перевіряється за вмістом. Запис у застосунку (MediaRecorder) дає WebM або фрагментований MP4 без
+тривалості й кількості кадрів, тому worker перед аналізом конвертує такі файли через ffmpeg
+(пакет `imageio-ffmpeg`, окремо ставити не треба) у MP4 зі сталими 30 кадрами/с. У сховищі
+лишається оригінал. Усі ендпоінти вимагають входу (`app/api/comparison_auth.py`).
 
 ### Сховище S3
 

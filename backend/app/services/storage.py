@@ -17,8 +17,9 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
 
-ALLOWED_CONTENT_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov"}
-KEY_RE = re.compile(r"^videos/(?P<owner>[A-Za-z0-9_-]{1,64})/[0-9a-f]{32}\.(mp4|mov)$")
+# WebM is what most browsers record with MediaRecorder; the worker converts it before analysis.
+ALLOWED_CONTENT_TYPES = {"video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm"}
+KEY_RE = re.compile(r"^videos/(?P<owner>[A-Za-z0-9_-]{1,64})/[0-9a-f]{32}\.(mp4|mov|webm)$")
 CHUNK_SIZE = 1024 * 1024
 
 
