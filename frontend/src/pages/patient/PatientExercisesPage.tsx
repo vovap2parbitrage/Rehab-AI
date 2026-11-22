@@ -31,55 +31,56 @@ export function PatientExercisesPage() {
     ),
   )
 
-  const renderAssignments = (items: typeof assignments) => items.map((assignment) => (
-    <article className="card exercise-card" key={assignment.id}>
-      <span className="exercise-card__icon" aria-hidden="true">
-        <ActivityIcon />
-      </span>
-      <div className="exercise-card__content">
-        <div className="exercise-card__title-row">
-          <h2>{assignment.exercise.name}</h2>
-          <span
-            className={
-              assignment.status === 'active'
-                ? 'status-pill status-pill--success status-pill--sm'
-                : 'status-pill status-pill--danger status-pill--sm'
-            }
-          >
-            {assignment.status === 'active' ? 'Активне' : 'Завершене'}
-          </span>
-        </div>
-        <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
-        {assignment.exercise.reference_video_key && (
-          <ReferenceVideo
-            exerciseId={assignment.exercise.id}
-            preview={videoPreview}
-            showLabel="Переглянути еталонне відео"
+  const renderAssignments = (items: typeof assignments) =>
+    items.map((assignment) => (
+      <article className="card exercise-card" key={assignment.id}>
+        <span className="exercise-card__icon" aria-hidden="true">
+          <ActivityIcon />
+        </span>
+        <div className="exercise-card__content">
+          <div className="exercise-card__title-row">
+            <h2>{assignment.exercise.name}</h2>
+            <span
+              className={
+                assignment.status === 'active'
+                  ? 'status-pill status-pill--success status-pill--sm'
+                  : 'status-pill status-pill--danger status-pill--sm'
+              }
+            >
+              {assignment.status === 'active' ? 'Активне' : 'Завершене'}
+            </span>
+          </div>
+          <p>{assignment.exercise.description ?? 'Опис вправи не додано.'}</p>
+          {assignment.exercise.reference_video_key && (
+            <ReferenceVideo
+              exerciseId={assignment.exercise.id}
+              preview={videoPreview}
+              showLabel="Переглянути еталонне відео"
+            />
+          )}
+          <div className="exercise-card__meta">
+            <span>
+              {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
+            </span>
+            <span>
+              {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
+            </span>
+          </div>
+          <SessionDetails assignment={assignment} />
+          <ExerciseQuestions
+            items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
           />
-        )}
-        <div className="exercise-card__meta">
-          <span>
-            {assignment.repetitions} повторень · {formatWeekdays(assignment.weekdays)}
-          </span>
-          <span>
-            {assignment.sessions.length} сесій · {assignment.duration_weeks} тиж.
-          </span>
         </div>
-        <SessionDetails assignment={assignment} />
-        <ExerciseQuestions
-          items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
-        />
-      </div>
-      {assignment.status === 'active' && (
-        <Link
-          to={`/patient/exercises/${assignment.id}/execute`}
-          className="button button--primary exercise-card__action"
-        >
-          Виконати вправу <ArrowRightIcon aria-hidden="true" />
-        </Link>
-      )}
-    </article>
-  ))
+        {assignment.status === 'active' && (
+          <Link
+            to={`/patient/exercises/${assignment.id}/execute`}
+            className="button button--primary exercise-card__action"
+          >
+            Виконати вправу <ArrowRightIcon aria-hidden="true" />
+          </Link>
+        )}
+      </article>
+    ))
 
   return (
     <div className="workspace-page">
@@ -102,7 +103,11 @@ export function PatientExercisesPage() {
               type="button"
               role="tab"
               aria-selected={assignmentView === 'today'}
-              className={assignmentView === 'today' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              className={
+                assignmentView === 'today'
+                  ? 'period-selector__option period-selector__option--active'
+                  : 'period-selector__option'
+              }
               onClick={() => setAssignmentView('today')}
             >
               На сьогодні
@@ -111,7 +116,11 @@ export function PatientExercisesPage() {
               type="button"
               role="tab"
               aria-selected={assignmentView === 'all'}
-              className={assignmentView === 'all' ? 'period-selector__option period-selector__option--active' : 'period-selector__option'}
+              className={
+                assignmentView === 'all'
+                  ? 'period-selector__option period-selector__option--active'
+                  : 'period-selector__option'
+              }
               onClick={() => setAssignmentView('all')}
             >
               Усі призначення
@@ -132,7 +141,10 @@ export function PatientExercisesPage() {
               {activeAssignments.length > 0 && (
                 <section>
                   <div className="card__header">
-                    <div><h2>Активні</h2><p>{activeAssignments.length} активних призначень</p></div>
+                    <div>
+                      <h2>Активні</h2>
+                      <p>{activeAssignments.length} активних призначень</p>
+                    </div>
                   </div>
                   <div className="exercise-list">{renderAssignments(activeAssignments)}</div>
                 </section>
@@ -140,7 +152,10 @@ export function PatientExercisesPage() {
               {completedAssignments.length > 0 && (
                 <section>
                   <div className="card__header">
-                    <div><h2>Завершені</h2><p>{completedAssignments.length} завершених призначень</p></div>
+                    <div>
+                      <h2>Завершені</h2>
+                      <p>{completedAssignments.length} завершених призначень</p>
+                    </div>
                   </div>
                   <div className="exercise-list">{renderAssignments(completedAssignments)}</div>
                 </section>
@@ -172,7 +187,9 @@ function ExerciseQuestions({ items }: { items: HelpRequest[] }) {
     <details className="exercise-questions">
       <summary>
         Запитання до лікаря ({items.length})
-        {waiting > 0 && <span className="exercise-questions__waiting"> · {waiting} очікує відповіді</span>}
+        {waiting > 0 && (
+          <span className="exercise-questions__waiting"> · {waiting} очікує відповіді</span>
+        )}
       </summary>
       <HelpRequestList items={items} />
     </details>

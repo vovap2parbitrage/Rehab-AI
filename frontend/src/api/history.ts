@@ -37,7 +37,10 @@ export interface PatientHistory {
   adherence_weeks: AdherenceWeek[]
 }
 
-export function getMyHistory(period: HistoryPeriod, options: RequestOptions = {}): Promise<PatientHistory> {
+export function getMyHistory(
+  period: HistoryPeriod,
+  options: RequestOptions = {},
+): Promise<PatientHistory> {
   return apiRequest<PatientHistory>(
     `/api/v1/patients/me/history?period=${encodeURIComponent(period)}`,
     options,

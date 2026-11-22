@@ -15,7 +15,8 @@ export function AskForHelpForm({ sessionId }: { sessionId: string }) {
   if (sent) {
     return (
       <div className="success-message" role="status">
-        Запитання надіслано лікарю. Відповідь з’явиться під цією вправою на сторінці «Мій цикл вправ».
+        Запитання надіслано лікарю. Відповідь з’явиться під цією вправою на сторінці «Мій цикл
+        вправ».
       </div>
     )
   }

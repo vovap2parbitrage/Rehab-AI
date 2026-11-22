@@ -17,16 +17,13 @@ export function ErrorPage({ title, message, code, notFound = false, onRetry }: E
 
   const heading =
     title ??
-    (notFound
-      ? 'Сторінку не знайдено'
-      : (description?.title ?? 'Не вдалося завершити дію'))
+    (notFound ? 'Сторінку не знайдено' : (description?.title ?? 'Не вдалося завершити дію'))
 
   const text =
     message ??
     (notFound
       ? 'Можливо, сторінку переміщено або адресу введено з помилкою. Скористайтеся навігацією, щоб продовжити.'
-      : (description?.message ??
-        'Спробуйте ще раз'))
+      : (description?.message ?? 'Спробуйте ще раз'))
 
   return (
     <section className="error-page" aria-labelledby="error-page-title">

@@ -16,11 +16,17 @@ export function RoleRoute({ allowedRoles, children }: RoleRouteProps) {
 
   if (!initialized) return <Loading fullPage label="Перевіряємо сесію…" />
   if (!authenticated) {
-    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    return (
+      <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    )
   }
   if (role === null) {
     return userError ? (
-      <ErrorPage title="Не вдалося перевірити доступ" message={userError.message} onRetry={refreshUser} />
+      <ErrorPage
+        title="Не вдалося перевірити доступ"
+        message={userError.message}
+        onRetry={refreshUser}
+      />
     ) : (
       <Loading fullPage label="Перевіряємо права доступу…" />
     )

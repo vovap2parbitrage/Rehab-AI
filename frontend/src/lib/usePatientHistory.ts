@@ -36,7 +36,11 @@ export function usePatientHistory(patientId?: string) {
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return
         const notFound = reason instanceof ApiError && reason.kind === 'not-found'
-        setSettled({ key: requestKey, error: getErrorMessage(reason, 'Не вдалося завантажити історію виконання.'), notFound })
+        setSettled({
+          key: requestKey,
+          error: getErrorMessage(reason, 'Не вдалося завантажити історію виконання.'),
+          notFound,
+        })
       })
 
     return () => controller.abort()

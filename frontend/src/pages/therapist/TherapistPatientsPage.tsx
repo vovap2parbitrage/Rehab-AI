@@ -57,37 +57,59 @@ export function TherapistPatientsPage() {
         lead="Переглядайте пацієнтів і відкривайте їхні плани реабілітації."
       />
 
-      {notice && <div className="success-message" role="status">{notice}</div>}
+      {notice && (
+        <div className="success-message" role="status">
+          {notice}
+        </div>
+      )}
       {error && <ErrorMessage title="Не вдалося завантажити дані" message={error} />}
 
       <div className="workspace-summary-grid therapist-page__grid">
         <section className="card">
           <div className="card__header">
-            <div><h2>Пацієнти ({patients.length})</h2><p>Натисніть на пацієнта, щоб призначити план.</p></div>
-            <span className="card__header-icon"><UserIcon /></span>
+            <div>
+              <h2>Пацієнти ({patients.length})</h2>
+              <p>Натисніть на пацієнта, щоб призначити план.</p>
+            </div>
+            <span className="card__header-icon">
+              <UserIcon />
+            </span>
           </div>
           <div className="patient-cards">
             {patients.map((patient) => (
-              <Link className="patient-card" to={`/therapist/patients/${patient.id}`} key={patient.id}>
+              <Link
+                className="patient-card"
+                to={`/therapist/patients/${patient.id}`}
+                key={patient.id}
+              >
                 <span className="avatar avatar--md" aria-hidden="true">
                   {patient.first_name.slice(0, 1).toUpperCase()}
                 </span>
                 <span>
-                  <strong>{patient.first_name} {patient.last_name}</strong>
+                  <strong>
+                    {patient.first_name} {patient.last_name}
+                  </strong>
                   <small>{patient.user_id}</small>
                 </span>
               </Link>
             ))}
             {loading && <Loading label="Завантажуємо пацієнтів…" />}
             {loadError && <ErrorMessage message={loadError} />}
-            {!loading && !loadError && patients.length === 0 && <EmptyState message="Пацієнтів поки немає." />}
+            {!loading && !loadError && patients.length === 0 && (
+              <EmptyState message="Пацієнтів поки немає." />
+            )}
           </div>
         </section>
 
         <section className="card">
           <div className="card__header">
-            <div><h2>Нове запрошення</h2><p>Додайте пацієнта до своєї практики.</p></div>
-            <span className="card__header-icon"><MailIcon /></span>
+            <div>
+              <h2>Нове запрошення</h2>
+              <p>Додайте пацієнта до своєї практики.</p>
+            </div>
+            <span className="card__header-icon">
+              <MailIcon />
+            </span>
           </div>
           <form className="therapist-form" onSubmit={handleInvite}>
             <label className="therapist-form__field">

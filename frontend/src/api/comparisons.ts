@@ -38,6 +38,9 @@ export function startComparison(payload: ComparisonPayload): Promise<{ task_id: 
   })
 }
 
-export function getComparison(taskId: string, options: RequestOptions = {}): Promise<ComparisonResult> {
+export function getComparison(
+  taskId: string,
+  options: RequestOptions = {},
+): Promise<ComparisonResult> {
   return apiRequest<ComparisonResult>(`/api/v1/comparisons/${encodeURIComponent(taskId)}`, options)
 }

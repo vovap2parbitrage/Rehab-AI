@@ -58,9 +58,7 @@ export function ProfileDetails({ profile, firstName, lastName, username }: Profi
           <Detail label="Email" icon={<MailIcon />}>
             {profile.email}
           </Detail>
-          <Detail label="Ім’я користувача">
-            {username ? `@${username}` : 'Не вказано'}
-          </Detail>
+          <Detail label="Ім’я користувача">{username ? `@${username}` : 'Не вказано'}</Detail>
         </dl>
       </section>
 

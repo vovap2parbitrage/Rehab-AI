@@ -23,7 +23,8 @@ export function PatientTherapistsPage() {
     patientInvitations.map((invitation) => [invitation.therapist_id, invitation.therapist_email]),
   )
   const connectedTherapists = new Set(
-    patientInvitations.filter((invitation) => invitation.status === 'accepted')
+    patientInvitations
+      .filter((invitation) => invitation.status === 'accepted')
       .map((invitation) => invitation.therapist_id),
   )
 
@@ -49,9 +50,7 @@ export function PatientTherapistsPage() {
                   <span className="avatar avatar--md" aria-hidden="true">
                     {getInitials(email)}
                   </span>
-                  <span className="therapist-card__experience">
-                    Ваш лікар
-                  </span>
+                  <span className="therapist-card__experience">Ваш лікар</span>
                 </div>
                 <h2>{email}</h2>
                 <p className="therapist-card__description">

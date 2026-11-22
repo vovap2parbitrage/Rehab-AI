@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { createExercise, deleteExercise, listExercises, updateExercise, type Exercise } from '../../api/therapist'
+import {
+  createExercise,
+  deleteExercise,
+  listExercises,
+  updateExercise,
+  type Exercise,
+} from '../../api/therapist'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import { ArrowRightIcon } from '../../components/Icons'
 import { PageHeading } from '../../components/PageHeading'
@@ -151,7 +157,7 @@ export function TherapistExercisesPage() {
           joint_tolerances: editingExercise?.joint_tolerances ?? {},
           body_parts: bodyParts,
         })
-        setExercises((current) => current.map((item) => item.id === updated.id ? updated : item))
+        setExercises((current) => current.map((item) => (item.id === updated.id ? updated : item)))
         if (videoFile) {
           // The old link points at the replaced video: drop it and load the new one.
           videoPreview.hide(updated.id)
@@ -196,15 +202,23 @@ export function TherapistExercisesPage() {
 
   return (
     <div className="workspace-page">
-      <Link to="/therapist/patients" className="back-link"><ArrowRightIcon /> До пацієнтів</Link>
+      <Link to="/therapist/patients" className="back-link">
+        <ArrowRightIcon /> До пацієнтів
+      </Link>
       <PageHeading
         eyebrow="Кабінет лікаря"
         title="Бібліотека вправ"
         lead="Створюйте та переглядайте вправи для планів пацієнтів."
       />
-      {notice && <div className="success-message" role="status">{notice}</div>}
+      {notice && (
+        <div className="success-message" role="status">
+          {notice}
+        </div>
+      )}
       {error && <ErrorMessage title="Помилка" message={error} />}
-      {videoPreview.error && <ErrorMessage title="Не вдалося відкрити відео" message={videoPreview.error} />}
+      {videoPreview.error && (
+        <ErrorMessage title="Не вдалося відкрити відео" message={videoPreview.error} />
+      )}
       <div className="workspace-summary-grid therapist-page__grid">
         <ExerciseForm
           values={form}

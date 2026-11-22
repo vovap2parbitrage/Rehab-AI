@@ -62,10 +62,7 @@ export function listPatientInvitations(options: RequestOptions = {}): Promise<Pa
   return apiRequest<PatientInvitation[]>('/api/v1/invitations/mine', options)
 }
 
-export function respondToPatientInvitation(
-  invitationId: string,
-  status: 'accepted' | 'declined',
-) {
+export function respondToPatientInvitation(invitationId: string, status: 'accepted' | 'declined') {
   return apiRequest<PatientInvitation>(
     `/api/v1/invitations/${encodeURIComponent(invitationId)}/response`,
     {
@@ -79,10 +76,7 @@ export function listPatientAssignments(options: RequestOptions = {}): Promise<Pa
   return apiRequest<PatientAssignment[]>('/api/v1/assignments/mine', options)
 }
 
-export function completePatientAssignment(
-  assignmentId: string,
-  payload: { pain_score?: number },
-) {
+export function completePatientAssignment(assignmentId: string, payload: { pain_score?: number }) {
   return apiRequest<PatientSession>(
     `/api/v1/sessions/assignments/${encodeURIComponent(assignmentId)}`,
     {

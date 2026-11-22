@@ -21,28 +21,34 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
   const { load: loadInvitations } = invitations
   const { load: loadAssignments } = assignments
 
-  const fetchTherapists = useCallback(async ({ signal }: { signal: AbortSignal }): Promise<PatientTherapist[]> => {
-    const patientInvitations = await loadInvitations()
-    if (signal.aborted) return []
-
-    let patientId = patientInvitations?.[0]?.patient_id
-    if (!patientId) {
-      const patientAssignments = await loadAssignments()
+  const fetchTherapists = useCallback(
+    async ({ signal }: { signal: AbortSignal }): Promise<PatientTherapist[]> => {
+      const patientInvitations = await loadInvitations()
       if (signal.aborted) return []
-      patientId = patientAssignments?.[0]?.patient_id
-      if (!patientId && (!patientInvitations || !patientAssignments)) {
-        throw new Error('Не вдалося визначити профіль пацієнта для списку лікарів.')
+
+      let patientId = patientInvitations?.[0]?.patient_id
+      if (!patientId) {
+        const patientAssignments = await loadAssignments()
+        if (signal.aborted) return []
+        patientId = patientAssignments?.[0]?.patient_id
+        if (!patientId && (!patientInvitations || !patientAssignments)) {
+          throw new Error('Не вдалося визначити профіль пацієнта для списку лікарів.')
+        }
       }
-    }
-    return patientId ? listPatientTherapists(patientId, { signal }) : []
-  }, [loadInvitations, loadAssignments])
+      return patientId ? listPatientTherapists(patientId, { signal }) : []
+    },
+    [loadInvitations, loadAssignments],
+  )
   const therapists = useCachedResource(fetchTherapists, WORKSPACE_ERROR)
 
   const [actionPending, setActionPending] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<{ resource: PatientActionResource; message: string } | null>(null)
+  const [actionError, setActionError] = useState<{
+    resource: PatientActionResource
+    message: string
+  } | null>(null)
 
   const clearActionError = (resource: PatientActionResource) => {
-    setActionError((current) => current?.resource === resource ? null : current)
+    setActionError((current) => (current?.resource === resource ? null : current))
   }
 
   const respondToInvitation = async (invitationId: string, status: 'accepted' | 'declined') => {
@@ -50,7 +56,9 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
     clearActionError('invitations')
     try {
       const updated = await respondToPatientInvitation(invitationId, status)
-      invitations.update((current) => current.map((item) => item.id === updated.id ? updated : item))
+      invitations.update((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      )
       therapists.invalidate()
       await loadInvitations({ refresh: true, background: true })
     } catch (caught) {
@@ -67,11 +75,13 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
       const session = await completePatientAssignment(assignmentId, {
         ...(painScore === null ? {} : { pain_score: painScore }),
       })
-      assignments.update((current) => current.map((assignment) =>
-        assignment.id === assignmentId
-          ? { ...assignment, sessions: [...assignment.sessions, session] }
-          : assignment,
-      ))
+      assignments.update((current) =>
+        current.map((assignment) =>
+          assignment.id === assignmentId
+            ? { ...assignment, sessions: [...assignment.sessions, session] }
+            : assignment,
+        ),
+      )
       return session
     } catch (caught) {
       setActionError({ resource: 'assignments', message: getErrorMessage(caught, WORKSPACE_ERROR) })
@@ -97,18 +107,20 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
   }
 
   return (
-    <PatientWorkspaceContext.Provider value={{
-      therapists,
-      invitations,
-      assignments,
-      helpRequests,
-      actionPending,
-      actionError,
-      clearActionError,
-      respondToInvitation,
-      completeAssignment,
-      askForHelp,
-    }}>
+    <PatientWorkspaceContext.Provider
+      value={{
+        therapists,
+        invitations,
+        assignments,
+        helpRequests,
+        actionPending,
+        actionError,
+        clearActionError,
+        respondToInvitation,
+        completeAssignment,
+        askForHelp,
+      }}
+    >
       {children}
     </PatientWorkspaceContext.Provider>
   )

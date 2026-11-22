@@ -25,7 +25,9 @@ export function useCachedResource<T>(
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cached = useRef<T | undefined>(undefined)
-  const inFlight = useRef<{ controller: AbortController; result: Promise<T | undefined> } | null>(null)
+  const inFlight = useRef<{ controller: AbortController; result: Promise<T | undefined> } | null>(
+    null,
+  )
   const mounted = useRef(true)
 
   const cancel = useCallback(() => {
@@ -41,46 +43,52 @@ export function useCachedResource<T>(
     }
   }, [cancel])
 
-  const load = useCallback(({ refresh = false, background = false }: LoadOptions = {}) => {
-    if (!mounted.current) return Promise.resolve(undefined)
-    if (inFlight.current) return inFlight.current.result
-    if (!refresh && cached.current !== undefined) return Promise.resolve(cached.current)
+  const load = useCallback(
+    ({ refresh = false, background = false }: LoadOptions = {}) => {
+      if (!mounted.current) return Promise.resolve(undefined)
+      if (inFlight.current) return inFlight.current.result
+      if (!refresh && cached.current !== undefined) return Promise.resolve(cached.current)
 
-    const controller = new AbortController()
-    const { signal } = controller
-    setLoading(!background || cached.current === undefined)
-    setError(null)
+      const controller = new AbortController()
+      const { signal } = controller
+      setLoading(!background || cached.current === undefined)
+      setError(null)
 
-    const result = Promise.resolve().then(async () => {
-      if (signal.aborted) return undefined
-      try {
-        const next = await fetchData({ signal })
+      const result = Promise.resolve().then(async () => {
         if (signal.aborted) return undefined
-        cached.current = next
-        setData(next)
-        return next
-      } catch (caught: unknown) {
-        if (!signal.aborted) setError(getErrorMessage(caught, fallbackError))
-        return undefined
-      } finally {
-        if (!signal.aborted) {
-          inFlight.current = null
-          setLoading(false)
+        try {
+          const next = await fetchData({ signal })
+          if (signal.aborted) return undefined
+          cached.current = next
+          setData(next)
+          return next
+        } catch (caught: unknown) {
+          if (!signal.aborted) setError(getErrorMessage(caught, fallbackError))
+          return undefined
+        } finally {
+          if (!signal.aborted) {
+            inFlight.current = null
+            setLoading(false)
+          }
         }
-      }
-    })
-    inFlight.current = { controller, result }
-    return result
-  }, [fetchData, fallbackError])
+      })
+      inFlight.current = { controller, result }
+      return result
+    },
+    [fetchData, fallbackError],
+  )
 
-  const update = useCallback((apply: (current: T) => T) => {
-    if (!mounted.current) return
-    cancel()
-    cached.current = cached.current === undefined ? undefined : apply(cached.current)
-    setData(cached.current)
-    setError(null)
-    setLoading(false)
-  }, [cancel])
+  const update = useCallback(
+    (apply: (current: T) => T) => {
+      if (!mounted.current) return
+      cancel()
+      cached.current = cached.current === undefined ? undefined : apply(cached.current)
+      setData(cached.current)
+      setError(null)
+      setLoading(false)
+    },
+    [cancel],
+  )
 
   const invalidate = useCallback(() => {
     if (!mounted.current) return

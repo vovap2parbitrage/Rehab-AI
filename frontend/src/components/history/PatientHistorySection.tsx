@@ -29,9 +29,7 @@ export function PatientHistorySection({
 
   let body
   if (error && !notFound) {
-    body = (
-      <ErrorMessage title="Не вдалося завантажити історію" message={error} onRetry={refresh} />
-    )
+    body = <ErrorMessage title="Не вдалося завантажити історію" message={error} onRetry={refresh} />
   } else if (!history && !notFound) {
     body = <Loading label="Завантажуємо історію виконання…" />
   } else {

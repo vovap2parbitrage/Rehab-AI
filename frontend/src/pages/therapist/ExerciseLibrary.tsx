@@ -74,7 +74,9 @@ export function ExerciseLibrary({
         ))}
         {loading && <Loading label="Завантажуємо вправи…" />}
         {loadError && <ErrorMessage message={loadError} />}
-        {!loading && !loadError && exercises.length === 0 && <EmptyState message="Вправ поки немає." />}
+        {!loading && !loadError && exercises.length === 0 && (
+          <EmptyState message="Вправ поки немає." />
+        )}
       </div>
     </section>
   )

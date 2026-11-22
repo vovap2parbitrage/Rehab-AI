@@ -34,7 +34,10 @@ export function listNeedsAttention(options: RequestOptions = {}): Promise<HelpRe
 }
 
 /** Therapist: all questions of one patient with replies, newest first. */
-export function listPatientHelpRequests(patientId: string, options: RequestOptions = {}): Promise<HelpRequest[]> {
+export function listPatientHelpRequests(
+  patientId: string,
+  options: RequestOptions = {},
+): Promise<HelpRequest[]> {
   return apiRequest<HelpRequest[]>(
     `/api/v1/help-requests/?patient_id=${encodeURIComponent(patientId)}`,
     options,

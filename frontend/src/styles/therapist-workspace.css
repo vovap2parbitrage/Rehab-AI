@@ -46,7 +46,7 @@
   font-weight: 700;
 }
 
-.therapist-form__field input:not([type="checkbox"]),
+.therapist-form__field input:not([type='checkbox']),
 .therapist-form__field select,
 .therapist-form__field textarea {
   width: 100%;
@@ -167,7 +167,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .patient-card:hover {

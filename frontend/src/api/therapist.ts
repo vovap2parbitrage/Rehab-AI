@@ -98,7 +98,10 @@ export function deleteExercise(id: string): Promise<void> {
   })
 }
 
-export function listAssignments(patientId: string, options: RequestOptions = {}): Promise<Assignment[]> {
+export function listAssignments(
+  patientId: string,
+  options: RequestOptions = {},
+): Promise<Assignment[]> {
   return apiRequest<Assignment[]>(
     `/api/v1/assignments/?patient_id=${encodeURIComponent(patientId)}`,
     options,

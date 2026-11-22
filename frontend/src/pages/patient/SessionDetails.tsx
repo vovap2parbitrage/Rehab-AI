@@ -47,11 +47,15 @@ export function SessionDetails({ assignment }: { assignment: PatientAssignment }
             <dl className="assignment-session__details">
               <div>
                 <dt>Біль</dt>
-                <dd>{session.pain_score === null ? 'Не вказано' : `${session.pain_score} із 10`}</dd>
+                <dd>
+                  {session.pain_score === null ? 'Не вказано' : `${session.pain_score} із 10`}
+                </dd>
               </div>
               <div>
                 <dt>Оцінка техніки</dt>
-                <dd>{session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}</dd>
+                <dd>
+                  {session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}
+                </dd>
               </div>
             </dl>
             {session.score !== null && <SessionAnalysis session={session} />}

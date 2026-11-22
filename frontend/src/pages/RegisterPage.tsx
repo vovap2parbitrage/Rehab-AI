@@ -94,9 +94,7 @@ export function RegisterPage() {
 
         <div className="role-choice__options">
           <label
-            className={
-              role === 'patient' ? 'role-option role-option--selected' : 'role-option'
-            }
+            className={role === 'patient' ? 'role-option role-option--selected' : 'role-option'}
           >
             <input
               type="radio"
@@ -121,9 +119,7 @@ export function RegisterPage() {
           </label>
 
           <label
-            className={
-              role === 'therapist' ? 'role-option role-option--selected' : 'role-option'
-            }
+            className={role === 'therapist' ? 'role-option role-option--selected' : 'role-option'}
           >
             <input
               type="radio"
@@ -153,8 +149,8 @@ export function RegisterPage() {
         {role === 'therapist' ? (
           <>
             <strong>Роль лікаря потребує підтвердження.</strong> Акаунт створюється з базовим
-            доступом пацієнта. Після реєстрації AIRehab автоматично надішле запит на роль
-            терапевта — адміністратор розгляне його найближчим часом.
+            доступом пацієнта. Після реєстрації AIRehab автоматично надішле запит на роль терапевта
+            — адміністратор розгляне його найближчим часом.
           </>
         ) : (
           <>

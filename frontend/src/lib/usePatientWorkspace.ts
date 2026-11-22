@@ -10,7 +10,9 @@ export function usePatientWorkspace() {
   return context
 }
 
-export function usePatientData<K extends keyof PatientWorkspaceResources>(key: K): PatientWorkspaceResources[K] {
+export function usePatientData<K extends keyof PatientWorkspaceResources>(
+  key: K,
+): PatientWorkspaceResources[K] {
   const { authenticated, initialized } = useAuth()
   const resource = usePatientWorkspace()[key]
   const { idle, load } = resource

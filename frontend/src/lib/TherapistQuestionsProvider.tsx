@@ -10,12 +10,19 @@ export function TherapistQuestionsProvider({ children }: { children: ReactNode }
   const enabled = authenticated && (role === 'therapist' || role === 'admin')
   const sessionKey = authenticated ? `session:${tokenParsed?.sub ?? ''}` : 'anonymous'
 
-  return <TherapistQuestionsCache key={sessionKey} enabled={enabled}>{children}</TherapistQuestionsCache>
+  return (
+    <TherapistQuestionsCache key={sessionKey} enabled={enabled}>
+      {children}
+    </TherapistQuestionsCache>
+  )
 }
 
 function TherapistQuestionsCache({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const { pathname } = useLocation()
-  const questions = useCachedResource(listNeedsAttention, 'Не вдалося завантажити запитання пацієнтів.')
+  const questions = useCachedResource(
+    listNeedsAttention,
+    'Не вдалося завантажити запитання пацієнтів.',
+  )
   const { load, invalidate } = questions
 
   useEffect(() => {
@@ -23,5 +30,9 @@ function TherapistQuestionsCache({ enabled, children }: { enabled: boolean; chil
     else invalidate()
   }, [enabled, load, invalidate, pathname])
 
-  return <TherapistQuestionsContext.Provider value={questions}>{children}</TherapistQuestionsContext.Provider>
+  return (
+    <TherapistQuestionsContext.Provider value={questions}>
+      {children}
+    </TherapistQuestionsContext.Provider>
+  )
 }

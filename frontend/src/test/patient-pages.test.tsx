@@ -27,7 +27,12 @@ import {
   listPatientTherapists,
   respondToPatientInvitation,
 } from '../api/patient'
-import { createHelpRequest, listMyHelpRequests, listNeedsAttention, replyToHelpRequest } from '../api/helpRequests'
+import {
+  createHelpRequest,
+  listMyHelpRequests,
+  listNeedsAttention,
+  replyToHelpRequest,
+} from '../api/helpRequests'
 import { getMyHistory, type PatientHistory } from '../api/history'
 import { ApiError } from '../api/client'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
@@ -71,13 +76,13 @@ vi.mock('../api/helpRequests', () => ({
 }))
 
 vi.mock('../api/auth', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../api/auth')>(),
+  ...(await importOriginal<typeof import('../api/auth')>()),
   fetchCurrentUser: vi.fn(),
   requestTherapistRole: vi.fn(),
 }))
 
 vi.mock('../auth/keycloak', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../auth/keycloak')>(),
+  ...(await importOriginal<typeof import('../auth/keycloak')>()),
   getKeycloak: () => ({ authenticated: true, tokenParsed: { sub: 'patient-1' } }),
   initKeycloak: async () => true,
 }))
@@ -332,10 +337,7 @@ describe('Login page', () => {
   })
 
   it('disables login and offers retry when authorization initialization failed', () => {
-    renderWithAuth(
-      <LoginPage />,
-      createAuth({ initError: 'Keycloak тимчасово недоступний' }),
-    )
+    renderWithAuth(<LoginPage />, createAuth({ initError: 'Keycloak тимчасово недоступний' }))
 
     expect(screen.getByRole('button', { name: 'Увійти' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent('Keycloak тимчасово недоступний')
@@ -380,9 +382,7 @@ describe('Register page', () => {
   it('stores the selected therapist role before starting registration', async () => {
     const user = userEvent.setup()
     const auth = createAuth()
-    renderWithAuth(<RegisterPage />, auth, [
-      { pathname: '/register', state: { from: '/patient' } },
-    ])
+    renderWithAuth(<RegisterPage />, auth, [{ pathname: '/register', state: { from: '/patient' } }])
 
     await user.click(screen.getByRole('radio', { name: /Лікар/ }))
     expect(screen.getByText(/Роль лікаря потребує підтвердження/)).toBeInTheDocument()
@@ -437,11 +437,14 @@ describe('Patient access and cabinet pages', () => {
   it('redirects an anonymous visitor to login with the requested cabinet path', async () => {
     renderWithAuth(
       <Routes>
-        <Route path="/patient" element={
-          <RoleRoute allowedRoles={['patient']}>
-            <PatientDashboardPage />
-          </RoleRoute>
-        } />
+        <Route
+          path="/patient"
+          element={
+            <RoleRoute allowedRoles={['patient']}>
+              <PatientDashboardPage />
+            </RoleRoute>
+          }
+        />
         <Route path="/login" element={<LocationDisplay />} />
       </Routes>,
       createAuth({ authenticated: false }),
@@ -454,11 +457,14 @@ describe('Patient access and cabinet pages', () => {
   it('redirects a therapist away from the patient cabinet', async () => {
     renderWithAuth(
       <Routes>
-        <Route path="/patient" element={
-          <RoleRoute allowedRoles={['patient']}>
-            <PatientDashboardPage />
-          </RoleRoute>
-        } />
+        <Route
+          path="/patient"
+          element={
+            <RoleRoute allowedRoles={['patient']}>
+              <PatientDashboardPage />
+            </RoleRoute>
+          }
+        />
         <Route path="/profile" element={<LocationDisplay />} />
       </Routes>,
       createAuth({ authenticated: true, role: 'therapist' }),
@@ -487,13 +493,16 @@ describe('Patient access and cabinet pages', () => {
       </AuthProvider>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'Не вдалося перевірити доступ' }))
-      .toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Не вдалося перевірити доступ' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Не вдалося завантажити дані облікового запису.')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити меню.')
     expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
 
-    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Спробувати ще раз' }))
+    await user.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Спробувати ще раз' }),
+    )
 
     expect(await screen.findByRole('link', { name: 'Мій цикл вправ' })).toBeInTheDocument()
     expect(screen.getByText('Кабінет пацієнта')).toBeInTheDocument()
@@ -507,13 +516,18 @@ describe('Patient access and cabinet pages', () => {
       { ...patientAssignment, sessions: [session] },
       { ...patientAssignment, id: 'assignment-2', status: 'completed', sessions: [session] },
     ])
-    renderPatientPage('/patient', <PatientDashboardPage />, createAuth({
-      authenticated: true,
-      tokenParsed: { given_name: 'Олена', family_name: 'Коваль' },
-    }))
+    renderPatientPage(
+      '/patient',
+      <PatientDashboardPage />,
+      createAuth({
+        authenticated: true,
+        tokenParsed: { given_name: 'Олена', family_name: 'Коваль' },
+      }),
+    )
 
-    expect(await screen.findByRole('heading', { name: 'Вітаємо, Олена Коваль' }))
-      .toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Вітаємо, Олена Коваль' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Вам надійшло запрошення' })).toBeInTheDocument()
     expect(screen.getByText('2 виконаних сесій')).toBeInTheDocument()
     expect(screen.getByText('1 активних призначень')).toBeInTheDocument()
@@ -522,41 +536,49 @@ describe('Patient access and cabinet pages', () => {
   it('shows an empty dashboard message when no invitations or assignments exist', async () => {
     renderPatientPage('/patient', <PatientDashboardPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Очікуйте запрошення від лікаря' }))
-      .toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Очікуйте запрошення від лікаря' }),
+    ).toBeInTheDocument()
   })
 
   it('lists connected therapists with the email from their accepted invitation', async () => {
     vi.mocked(listPatientInvitations).mockResolvedValue([acceptedInvitation])
-    vi.mocked(listPatientTherapists).mockResolvedValue([
-      { id: 'therapist-2', role: 'therapist' },
-    ])
+    vi.mocked(listPatientTherapists).mockResolvedValue([{ id: 'therapist-2', role: 'therapist' }])
     renderPatientPage('/patient/therapists', <PatientTherapistsPage />)
 
-    expect(await screen.findByRole('heading', { name: 'second.doctor@example.com' }))
-      .toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'second.doctor@example.com' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Ви прийняли запрошення цього лікаря.')).toBeInTheDocument()
     expect(listPatientAssignments).not.toHaveBeenCalled()
   })
 
   it('uses the assignment patient ID to load doctors when invitations are unavailable', async () => {
-    vi.mocked(listPatientInvitations).mockRejectedValueOnce(new Error('Не вдалося завантажити запрошення'))
+    vi.mocked(listPatientInvitations).mockRejectedValueOnce(
+      new Error('Не вдалося завантажити запрошення'),
+    )
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
     vi.mocked(listPatientTherapists).mockResolvedValue([{ id: 'therapist-2', role: 'therapist' }])
     renderPatientPage('/patient/therapists', <PatientTherapistsPage />)
 
     expect(await screen.findByRole('heading', { name: 'therapist-2' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити запрошення')
-    expect(listPatientTherapists).toHaveBeenCalledWith(patientAssignment.patient_id, expect.anything())
+    expect(listPatientTherapists).toHaveBeenCalledWith(
+      patientAssignment.patient_id,
+      expect.anything(),
+    )
   })
 
   it('loads invitations independently and reuses them while navigating to and from doctors', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientInvitations).mockResolvedValue([acceptedInvitation])
     let finishDoctors!: (doctors: Awaited<ReturnType<typeof listPatientTherapists>>) => void
-    vi.mocked(listPatientTherapists).mockImplementationOnce(() => new Promise((resolve) => {
-      finishDoctors = resolve
-    }))
+    vi.mocked(listPatientTherapists).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishDoctors = resolve
+        }),
+    )
     renderWithAuth(
       <StrictMode>
         <PatientWorkspaceProvider>
@@ -593,9 +615,12 @@ describe('Patient access and cabinet pages', () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
     let finishQuestions!: (questions: HelpRequest[]) => void
-    vi.mocked(listMyHelpRequests).mockImplementationOnce(() => new Promise((resolve) => {
-      finishQuestions = resolve
-    }))
+    vi.mocked(listMyHelpRequests).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishQuestions = resolve
+        }),
+    )
     renderPatientPage('/patient/exercises', <PatientExercisesPage />)
 
     await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
@@ -639,7 +664,12 @@ describe('Patient access and cabinet pages', () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([
       patientAssignment,
-      { ...patientAssignment, id: 'assignment-2', exercise: { ...patientAssignment.exercise, name: 'Пасивне розгинання' }, status: 'completed' },
+      {
+        ...patientAssignment,
+        id: 'assignment-2',
+        exercise: { ...patientAssignment.exercise, name: 'Пасивне розгинання' },
+        status: 'completed',
+      },
     ])
     renderPatientPage('/patient/exercises', <PatientExercisesPage />)
 
@@ -657,7 +687,10 @@ describe('Patient access and cabinet pages', () => {
     vi.mocked(listPatientAssignments).mockResolvedValue([
       {
         ...patientAssignment,
-        exercise: { ...patientAssignment.exercise, reference_video_key: 'videos/u/' + 'a'.repeat(32) + '.mp4' },
+        exercise: {
+          ...patientAssignment.exercise,
+          reference_video_key: 'videos/u/' + 'a'.repeat(32) + '.mp4',
+        },
       },
     ])
     renderPatientPage('/patient/exercises', <PatientExercisesPage />)
@@ -672,17 +705,15 @@ describe('Patient access and cabinet pages', () => {
   it('shows an empty state when no exercises have been assigned', async () => {
     renderPatientPage('/patient/exercises', <PatientExercisesPage />)
 
-    expect(await screen.findByRole('heading', { name: 'Призначень поки немає' }))
-      .toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Призначень поки немає' }),
+    ).toBeInTheDocument()
   })
 
   it('saves a completed session with a pain score and confirms success', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
-    renderPatientPage(
-      '/patient/exercises/assignment-1/execute',
-      <PatientExerciseExecutionPage />,
-    )
+    renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
 
     await user.selectOptions(
       await screen.findByLabelText('Рівень болю після вправи (необов’язково)'),
@@ -690,23 +721,18 @@ describe('Patient access and cabinet pages', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Завершити без відео' }))
 
-    expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
-      .toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Виконання записано' })).toBeInTheDocument()
     expect(completePatientAssignment).toHaveBeenCalledWith('assignment-1', { pain_score: 7 })
   })
 
   it('saves a completed session without an optional pain score', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
-    renderPatientPage(
-      '/patient/exercises/assignment-1/execute',
-      <PatientExerciseExecutionPage />,
-    )
+    renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
 
     await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
-    expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
-      .toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Виконання записано' })).toBeInTheDocument()
     expect(completePatientAssignment).toHaveBeenCalledWith('assignment-1', {})
   })
 
@@ -714,10 +740,7 @@ describe('Patient access and cabinet pages', () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
     vi.mocked(completePatientAssignment).mockRejectedValueOnce(new Error('Збереження не вдалося'))
-    renderPatientPage(
-      '/patient/exercises/assignment-1/execute',
-      <PatientExerciseExecutionPage />,
-    )
+    renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
 
     await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
@@ -728,10 +751,7 @@ describe('Patient access and cabinet pages', () => {
   it('submits a trimmed question to the doctor after saving the session', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
-    renderPatientPage(
-      '/patient/exercises/assignment-1/execute',
-      <PatientExerciseExecutionPage />,
-    )
+    renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
     await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
 
     await user.type(await screen.findByLabelText('Ваше запитання'), '  Потрібна порада  ')
@@ -745,10 +765,7 @@ describe('Patient access and cabinet pages', () => {
     const user = userEvent.setup()
     vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
     vi.mocked(createHelpRequest).mockRejectedValueOnce(new Error('Не вдалося надіслати запитання'))
-    renderPatientPage(
-      '/patient/exercises/assignment-1/execute',
-      <PatientExerciseExecutionPage />,
-    )
+    renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
     await user.click(await screen.findByRole('button', { name: 'Завершити без відео' }))
     const question = await screen.findByLabelText('Ваше запитання')
     await user.type(question, 'Допоможіть, будь ласка')
@@ -761,10 +778,7 @@ describe('Patient access and cabinet pages', () => {
   describe('video analysis', () => {
     const openExecution = async () => {
       vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
-      renderPatientPage(
-        '/patient/exercises/assignment-1/execute',
-        <PatientExerciseExecutionPage />,
-      )
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
       const user = userEvent.setup()
       const input = await screen.findByLabelText(/Відеофайл/)
       await user.upload(input, new File(['video'], 'squat.mp4', { type: 'video/mp4' }))
@@ -779,8 +793,7 @@ describe('Patient access and cabinet pages', () => {
       )
       await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
 
-      expect(await screen.findByRole('heading', { name: 'Виконання записано' }))
-        .toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Виконання записано' })).toBeInTheDocument()
       expect(startComparison).toHaveBeenCalledWith({
         assignment_id: 'assignment-1',
         patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
@@ -950,8 +963,15 @@ describe('Shared account data', () => {
 
   it('updates the shared profile with the automatic role request from registration', async () => {
     window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    vi.mocked(requestTherapistRole).mockResolvedValueOnce({ ...currentPatient, pending_role: 'therapist' })
-    render(<AuthProvider><ProfilePage /></AuthProvider>)
+    vi.mocked(requestTherapistRole).mockResolvedValueOnce({
+      ...currentPatient,
+      pending_role: 'therapist',
+    })
+    render(
+      <AuthProvider>
+        <ProfilePage />
+      </AuthProvider>,
+    )
 
     expect(await screen.findByRole('heading', { name: /Запит на роль «/ })).toBeInTheDocument()
     expect(requestTherapistRole).toHaveBeenCalledTimes(1)
@@ -963,7 +983,10 @@ describe('Therapist questions', () => {
   it('shares one request and updates the header badge when a reply is sent', async () => {
     const user = userEvent.setup()
     vi.mocked(listNeedsAttention).mockResolvedValueOnce([helpRequest])
-    vi.mocked(replyToHelpRequest).mockResolvedValue({ ...helpRequest, reply: 'Так, усе правильно.' })
+    vi.mocked(replyToHelpRequest).mockResolvedValue({
+      ...helpRequest,
+      reply: 'Так, усе правильно.',
+    })
     renderWithAuth(
       <TherapistQuestionsProvider>
         <Header />
@@ -977,7 +1000,10 @@ describe('Therapist questions', () => {
     expect(screen.getByLabelText('1 нових запитань')).toBeInTheDocument()
     expect(listNeedsAttention).toHaveBeenCalledTimes(1)
 
-    await user.type(screen.getByRole('textbox', { name: 'Відповідь пацієнту' }), 'Так, усе правильно.')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Відповідь пацієнту' }),
+      'Так, усе правильно.',
+    )
     await user.click(screen.getByRole('button', { name: 'Відповісти' }))
 
     expect(await screen.findByText('Нових запитань від пацієнтів немає.')).toBeInTheDocument()

@@ -2,8 +2,7 @@
   color-scheme: light;
 
   --font-sans:
-    'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial,
-    sans-serif;
+    'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
 
   --bg: #f4f8fb;
@@ -63,8 +62,7 @@ body {
   color: var(--text);
   background:
     radial-gradient(1100px 600px at 88% -12%, rgba(14, 159, 143, 0.1), transparent 62%),
-    radial-gradient(900px 520px at -8% 4%, rgba(18, 102, 166, 0.08), transparent 58%),
-    var(--bg);
+    radial-gradient(900px 520px at -8% 4%, rgba(18, 102, 166, 0.08), transparent 58%), var(--bg);
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;

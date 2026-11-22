@@ -124,7 +124,9 @@
   align-items: center;
   gap: 18px;
   padding: 22px;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 .exercise-card--complete {

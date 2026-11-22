@@ -38,10 +38,16 @@ export function NeedsAttentionSection() {
           <h2 id="needs-attention-title">Потребують уваги ({requests.length})</h2>
           <p>Запитання пацієнтів після виконання вправ. Після відповіді запит зникає зі списку.</p>
         </div>
-        <span className="card__header-icon"><AlertTriangleIcon /></span>
+        <span className="card__header-icon">
+          <AlertTriangleIcon />
+        </span>
       </div>
       {loadError && (
-        <ErrorMessage title="Помилка" message={loadError} onRetry={() => void load({ refresh: true })} />
+        <ErrorMessage
+          title="Помилка"
+          message={loadError}
+          onRetry={() => void load({ refresh: true })}
+        />
       )}
       {replyError && <ErrorMessage title="Помилка" message={replyError} />}
       {loading ? (

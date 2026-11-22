@@ -73,7 +73,11 @@ export function useVideoAnalysis(assignmentId: string | undefined, onDone?: () =
       let taskId: string
       try {
         taskId = (
-          await startComparison({ assignment_id: assignmentId, patient_key: key, pain_score: painScore })
+          await startComparison({
+            assignment_id: assignmentId,
+            patient_key: key,
+            pain_score: painScore,
+          })
         ).task_id
       } catch (reason: unknown) {
         if (!isCurrent()) return

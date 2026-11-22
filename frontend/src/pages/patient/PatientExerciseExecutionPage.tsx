@@ -13,8 +13,10 @@ import { AskForHelpForm } from './AskForHelpForm'
 import { WorkspaceError } from './WorkspaceError'
 
 const ANALYSIS_NOTICES: Record<string, string> = {
-  rerecord: 'Обрані частини тіла погано видно на відео. Запишіть відео ще раз так, щоб вас було видно повністю.',
-  no_repetitions: 'На відео не вдалося знайти повторень вправи. Запишіть ще раз і виконайте вправу кілька разів.',
+  rerecord:
+    'Обрані частини тіла погано видно на відео. Запишіть відео ще раз так, щоб вас було видно повністю.',
+  no_repetitions:
+    'На відео не вдалося знайти повторень вправи. Запишіть ще раз і виконайте вправу кілька разів.',
   failed: 'Не вдалося проаналізувати відео. Спробуйте ще раз.',
 }
 
@@ -26,7 +28,10 @@ export function PatientExerciseExecutionPage() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [recordingFile, setRecordingFile] = useState<File | null>(null)
   const recordingInputRef = useRef<HTMLInputElement>(null)
-  const analysis = useVideoAnalysis(assignmentId, () => void loadAssignments({ refresh: true, background: true }))
+  const analysis = useVideoAnalysis(
+    assignmentId,
+    () => void loadAssignments({ refresh: true, background: true }),
+  )
   const assignment = assignments?.find((item) => item.id === assignmentId)
   const saving = actionPending === assignmentId
   const analysing = analysis.phase === 'uploading' || analysis.phase === 'analyzing'
@@ -91,7 +96,10 @@ export function PatientExerciseExecutionPage() {
       />
       <WorkspaceError resource="assignments" />
 
-      <section className="card exercise-execution__details" aria-labelledby="execution-instructions">
+      <section
+        className="card exercise-execution__details"
+        aria-labelledby="execution-instructions"
+      >
         <div>
           <p className="eyebrow">Призначення лікаря</p>
           <h2 id="execution-instructions">{assignment.repetitions} повторень</h2>

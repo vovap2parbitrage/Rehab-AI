@@ -36,9 +36,13 @@ export function ExerciseForm({
       <div className="card__header">
         <div>
           <h2>{isEditing ? 'Редагування вправи' : 'Нова вправа'}</h2>
-          <p>{isEditing ? 'Змініть назву або опис вправи.' : 'Додайте назву, опис і відео вправи.'}</p>
+          <p>
+            {isEditing ? 'Змініть назву або опис вправи.' : 'Додайте назву, опис і відео вправи.'}
+          </p>
         </div>
-        <span className="card__header-icon"><CheckIcon /></span>
+        <span className="card__header-icon">
+          <CheckIcon />
+        </span>
       </div>
 
       <form className="therapist-form" onSubmit={onSubmit}>

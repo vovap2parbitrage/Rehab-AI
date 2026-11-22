@@ -11,28 +11,33 @@ export function useProfileRoleRequest() {
   const [roleRequestError, setRoleRequestError] = useState<string | null>(null)
   const [roleRequestSuccess, setRoleRequestSuccess] = useState<string | null>(null)
 
-  const submitRoleRequest = useCallback(async (fromRegistration: boolean) => {
-    if (requestInFlight.current) return
-    requestInFlight.current = true
-    setIsRequestingRole(true)
-    setRoleRequestError(null)
-    setRoleRequestSuccess(null)
+  const submitRoleRequest = useCallback(
+    async (fromRegistration: boolean) => {
+      if (requestInFlight.current) return
+      requestInFlight.current = true
+      setIsRequestingRole(true)
+      setRoleRequestError(null)
+      setRoleRequestSuccess(null)
 
-    try {
-      const updated = await requestTherapistRole()
-      updateUser(updated)
-      setRoleRequestSuccess(
-        fromRegistration
-          ? 'Ви обрали роль лікаря під час реєстрації. Запит на роль терапевта надіслано — адміністратор розгляне його найближчим часом.'
-          : 'Запит на роль терапевта надіслано. Адміністратор розгляне його найближчим часом.',
-      )
-    } catch (caught) {
-      setRoleRequestError(getErrorMessage(caught, 'Не вдалося надіслати запит на роль терапевта.'))
-    } finally {
-      requestInFlight.current = false
-      setIsRequestingRole(false)
-    }
-  }, [updateUser])
+      try {
+        const updated = await requestTherapistRole()
+        updateUser(updated)
+        setRoleRequestSuccess(
+          fromRegistration
+            ? 'Ви обрали роль лікаря під час реєстрації. Запит на роль терапевта надіслано — адміністратор розгляне його найближчим часом.'
+            : 'Запит на роль терапевта надіслано. Адміністратор розгляне його найближчим часом.',
+        )
+      } catch (caught) {
+        setRoleRequestError(
+          getErrorMessage(caught, 'Не вдалося надіслати запит на роль терапевта.'),
+        )
+      } finally {
+        requestInFlight.current = false
+        setIsRequestingRole(false)
+      }
+    },
+    [updateUser],
+  )
 
   useEffect(() => {
     if (!user || userLoading || userError) return
@@ -41,7 +46,12 @@ export function useProfileRoleRequest() {
     queueMicrotask(() => {
       if (!active) return
       const intent = consumeRegistrationRole()
-      if (intent === 'therapist' && user.role === 'patient' && user.pending_role === null && user.is_active) {
+      if (
+        intent === 'therapist' &&
+        user.role === 'patient' &&
+        user.pending_role === null &&
+        user.is_active
+      ) {
         void submitRoleRequest(true)
       }
     })

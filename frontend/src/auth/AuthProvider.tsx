@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     : null
   const currentUser = session !== null && result?.session === session ? result : undefined
   const userLoading = session !== null && (!userRequest.settled || currentUser === undefined)
-  const userError = userLoading ? null : currentUser?.error ?? null
+  const userError = userLoading ? null : (currentUser?.error ?? null)
 
   useEffect(() => {
     let active = true
@@ -131,34 +131,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const user = await fetchCurrentUser({ signal })
         if (!signal.aborted) {
-          setUserRequest((current) => current.attempt === attempt
-            ? { attempt, settled: true, result: { session, user, error: null } }
-            : current)
+          setUserRequest((current) =>
+            current.attempt === attempt
+              ? { attempt, settled: true, result: { session, user, error: null } }
+              : current,
+          )
         }
       } catch (caught: unknown) {
         if (signal.aborted) return
 
-        const error = caught instanceof ApiError
-          ? caught
-          : new ApiError('Не вдалося завантажити дані облікового запису.', 'unknown')
+        const error =
+          caught instanceof ApiError
+            ? caught
+            : new ApiError('Не вдалося завантажити дані облікового запису.', 'unknown')
 
-        if (canRetry && (
-          error.kind === 'network' || error.kind === 'session' ||
-          error.kind === 'unauthorized' || error.kind === 'unavailable' || error.kind === 'server' ||
-          error.status >= 500
-        )) {
+        if (
+          canRetry &&
+          (error.kind === 'network' ||
+            error.kind === 'session' ||
+            error.kind === 'unauthorized' ||
+            error.kind === 'unavailable' ||
+            error.kind === 'server' ||
+            error.status >= 500)
+        ) {
           retryTimer = window.setTimeout(() => void loadUser(false), USER_RETRY_DELAY_MS)
           return
         }
 
         setUserRequest((current) => {
           if (current.attempt !== attempt) return current
-          const retainUser = current.result?.session === session &&
-            !isSessionError(error) && error.kind !== 'forbidden'
+          const retainUser =
+            current.result?.session === session &&
+            !isSessionError(error) &&
+            error.kind !== 'forbidden'
           return {
             attempt,
             settled: true,
-            result: { session, user: retainUser ? current.result?.user ?? null : null, error },
+            result: { session, user: retainUser ? (current.result?.user ?? null) : null, error },
           }
         })
       }
@@ -175,19 +184,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRequest((current) => ({ ...current, attempt: current.attempt + 1, settled: false }))
   }, [])
 
-  const updateUser = useCallback((user: UserProfile) => {
-    setUserRequest((current) => {
-      if (session === null || current.result?.session !== session || current.result.user?.id !== user.id) {
-        return current
-      }
+  const updateUser = useCallback(
+    (user: UserProfile) => {
+      setUserRequest((current) => {
+        if (
+          session === null ||
+          current.result?.session !== session ||
+          current.result.user?.id !== user.id
+        ) {
+          return current
+        }
 
-      return {
-        attempt: current.attempt + 1,
-        settled: true,
-        result: { session, user, error: null },
-      }
-    })
-  }, [session])
+        return {
+          attempt: current.attempt + 1,
+          settled: true,
+          result: { session, user, error: null },
+        }
+      })
+    },
+    [session],
+  )
 
   const login = useCallback(async (redirectPath?: string) => {
     await loginWithKeycloak(redirectPath)

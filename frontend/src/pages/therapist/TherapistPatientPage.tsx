@@ -74,7 +74,10 @@ export function TherapistPatientPage() {
     return () => controller.abort()
   }, [patientId])
 
-  const exerciseNames = useMemo(() => new Map(exercises.map((item) => [item.id, item.name])), [exercises])
+  const exerciseNames = useMemo(
+    () => new Map(exercises.map((item) => [item.id, item.name])),
+    [exercises],
+  )
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -93,15 +96,16 @@ export function TherapistPatientPage() {
   }
 
   const handleCancel = async (assignment: Assignment) => {
-    if (!window.confirm(`Відмінити призначення «${exerciseNames.get(assignment.exercise_id)}»?`)) return
+    if (!window.confirm(`Відмінити призначення «${exerciseNames.get(assignment.exercise_id)}»?`))
+      return
     setBusy(true)
     setError(null)
     try {
       await cancelAssignment(assignment.id)
       setAssignments((current) =>
         current.map((item) =>
-          item.id === assignment.id ? { ...item, status: 'cancelled' } : item
-        )
+          item.id === assignment.id ? { ...item, status: 'cancelled' } : item,
+        ),
       )
       setNotice('Призначення відмінено.')
     } catch (reason: unknown) {
@@ -141,7 +145,11 @@ export function TherapistPatientPage() {
         title={`${patient.first_name} ${patient.last_name}`}
         lead={patient.notes || 'Персональний план реабілітації та активні призначення.'}
       />
-      {notice && <div className="success-message" role="status">{notice}</div>}
+      {notice && (
+        <div className="success-message" role="status">
+          {notice}
+        </div>
+      )}
       {error && <ErrorMessage title="Помилка" message={error} />}
       <div className="workspace-summary-grid therapist-page__grid">
         <section className="card">
@@ -150,7 +158,9 @@ export function TherapistPatientPage() {
               <h2>Призначити план</h2>
               <p>Оберіть вправу та параметри занять.</p>
             </div>
-            <span className="card__header-icon"><CalendarIcon /></span>
+            <span className="card__header-icon">
+              <CalendarIcon />
+            </span>
           </div>
           <form className="therapist-form" onSubmit={handleSubmit}>
             <label className="therapist-form__field">
@@ -162,7 +172,9 @@ export function TherapistPatientPage() {
               >
                 <option value="">Оберіть вправу</option>
                 {exercises.map((item) => (
-                  <option value={item.id} key={item.id}>{item.name}</option>
+                  <option value={item.id} key={item.id}>
+                    {item.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -172,7 +184,9 @@ export function TherapistPatientPage() {
                 type="number"
                 min={1}
                 value={form.duration_weeks}
-                onChange={(event) => setForm({ ...form, duration_weeks: Number(event.target.value) })}
+                onChange={(event) =>
+                  setForm({ ...form, duration_weeks: Number(event.target.value) })
+                }
                 required
               />
             </label>
@@ -184,12 +198,14 @@ export function TherapistPatientPage() {
                     <input
                       type="checkbox"
                       checked={form.weekdays.includes(index)}
-                      onChange={() => setForm({
-                        ...form,
-                        weekdays: form.weekdays.includes(index)
-                          ? form.weekdays.filter((item) => item !== index)
-                          : [...form.weekdays, index].sort((a, b) => a - b),
-                      })}
+                      onChange={() =>
+                        setForm({
+                          ...form,
+                          weekdays: form.weekdays.includes(index)
+                            ? form.weekdays.filter((item) => item !== index)
+                            : [...form.weekdays, index].sort((a, b) => a - b),
+                        })
+                      }
                     />
                     {day}
                   </label>
@@ -237,8 +253,12 @@ export function TherapistPatientPage() {
               {assignments.map((item) => (
                 <div className="therapist-assignment" key={item.id}>
                   <strong>{exerciseNames.get(item.exercise_id) || 'Вправа'}</strong>
-                  <span>{item.repetitions} повторень · {formatWeekdays(item.weekdays)}</span>
-                  <small>{item.starts_on} · {item.duration_weeks} тиж.</small>
+                  <span>
+                    {item.repetitions} повторень · {formatWeekdays(item.weekdays)}
+                  </span>
+                  <small>
+                    {item.starts_on} · {item.duration_weeks} тиж.
+                  </small>
                   <span>· стан: {item.status}</span>
                   {item.status === 'active' && (
                     <button

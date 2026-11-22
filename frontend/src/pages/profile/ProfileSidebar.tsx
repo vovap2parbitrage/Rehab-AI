@@ -53,9 +53,7 @@ export function ProfileSidebar({
           <ShieldCheckIcon />
         </span>
         <h2 id="session-title">Захищена сесія</h2>
-        <p>
-          Ви увійшли через захищений сервіс.
-        </p>
+        <p>Ви увійшли через захищений сервіс.</p>
 
         {logoutError && <p className="form-error">{logoutError}</p>}
 

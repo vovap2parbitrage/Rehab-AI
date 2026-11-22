@@ -22,9 +22,11 @@ export interface PatientWorkspaceContextValue extends PatientWorkspaceResources 
   actionError: { resource: PatientActionResource; message: string } | null
   clearActionError: (resource: PatientActionResource) => void
   respondToInvitation: (invitationId: string, status: 'accepted' | 'declined') => void
-  completeAssignment: (assignmentId: string, painScore: number | null) => Promise<PatientSession | null>
+  completeAssignment: (
+    assignmentId: string,
+    painScore: number | null,
+  ) => Promise<PatientSession | null>
   askForHelp: (sessionId: string, message: string) => Promise<boolean>
 }
 
-export const PatientWorkspaceContext =
-  createContext<PatientWorkspaceContextValue | null>(null)
+export const PatientWorkspaceContext = createContext<PatientWorkspaceContextValue | null>(null)

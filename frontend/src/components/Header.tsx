@@ -9,7 +9,16 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function Header() {
-  const { initialized, authenticated, tokenParsed, initError, role, userLoading, userError, refreshUser } = useAuth()
+  const {
+    initialized,
+    authenticated,
+    tokenParsed,
+    initError,
+    role,
+    userLoading,
+    userError,
+    refreshUser,
+  } = useAuth()
   const displayName = getDisplayName(tokenParsed)
   const initials = getInitials(displayName)
   const isTherapist = role === 'therapist' || role === 'admin'

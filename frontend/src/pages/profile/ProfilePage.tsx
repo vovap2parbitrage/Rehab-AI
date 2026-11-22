@@ -13,13 +13,17 @@ import { ProfileSidebar } from './ProfileSidebar'
 import { useProfileRoleRequest } from './useProfileRoleRequest'
 
 export function ProfilePage() {
-  const { tokenParsed, login, logout, user: profile, userLoading, userError: error, refreshUser } = useAuth()
   const {
-    isRequestingRole,
-    roleRequestError,
-    roleRequestSuccess,
-    handleRoleRequest,
-  } = useProfileRoleRequest()
+    tokenParsed,
+    login,
+    logout,
+    user: profile,
+    userLoading,
+    userError: error,
+    refreshUser,
+  } = useAuth()
+  const { isRequestingRole, roleRequestError, roleRequestSuccess, handleRoleRequest } =
+    useProfileRoleRequest()
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
@@ -33,9 +37,7 @@ export function ProfilePage() {
       await logout()
     } catch (caught) {
       console.error('Logout failed', caught)
-      setLogoutError(
-        'Не вдалося коректно завершити сесію. Оновіть сторінку та спробуйте ще раз.',
-      )
+      setLogoutError('Не вдалося коректно завершити сесію. Оновіть сторінку та спробуйте ще раз.')
       setIsLoggingOut(false)
     }
   }

@@ -39,7 +39,9 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
           <h2 id="patient-questions-title">Запитання пацієнта ({items.length})</h2>
           <p>Останнє запитання після виконання ваших призначень.</p>
         </div>
-        <span className="card__header-icon"><MailIcon /></span>
+        <span className="card__header-icon">
+          <MailIcon />
+        </span>
       </div>
       {error && <ErrorMessage message={error} />}
       {loading ? (
