@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -15,3 +15,4 @@ class PatientCreate(BaseModel):
 
 class PatientRead(PatientCreate):
     id: UUID = Field(default_factory=uuid4)
+    archived_at: datetime | None = None

@@ -17,6 +17,7 @@ from app.services.patient_access import (
     get_patient_for_therapist,
     get_patient_for_user,
     get_patient_profile,
+    require_not_archived,
     treated_by,
 )
 
@@ -110,6 +111,7 @@ def create_assignment(
             raise HTTPException(status_code=404, detail="Patient not found")
     else:
         get_patient_for_therapist(payload.patient_id, user, db)
+    require_not_archived(db, payload.patient_id, user)
     if db.get(Exercise, payload.exercise_id) is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
 

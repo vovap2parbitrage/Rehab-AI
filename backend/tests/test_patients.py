@@ -176,4 +176,4 @@ def test_patient_schema_matches_model_columns():
 
     columns = {column.name for column in Patient.__table__.columns}
 
-    assert set(PatientRead.model_fields) - {"therapist_ids"} <= columns
+    assert set(PatientRead.model_fields) - {"therapist_ids", "archived_at"} <= columns

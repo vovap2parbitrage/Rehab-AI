@@ -1,10 +1,13 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role
 from app.models.patient import Patient
+from app.models.patient_therapist import patient_therapist_table
 from app.models.user import User
 from app.schemas.patient import PatientRead
 
@@ -15,8 +18,38 @@ def is_patient_therapist(patient: Patient, user: User) -> bool:
 
 
 def treated_by(therapist_id: UUID | None):
-    """SQL condition: the patient is treated by this therapist."""
-    return Patient.therapists.any(User.id == therapist_id)
+    """SQL condition: the patient is on this therapist's active list (not archived)."""
+    return Patient.therapists.any(
+        and_(
+            User.id == therapist_id,
+            patient_therapist_table.c.archived_at.is_(None),
+        )
+    )
+
+
+def archived_by(therapist_id: UUID | None):
+    """SQL condition: this therapist has archived the patient."""
+    return Patient.therapists.any(
+        and_(
+            User.id == therapist_id,
+            patient_therapist_table.c.archived_at.is_not(None),
+        )
+    )
+
+
+def archived_at_for(db: Session, patient_id: UUID, therapist_id: UUID) -> datetime | None:
+    """When this therapist archived the patient, or None if not archived (or not linked)."""
+    return db.execute(
+        select(patient_therapist_table.c.archived_at).where(
+            patient_therapist_table.c.patient_id == patient_id,
+            patient_therapist_table.c.therapist_id == therapist_id,
+        )
+    ).scalar_one_or_none()
+
+
+def require_not_archived(db: Session, patient_id: UUID, user: User) -> None:
+    if archived_at_for(db, patient_id, user.id) is not None:
+        raise HTTPException(status_code=409, detail="Patient is archived. Restore the patient first")
 
 
 def get_patient_profile(db: Session, user: User) -> Patient:
@@ -37,7 +70,7 @@ def _has_access(patient: Patient, user: User, roles: set[str]) -> bool:
     return Role.PATIENT.value in roles and patient.user_id == user.id
 
 
-def _to_schema(patient: Patient) -> PatientRead:
+def _to_schema(patient: Patient, archived_at: datetime | None = None) -> PatientRead:
     return PatientRead(
         id=patient.id,
         user_id=patient.user_id,
@@ -46,6 +79,7 @@ def _to_schema(patient: Patient) -> PatientRead:
         last_name=patient.last_name,
         date_of_birth=patient.date_of_birth,
         notes=patient.notes,
+        archived_at=archived_at,
     )
 
 
@@ -75,7 +109,7 @@ def require_patient_access(
     if not _has_access(patient, user, roles):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    return _to_schema(patient)
+    return _to_schema(patient, archived_at_for(db, patient.id, user.id))
 
 
 def get_patient_for_therapist(

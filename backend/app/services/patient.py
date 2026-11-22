@@ -1,16 +1,27 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import and_, update
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role
+from app.core.statuses import AssignmentStatus
+from app.models.assignment import Assignment
 from app.models.patient import Patient
+from app.models.patient_therapist import patient_therapist_table
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
-from app.services.patient_access import is_patient_therapist, require_patient_access, treated_by
+from app.services.patient_access import (
+    archived_at_for,
+    archived_by,
+    is_patient_therapist,
+    require_patient_access,
+    treated_by,
+)
 
 
-def _to_read(patient: Patient) -> PatientRead:
+def _to_read(patient: Patient, archived_at: datetime | None = None) -> PatientRead:
     return PatientRead(
         id=patient.id,
         user_id=patient.user_id,
@@ -19,10 +30,24 @@ def _to_read(patient: Patient) -> PatientRead:
         last_name=patient.last_name,
         date_of_birth=patient.date_of_birth,
         notes=patient.notes,
+        archived_at=archived_at,
     )
 
 
-def list_patients(db: Session, *, is_admin: bool, therapist_id: UUID | None) -> list[PatientRead]:
+def list_patients(
+    db: Session,
+    *,
+    is_admin: bool,
+    therapist_id: UUID | None,
+    archived: bool = False,
+) -> list[PatientRead]:
+    """Active patients, or with ``archived`` the ones this therapist has archived."""
+    if archived:
+        patients = db.query(Patient).filter(archived_by(therapist_id)).all()
+        archived_at = {
+            patient.id: archived_at_for(db, patient.id, therapist_id) for patient in patients
+        }
+        return [_to_read(patient, archived_at[patient.id]) for patient in patients]
     query = db.query(Patient)
     if not is_admin:
         query = query.filter(treated_by(therapist_id))
@@ -101,17 +126,51 @@ def list_patient_therapists(
     ]
 
 
-def remove_patient_from_therapist(
-    db: Session,
-    patient_id: UUID,
-    user: User,
-) -> None:
+def _own_patient(db: Session, patient_id: UUID, user: User) -> Patient:
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
-    if user.role != Role.ADMIN.value and not is_patient_therapist(patient, user):
+    if not is_patient_therapist(patient, user):
         raise HTTPException(status_code=403, detail="Patient is not assigned to you")
-    patient.therapists = [
-        therapist for therapist in patient.therapists if therapist.id != user.id
-    ]
+    return patient
+
+
+def _link(patient_id: UUID, therapist_id: UUID):
+    return and_(
+        patient_therapist_table.c.patient_id == patient_id,
+        patient_therapist_table.c.therapist_id == therapist_id,
+    )
+
+
+def archive_patient(db: Session, patient_id: UUID, user: User) -> None:
+    """Move the patient off this therapist's active list and cancel their active assignments.
+
+    Only this therapist's link and assignments change; other therapists are unaffected.
+    """
+    _own_patient(db, patient_id, user)
+    db.execute(
+        update(patient_therapist_table)
+        .where(_link(patient_id, user.id), patient_therapist_table.c.archived_at.is_(None))
+        .values(archived_at=datetime.now(UTC))
+    )
+    db.execute(
+        update(Assignment)
+        .where(
+            Assignment.patient_id == patient_id,
+            Assignment.therapist_id == user.id,
+            Assignment.status == AssignmentStatus.ACTIVE.value,
+        )
+        .values(status=AssignmentStatus.CANCELLED.value)
+    )
+    db.commit()
+
+
+def restore_patient(db: Session, patient_id: UUID, user: User) -> None:
+    """Return an archived patient to this therapist's active list."""
+    _own_patient(db, patient_id, user)
+    db.execute(
+        update(patient_therapist_table)
+        .where(_link(patient_id, user.id))
+        .values(archived_at=None)
+    )
     db.commit()
