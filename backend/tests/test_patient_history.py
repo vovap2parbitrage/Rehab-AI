@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.models.assignment import Assignment
+from app.services.exercise import current_version
 from app.models.exercise import Exercise
 from app.models.session import TrainingSession
 from app.schemas.history import HistoryPeriod
@@ -21,6 +22,7 @@ def add_assignment(db_session):
         assignment = Assignment(
             patient_id=patient.id,
             exercise_id=exercise.id,
+            exercise_version_id=current_version(db_session, exercise).id,
             repetitions=10,
             duration_weeks=duration_weeks,
             weekdays=weekdays or [0, 1, 2],
