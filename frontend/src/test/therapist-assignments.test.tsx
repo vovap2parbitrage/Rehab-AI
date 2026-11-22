@@ -16,6 +16,7 @@ import {
 import { ApiError } from '../api/client'
 import { getPatientHistory, type PatientHistory } from '../api/history'
 import { listPatientHelpRequests } from '../api/helpRequests'
+import { listPatientSessions } from '../api/sessions'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { getLocalDate, nextSessionDate, weekdayOf } from '../lib/assignmentSchedule'
 
@@ -35,6 +36,11 @@ vi.mock('../api/history', () => ({
 
 vi.mock('../api/helpRequests', () => ({
   listPatientHelpRequests: vi.fn(),
+}))
+
+vi.mock('../api/sessions', () => ({
+  listPatientSessions: vi.fn(),
+  getSessionVideoUrl: vi.fn(),
 }))
 
 const patient: Patient = {
@@ -104,6 +110,7 @@ beforeEach(() => {
   vi.mocked(listAssignments).mockResolvedValue([assignment])
   vi.mocked(getPatientHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+  vi.mocked(listPatientSessions).mockResolvedValue([])
   vi.mocked(updateAssignment).mockImplementation(async (_id, payload) => ({
     ...assignment,
     ...payload,
