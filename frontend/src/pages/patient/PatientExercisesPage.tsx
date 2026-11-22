@@ -9,6 +9,7 @@ import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { ReferenceVideo } from '../../components/ReferenceVideo'
 import { formatWeekdays, isAssignmentScheduledToday } from '../../lib/assignmentSchedule'
+import { useLocalToday } from '../../lib/useLocalToday'
 import { usePatientData } from '../../lib/usePatientWorkspace'
 import { useVideoPreview } from '../../lib/useVideoPreview'
 import { SessionDetails } from './SessionDetails'
@@ -20,6 +21,7 @@ export function PatientExercisesPage() {
   const assignments = assignmentData.data ?? []
   const helpRequests = questionData.data ?? []
   const videoPreview = useVideoPreview()
+  const today = useLocalToday()
   const [assignmentView, setAssignmentView] = useState<'today' | 'all'>('today')
   const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
   const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
@@ -28,6 +30,7 @@ export function PatientExercisesPage() {
       assignment.starts_on,
       assignment.duration_weeks,
       assignment.weekdays,
+      today,
     ),
   )
 

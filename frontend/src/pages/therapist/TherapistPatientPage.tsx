@@ -18,13 +18,13 @@ import { Loading } from '../../components/Loading'
 import { PatientHistorySection } from '../../components/history/PatientHistorySection'
 import { PageHeading } from '../../components/PageHeading'
 import { PatientQuestionsCard } from '../../components/PatientQuestionsCard'
-import { formatWeekdays, WEEKDAYS } from '../../lib/assignmentSchedule'
+import { formatWeekdays, getLocalDate, WEEKDAYS } from '../../lib/assignmentSchedule'
 import { getErrorMessage } from '../../lib/errorMessage'
-
-const today = new Date().toISOString().slice(0, 10)
+import { useLocalToday } from '../../lib/useLocalToday'
 
 export function TherapistPatientPage() {
   const { patientId } = useParams()
+  const today = useLocalToday()
   const [patient, setPatient] = useState<Patient | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -33,12 +33,12 @@ export function TherapistPatientPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [startDate, setStartDate] = useState<string | null>(null)
   const [form, setForm] = useState({
     exercise_id: '',
     duration_weeks: 4,
     weekdays: [0, 2, 4],
     repetitions: 10,
-    starts_on: today,
   })
 
   useEffect(() => {
@@ -85,7 +85,11 @@ export function TherapistPatientPage() {
     setBusy(true)
     setNotice(null)
     try {
-      const assignment = await createAssignment({ ...form, patient_id: patientId })
+      const assignment = await createAssignment({
+        ...form,
+        patient_id: patientId,
+        starts_on: startDate ?? getLocalDate(),
+      })
       setAssignments((current) => [assignment, ...current])
       setNotice('План призначено пацієнту.')
     } catch (reason: unknown) {
@@ -227,8 +231,8 @@ export function TherapistPatientPage() {
               <span>Початок *</span>
               <input
                 type="date"
-                value={form.starts_on}
-                onChange={(event) => setForm({ ...form, starts_on: event.target.value })}
+                value={startDate ?? today}
+                onChange={(event) => setStartDate(event.target.value)}
                 required
               />
             </label>

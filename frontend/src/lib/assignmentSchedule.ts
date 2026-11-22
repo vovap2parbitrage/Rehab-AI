@@ -4,15 +4,21 @@ export function formatWeekdays(weekdays: number[]): string {
   return weekdays.map((day) => WEEKDAYS[day]).join(' ')
 }
 
+export function getLocalDate(date = new Date()): string {
+  const year = String(date.getFullYear()).padStart(4, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function isAssignmentScheduledToday(
   startsOn: string,
   durationWeeks: number,
   weekdays: number[],
-  today = new Date(),
+  today = getLocalDate(),
 ): boolean {
   const start = new Date(`${startsOn}T00:00:00`)
-  const current = new Date(today)
-  current.setHours(0, 0, 0, 0)
+  const current = new Date(`${today}T00:00:00`)
   const end = new Date(start)
   end.setDate(end.getDate() + durationWeeks * 7 - 1)
 

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -31,15 +31,19 @@ import {
   createHelpRequest,
   listMyHelpRequests,
   listNeedsAttention,
+  listPatientHelpRequests,
   replyToHelpRequest,
 } from '../api/helpRequests'
-import { getMyHistory, type PatientHistory } from '../api/history'
+import { getMyHistory, getPatientHistory, type PatientHistory } from '../api/history'
+import { createAssignment, getPatient, listAssignments, listExercises } from '../api/therapist'
 import { ApiError } from '../api/client'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { fetchCurrentUser, requestTherapistRole, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
+import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
+import { MOCK_ASSIGNMENT, MOCK_EXERCISE, MOCK_PATIENT } from '../data/therapistMocks'
 
 vi.mock('../api/patient', () => ({
   completePatientAssignment: vi.fn(),
@@ -52,6 +56,13 @@ vi.mock('../api/patient', () => ({
 vi.mock('../api/history', () => ({
   getMyHistory: vi.fn(),
   getPatientHistory: vi.fn(),
+}))
+
+vi.mock('../api/therapist', () => ({
+  createAssignment: vi.fn(),
+  getPatient: vi.fn(),
+  listAssignments: vi.fn(),
+  listExercises: vi.fn(),
 }))
 
 vi.mock('../api/comparisons', () => ({
@@ -72,6 +83,7 @@ vi.mock('../api/helpRequests', () => ({
   createHelpRequest: vi.fn(),
   listMyHelpRequests: vi.fn(),
   listNeedsAttention: vi.fn(),
+  listPatientHelpRequests: vi.fn(),
   replyToHelpRequest: vi.fn(),
 }))
 
@@ -927,6 +939,73 @@ describe('Patient access and cabinet pages', () => {
     await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
 
     await waitFor(() => expect(listPatientInvitations).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('Local assignment dates', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 10, 22, 23, 59, 59))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('refreshes the patient’s schedule at local midnight', async () => {
+    vi.mocked(listPatientAssignments).mockResolvedValue([
+      { ...patientAssignment, starts_on: '2026-11-23', weekdays: [0] },
+    ])
+    await act(async () => {
+      renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+    })
+
+    expect(screen.getByText('На сьогодні вправ немає')).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(1_000))
+
+    expect(
+      screen.getByRole('heading', { name: patientAssignment.exercise.name }),
+    ).toBeInTheDocument()
+  })
+
+  it('updates the therapist’s default date and submits a manually selected date', async () => {
+    vi.mocked(getPatient).mockResolvedValue(MOCK_PATIENT)
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listAssignments).mockResolvedValue([])
+    vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+    vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
+    vi.mocked(createAssignment).mockResolvedValue({ ...MOCK_ASSIGNMENT, starts_on: '2026-11-26' })
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={[`/therapist/patients/${MOCK_PATIENT.id}`]}>
+          <Routes>
+            <Route path="/therapist/patients/:patientId" element={<TherapistPatientPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+    })
+
+    const dateInput = screen.getByLabelText('Початок *')
+    expect(dateInput).toHaveValue('2026-11-22')
+
+    vi.setSystemTime(new Date(2026, 10, 23, 0, 1))
+    fireEvent.focus(window)
+    expect(dateInput).toHaveValue('2026-11-23')
+
+    fireEvent.change(dateInput, { target: { value: '2026-11-26' } })
+    vi.setSystemTime(new Date(2026, 10, 24, 0, 1))
+    fireEvent.focus(window)
+    expect(dateInput).toHaveValue('2026-11-26')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Призначити план' }))
+    })
+
+    expect(createAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({ starts_on: '2026-11-26' }),
+    )
   })
 })
 
