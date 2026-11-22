@@ -1,6 +1,7 @@
-import { useContext, useEffect } from 'react'
+import { useContext } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { PatientWorkspaceContext, type PatientWorkspaceResources } from './patientWorkspaceContext'
+import { useRefreshOnEntry } from './useCachedResource'
 
 export function usePatientWorkspace() {
   const context = useContext(PatientWorkspaceContext)
@@ -15,20 +16,6 @@ export function usePatientData<K extends keyof PatientWorkspaceResources>(
 ): PatientWorkspaceResources[K] {
   const { authenticated, initialized } = useAuth()
   const resource = usePatientWorkspace()[key]
-  const { idle, load } = resource
-
-  useEffect(() => {
-    if (!initialized || !authenticated || !idle) return
-
-    // Start after the provider's effects, including when Strict Mode remounts them.
-    let active = true
-    queueMicrotask(() => {
-      if (active) void load()
-    })
-    return () => {
-      active = false
-    }
-  }, [authenticated, initialized, idle, load])
-
+  useRefreshOnEntry(resource, initialized && authenticated)
   return resource
 }

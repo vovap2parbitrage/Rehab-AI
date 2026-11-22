@@ -23,12 +23,13 @@ export function PatientWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const fetchTherapists = useCallback(
     async ({ signal }: { signal: AbortSignal }): Promise<PatientTherapist[]> => {
-      const patientInvitations = await loadInvitations()
+      const options = { refresh: true, background: true }
+      const patientInvitations = await loadInvitations(options)
       if (signal.aborted) return []
 
       let patientId = patientInvitations?.[0]?.patient_id
       if (!patientId) {
-        const patientAssignments = await loadAssignments()
+        const patientAssignments = await loadAssignments(options)
         if (signal.aborted) return []
         patientId = patientAssignments?.[0]?.patient_id
         if (!patientId && (!patientInvitations || !patientAssignments)) {

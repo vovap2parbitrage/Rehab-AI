@@ -35,14 +35,23 @@ import {
   replyToHelpRequest,
 } from '../api/helpRequests'
 import { getMyHistory, getPatientHistory, type PatientHistory } from '../api/history'
-import { createAssignment, getPatient, listAssignments, listExercises } from '../api/therapist'
+import {
+  createAssignment,
+  getPatient,
+  listAssignments,
+  listExercises,
+  listPatients,
+} from '../api/therapist'
 import { ApiError } from '../api/client'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { fetchCurrentUser, requestTherapistRole, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
+import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
+import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
+import { TherapistWorkspaceLayout } from '../pages/therapist/TherapistWorkspaceLayout'
 import { MOCK_ASSIGNMENT, MOCK_EXERCISE, MOCK_PATIENT } from '../data/therapistMocks'
 
 vi.mock('../api/patient', () => ({
@@ -63,6 +72,7 @@ vi.mock('../api/therapist', () => ({
   getPatient: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
+  listPatients: vi.fn(),
 }))
 
 vi.mock('../api/comparisons', () => ({
@@ -581,16 +591,33 @@ describe('Patient access and cabinet pages', () => {
     )
   })
 
-  it('loads invitations independently and reuses them while navigating to and from doctors', async () => {
+  it('shows cached invitations and refreshes them while navigating to and from doctors', async () => {
     const user = userEvent.setup()
-    vi.mocked(listPatientInvitations).mockResolvedValue([acceptedInvitation])
+    const updatedInvitation = {
+      ...acceptedInvitation,
+      therapist_email: 'updated.doctor@example.com',
+    }
+    let finishInvitations!: (invitations: PatientInvitation[]) => void
+    vi.mocked(listPatientInvitations)
+      .mockResolvedValueOnce([acceptedInvitation])
+      .mockResolvedValueOnce([acceptedInvitation])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishInvitations = resolve
+          }),
+      )
+      .mockResolvedValue([updatedInvitation])
+    const doctors = [{ id: 'therapist-2', role: 'therapist' }]
     let finishDoctors!: (doctors: Awaited<ReturnType<typeof listPatientTherapists>>) => void
-    vi.mocked(listPatientTherapists).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishDoctors = resolve
-        }),
-    )
+    vi.mocked(listPatientTherapists)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishDoctors = resolve
+          }),
+      )
+      .mockResolvedValue(doctors)
     renderWithAuth(
       <StrictMode>
         <PatientWorkspaceProvider>
@@ -615,12 +642,18 @@ describe('Patient access and cabinet pages', () => {
     await waitFor(() => expect(listPatientTherapists).toHaveBeenCalledTimes(1))
     await user.click(screen.getByRole('link', { name: 'До запрошень' }))
     expect(screen.getByText('second.doctor@example.com')).toBeInTheDocument()
-    expect(listPatientInvitations).toHaveBeenCalledTimes(1)
-
-    await act(async () => finishDoctors([{ id: 'therapist-2', role: 'therapist' }]))
-    await user.click(screen.getByRole('link', { name: 'До лікарів' }))
-    expect(screen.getByRole('heading', { name: 'second.doctor@example.com' })).toBeInTheDocument()
+    expect(listPatientInvitations).toHaveBeenCalledTimes(3)
     expect(listPatientTherapists).toHaveBeenCalledTimes(1)
+
+    await act(async () => finishInvitations([updatedInvitation]))
+    expect(screen.getByText('updated.doctor@example.com')).toBeInTheDocument()
+
+    await act(async () => finishDoctors(doctors))
+    await user.click(screen.getByRole('link', { name: 'До лікарів' }))
+    expect(screen.getByRole('heading', { name: 'updated.doctor@example.com' })).toBeInTheDocument()
+    expect(listPatientTherapists).toHaveBeenCalledTimes(2)
+    expect(listPatientAssignments).not.toHaveBeenCalled()
+    expect(listMyHelpRequests).not.toHaveBeenCalled()
   })
 
   it('shows exercise assignments while the questions request is pending', async () => {
@@ -1055,6 +1088,54 @@ describe('Shared account data', () => {
     expect(await screen.findByRole('heading', { name: /Запит на роль «/ })).toBeInTheDocument()
     expect(requestTherapistRole).toHaveBeenCalledTimes(1)
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Therapist workspace', () => {
+  it('keeps the patient list visible while refreshing it after a tab switch', async () => {
+    const user = userEvent.setup()
+    let finishPatients!: (patients: Awaited<ReturnType<typeof listPatients>>) => void
+    vi.mocked(listPatients)
+      .mockResolvedValueOnce([MOCK_PATIENT])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishPatients = resolve
+          }),
+      )
+    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+
+    renderWithAuth(
+      <StrictMode>
+        <Link to="/therapist/patients">До списку пацієнтів</Link>
+        <Link to="/therapist/exercises">До бібліотеки</Link>
+        <Routes>
+          <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
+            <Route path="patients" element={<TherapistPatientsPage />} />
+            <Route path="exercises" element={<TherapistExercisesPage />} />
+          </Route>
+        </Routes>
+      </StrictMode>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/patients'],
+    )
+
+    expect(await screen.findByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
+    expect(listPatients).toHaveBeenCalledTimes(1)
+    expect(listExercises).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('link', { name: 'До бібліотеки' }))
+    expect(await screen.findByRole('heading', { name: MOCK_EXERCISE.name })).toBeInTheDocument()
+    expect(listPatients).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('link', { name: 'До списку пацієнтів' }))
+    expect(screen.getByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
+    expect(screen.queryByText('Завантажуємо пацієнтів…')).not.toBeInTheDocument()
+    expect(listPatients).toHaveBeenCalledTimes(2)
+    expect(listExercises).toHaveBeenCalledTimes(1)
+
+    await act(async () => finishPatients([{ ...MOCK_PATIENT, first_name: 'Андрій' }]))
+    expect(screen.getByRole('link', { name: /Андрій Коваленко/ })).toBeInTheDocument()
   })
 })
 

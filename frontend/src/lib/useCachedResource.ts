@@ -102,3 +102,30 @@ export function useCachedResource<T>(
   const idle = data === undefined && !loading && error === null
   return { data, error, idle, loading: loading || idle, load, update, invalidate }
 }
+
+export function useRefreshOnEntry(
+  { idle, load }: Pick<CachedResource<unknown>, 'idle' | 'load'>,
+  enabled = true,
+) {
+  const lastLoad = useRef<typeof load | null>(null)
+
+  useEffect(() => {
+    if (!enabled) {
+      lastLoad.current = null
+      return
+    }
+    const refresh = lastLoad.current !== load
+    if (!refresh && !idle) return
+
+    // Start after the cache owner's effects, including in Strict Mode.
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      lastLoad.current = load
+      void load({ refresh, background: true })
+    })
+    return () => {
+      active = false
+    }
+  }, [enabled, idle, load])
+}

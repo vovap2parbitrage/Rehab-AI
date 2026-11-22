@@ -1,38 +1,23 @@
 import { EmptyState } from '../../components/EmptyState'
 import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, useOutletContext } from 'react-router-dom'
 import { getErrorMessage } from '../../lib/errorMessage'
-import { listPatients, sendInvitation, type Patient } from '../../api/therapist'
+import { sendInvitation } from '../../api/therapist'
 import { MailIcon, UserIcon } from '../../components/Icons'
 import { ErrorMessage } from '../../components/ErrorMessage'
+import { useRefreshOnEntry } from '../../lib/useCachedResource'
+import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
 export function TherapistPatientsPage() {
-  const [patients, setPatients] = useState<Patient[]>([])
+  const { patients: resource } = useOutletContext<TherapistWorkspaceResources>()
+  useRefreshOnEntry(resource)
+  const { data: patients = [], loading, error: loadError } = resource
   const [notice, setNotice] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState({ email: '' })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    listPatients({ signal: controller.signal })
-      .then((items) => {
-        if (!controller.signal.aborted) setPatients(items)
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
-          setLoadError(getErrorMessage(reason, 'Не вдалося завантажити пацієнтів.'))
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
-  }, [])
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
