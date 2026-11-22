@@ -84,6 +84,11 @@ export async function logoutFromKeycloak(): Promise<void> {
   await getKeycloak().logout({ redirectUri: toAppUrl('/') })
 }
 
+/** Forces a new token, e.g. after the backend changed the user's role in Keycloak. */
+export async function refreshAccessToken(): Promise<void> {
+  await getKeycloak().updateToken(-1)
+}
+
 /**
  * Returns a valid access token for the FastAPI backend.
  *

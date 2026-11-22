@@ -15,12 +15,9 @@ export function fetchCurrentUser(options: RequestOptions = {}): Promise<UserProf
   return apiRequest<UserProfile>('/api/v1/auth/me', options)
 }
 
-/**
- * The role is only stored as a pending request on the backend.
- * An administrator grants the real role in Keycloak.
- */
-export function requestTherapistRole(): Promise<UserProfile> {
-  return apiRequest<UserProfile>('/api/v1/auth/role-requests', {
+/** A new account registered as a therapist gets the role at once, without approval. */
+export function chooseTherapistRole(): Promise<UserProfile> {
+  return apiRequest<UserProfile>('/api/v1/auth/me/role', {
     method: 'POST',
     body: JSON.stringify({ role: 'therapist' }),
   })

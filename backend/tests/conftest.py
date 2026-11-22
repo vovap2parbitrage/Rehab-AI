@@ -34,6 +34,7 @@ from app.main import app  # noqa: E402
 from app.models.assignment import Assignment  # noqa: E402
 from app.models.exercise import Exercise  # noqa: E402
 from app.models.patient import Patient  # noqa: E402
+from app.models.plan import Plan  # noqa: E402
 from app.models.session import TrainingSession  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.schemas.assignment import AssignmentRead  # noqa: E402
@@ -94,6 +95,13 @@ def clean_database(request: pytest.FixtureRequest):
     with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(table.delete())
+        db.add_all(
+            [
+                Plan(code="free", name="Безкоштовний", max_active_patients=5, price_uah=0),
+                Plan(code="standard", name="Стандарт", max_active_patients=15, price_uah=499),
+                Plan(code="pro", name="Професійний", max_active_patients=30, price_uah=899),
+            ]
+        )
         db.commit()
     yield
 

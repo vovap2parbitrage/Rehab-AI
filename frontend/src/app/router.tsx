@@ -4,6 +4,7 @@ import { ProtectedRoute } from '../auth/ProtectedRoute'
 import { ErrorPage } from '../pages/ErrorPage'
 import { LoginPage } from '../pages/LoginPage'
 import { ProfilePage } from '../pages/profile/ProfilePage'
+import { PricingPage } from '../pages/PricingPage'
 
 import { PatientDashboardPage } from '../pages/patient/PatientDashboardPage'
 import { PatientExerciseExecutionPage } from '../pages/patient/PatientExerciseExecutionPage'
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
       {
         path: 'register',
         element: <RegisterPage />,
+      },
+      {
+        path: 'pricing',
+        element: <PricingPage />,
       },
       {
         path: 'profile',

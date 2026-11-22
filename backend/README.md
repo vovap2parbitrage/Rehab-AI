@@ -1,75 +1,230 @@
-# Rehab AI — FastAPI backend skeleton
+# Rehab AI — backend
 
-Backend каркас для Rehab AI: веб-кабінет терапевта, API для мобільного застосунку пацієнта,
-аналіз вправ, історія сесій та фонові задачі.
+FastAPI backend платформи Rehab AI: кабінети лікаря та пацієнта, призначення вправ, історія
+виконання, запитання пацієнтів, тарифи лікарів і аналіз відео. Версії Python: 3.11 і новіші
+(у Docker-образі 3.12).
+
+Огляд продукту, ролей і запуску всього стеку: [`../README.md`](../README.md).
+
+- [Стек](#стек)
+- [Структура](#структура)
+- [Запуск локально](#запуск-локально)
+- [Автентифікація та ролі](#автентифікація-та-ролі)
+- [API](#api)
+- [Пацієнти: архівування й відновлення](#пацієнти-архівування-й-відновлення)
+- [Тарифи й ліміт активних пацієнтів](#тарифи-й-ліміт-активних-пацієнтів)
+- [Міграції БД (Alembic)](#міграції-бд-alembic)
+- [Video-comparison service](#video-comparison-service)
 
 ## Стек
 
 - **FastAPI + Pydantic** — REST API та валідація.
 - **PostgreSQL + SQLAlchemy 2 + Alembic** — основна БД і міграції.
-- **JWT + Argon2** — основа автентифікації (auth flow потрібно завершити перед production).
-- **Redis + Celery** — черга аналізу відео; HTTP-запит не має чекати завершення аналізу.
-- **pytest + Ruff** — тести та CI.
-- **Docker Compose** — локальні PostgreSQL і Redis.
+- **Keycloak (OpenID Connect)** — автентифікація: backend перевіряє JWT, ролі беруться з токена.
+  Керування ролями йде через Keycloak Admin API.
+- **Redis + Celery** — черга аналізу відео; HTTP-запит не чекає завершення аналізу.
+- **MediaPipe + OpenCV + SciPy** — розпізнавання пози та порівняння рухів.
+- **S3-сумісне сховище** (boto3) — відео пацієнтів і еталонні відео.
+- **pytest + Ruff** — тести й лінтер.
+- **Docker Compose** — PostgreSQL, Redis, Keycloak, S3, backend, Celery і frontend.
 
 ## Структура
 
 ```text
 app/
   api/v1/endpoints/       # маршрути за доменами
-  core/                   # налаштування, безпека
-  db/                     # engine, сесії, base
+  core/                   # налаштування, автентифікація, ролі, статуси, помилки
+  db/                     # engine, сесії, base, підготовка БД до міграцій
   models/                 # SQLAlchemy-моделі
   schemas/                # Pydantic-схеми
-  services/               # бізнес-логіка
+  services/               # бізнес-логіка (patient, plan, invitation, comparison/, ...)
   tasks/                  # Celery tasks
   main.py
 alembic/versions/         # Alembic-міграції
 tests/
 ```
 
-## Запуск усього стеку
-
-З кореня репозиторію:
-
-```bash
-docker compose up --build -d
-```
-
-Це піднімає PostgreSQL, Redis, Keycloak, FastAPI, Celery і frontend.
-Деталі та адреси сервісів — у [`../README.md`](../README.md).
-
 ## Запуск локально
 
-1.
-   ```bash
-   # Linux/WSL/macOS
-   python -m venv .venv
-   source .venv/bin/activate
-   # Windows PowerShell:
-   .venv\\Scripts\\Activate.ps1
+Увесь стек (рекомендовано) запускається з кореня репозиторію: `docker compose up --build -d`.
+Щоб запускати лише backend на хості:
 
+1. Створіть оточення та встановіть залежності:
+   ```bash
+   cd backend
+   python -m venv .venv
+   source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
    pip install -e ".[dev]"
    ```
-2. Створити `.env`:
+2. Створіть `.env` із шаблону (`cp .env.example .env`, у Windows `copy .env.example .env`).
+3. Підніміть залежні сервіси з **кореня репозиторію** (`compose.yaml` лежить там):
    ```bash
-   cp .env.example .env
+   docker compose up -d db redis keycloak s3 s3-init keycloak-init
    ```
-3. Запусти сервіси:
-   ```bash
-   docker compose up -d
-   ```
-4. Застосуй міграції БД:
+   Порти хоста відрізняються від типових (PostgreSQL `5433`, Redis `6380`, Keycloak `8081`),
+   тому підправте `DATABASE_URL`, `REDIS_URL` і `KEYCLOAK_SERVER_URL` у `.env`.
+4. Застосуйте міграції:
    ```bash
    alembic upgrade head
    ```
-5. Запусти API:
+5. Запустіть API:
    ```bash
    uvicorn app.main:app --reload
    ```
-6. Перевір:
-   - http://127.0.0.1:8000/health
-   - http://127.0.0.1:8000/docs
+6. Перевірте: http://127.0.0.1:8000/health і http://127.0.0.1:8000/docs.
+
+Воркер аналізу відео запускається окремо: `celery -A app.tasks.celery_app.celery_app worker --loglevel=info`.
+
+### Налаштування
+
+Змінні середовища описані в [`.env.example`](.env.example). Основні:
+
+| Змінна | Призначення |
+| --- | --- |
+| `DATABASE_URL`, `REDIS_URL` | PostgreSQL і Redis |
+| `SECRET_KEY` | Секрет застосунку, щонайменше 32 символи |
+| `CORS_ORIGINS` | Дозволені адреси фронтенду, через кому |
+| `KEYCLOAK_*` | Адреса, realm, клієнт і audience Keycloak; `KEYCLOAK_ADMIN_CLIENT_*` — сервісний акаунт для зміни ролей |
+| `S3_*`, `MAX_VIDEO_MB`, `MAX_VIDEO_SECONDS` | Сховище відео та його обмеження |
+| `PAYMENT_PROVIDER` | Провайдер оплати тарифів; зараз лише `mock` |
+
+## Автентифікація та ролі
+
+Клієнт передає `Authorization: Bearer <access token>` від Keycloak. Backend перевіряє підпис,
+issuer і audience, а при першому запиті створює користувача в БД. Ролі: `patient`,
+`therapist`, `admin`. **Джерелом ролей є токен Keycloak**: збережена в БД роль
+перезаписується роллю з токена, тому зміна ролі в Keycloak потребує нового токена.
+
+Ролі змінюються так:
+
+- **Реєстрація лікаря.** Користувач, що обрав «Лікар», викликає `POST /api/v1/auth/me/role`
+  із `{"role": "therapist"}`. Backend одразу призначає роль у Keycloak, ставить її в БД і
+  видаляє порожній профіль пацієнта. Працює лише для акаунта без даних пацієнта (зв'язків із
+  лікарями, призначень, запрошень), інакше відповідь `409`. Після цього клієнт має оновити
+  токен.
+- **Запит ролі з мобільного застосунку.** `POST /api/v1/auth/role-requests` лише записує
+  `pending_role`; адміністратор розглядає запити через `GET`/`DELETE /auth/role-requests`
+  і призначає роль через `PUT /api/v1/auth/users/{id}/role`.
+
+## API
+
+Повний опис і схеми запитів: Swagger UI на `/docs`. Усі шляхи мають префікс `/api/v1`. Якщо
+не вказано інше, ендпоінт потребує входу; у колонці «Ролі» — хто має доступ (A — адмін,
+T — лікар, P — пацієнт).
+
+### Користувач і ролі — `/auth`
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `GET /auth/me` | будь-який | Профіль поточного користувача |
+| `POST /auth/me/role` | будь-який | Нова роль лікаря при реєстрації, без підтвердження |
+| `POST /auth/role-requests` | будь-який | Запит ролі, чекає на адміністратора (мобільний застосунок) |
+| `GET /auth/role-requests` | A | Список запитів |
+| `DELETE /auth/role-requests/{user_id}` | A | Відхилити запит |
+| `PUT /auth/users/{user_id}/role` | A | Призначити роль у Keycloak |
+
+### Пацієнти — `/patients`
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `GET /patients/` | A, T | Активні пацієнти лікаря; `?archived=true` — архів лікаря |
+| `POST /patients/` | A, T | Створити профіль пацієнта (перевіряє ліміт тарифу) |
+| `GET /patients/{id}` | A, T, P | Профіль; містить `archived_at` для лікаря |
+| `GET /patients/{id}/therapists` | A, T, P | Лікарі пацієнта |
+| `GET /patients/{id}/history`, `GET /patients/me/history` | A, T, P / P | Історія виконання за період (`?period=`) |
+| `POST /patients/{id}/archive` | T | Архівувати пацієнта |
+| `POST /patients/{id}/restore` | T | Повернути з архіву (перевіряє ліміт тарифу) |
+
+### Запрошення — `/invitations`
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `POST /invitations/` | T | Запросити пацієнта за email або `patient_id` (перевіряє ліміт) |
+| `GET /invitations/mine` | P | Власні запрошення |
+| `PATCH /invitations/{id}/response` | P | Прийняти або відхилити (прийняття перевіряє ліміт лікаря) |
+
+### Вправи, призначення, сесії
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `GET`, `POST /exercises/`; `GET`, `PUT`, `DELETE /exercises/{id}` | A, T | Бібліотека вправ |
+| `GET /exercises/{id}/video` | A, T, P | Посилання на еталонне відео |
+| `GET /assignments/` | A, T, P | Призначення; `?patient_id=` фільтрує за пацієнтом |
+| `GET /assignments/mine` | P | Власні призначення без скасованих |
+| `POST /assignments/` | A, T | Призначити вправу (409 для архівованого пацієнта) |
+| `GET /assignments/{id}` | A, T, P | Одне призначення |
+| `POST /assignments/{id}/cancel` | A, T | Скасувати активне призначення |
+| `GET /sessions/`, `GET /sessions/{id}` | A, T, P | Сесії виконання |
+| `POST /sessions/` | A, T, P | Створити сесію |
+| `POST /sessions/assignments/{assignment_id}` | P | Завершити призначення без відео |
+| `GET /sessions/{id}/video` | A, T, P | Посилання на відео сесії |
+
+### Запитання пацієнтів — `/help-requests`
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `POST /help-requests/` | P | Поставити запитання після сесії |
+| `GET /help-requests/mine` | P | Власні запитання |
+| `GET /help-requests/needs-attention` | A, T | Запитання без відповіді |
+| `GET /help-requests/?patient_id=` | A, T | Історія запитань пацієнта (архівованого теж) |
+| `PATCH /help-requests/{id}/reply` | A, T | Відповісти |
+
+### Тарифи — `/plans`, `/therapists`
+
+| Метод і шлях | Ролі | Опис |
+| --- | --- | --- |
+| `GET /plans/` | **публічний** | Тарифи для сторінки цін |
+| `GET /therapists/me/plan` | T | Тариф, ліміт і використання |
+| `POST /therapists/me/plan/purchase` | T | Купити або змінити тариф |
+| `PUT /therapists/{user_id}/plan` | A | Призначити тариф вручну |
+
+Порівняння відео (`/comparisons`) описане [нижче](#api-1) у розділі Video-comparison service. `GET /health` — перевірка живості.
+
+## Пацієнти: архівування й відновлення
+
+Лікар архівує **свій зв'язок** із пацієнтом (`patient_therapists.archived_at`), а не самого
+пацієнта, тому зв'язок інших лікарів із ним не змінюється.
+
+- Під час архівування всі активні призначення цього лікаря для цього пацієнта скасовуються.
+  Завершені призначення, призначення інших лікарів і історія виконання лишаються.
+- Архівований пацієнт зникає з активних списків і лічильників: `treated_by()` у
+  `app/services/patient_access.py` додає `archived_at IS NULL` в одному місці.
+- Історія, профіль, призначення, сесії та запитання архівованого пацієнта доступні лікарю для
+  читання. Нове призначення для нього створити не можна (`409`), поки його не відновлено.
+- Відновлення повертає пацієнта до активного списку, але не відновлює скасовані призначення, і
+  підпадає під ліміт тарифу. Повторне архівування чи відновлення нічого не ламає.
+
+## Тарифи й ліміт активних пацієнтів
+
+Таблиця `plans` містить код, назву, `max_active_patients` і `price_uah`; кожен користувач
+має `users.plan_code` (за замовчуванням `free`). Початкові тарифи вносить міграція `0007`:
+`free` — 5 пацієнтів, `standard` — 15 (499 ₴/міс), `pro` — 30 (899 ₴/міс).
+
+- **Активні пацієнти** — зв'язки `patient_therapists` з `archived_at IS NULL`.
+- **Ліміт:** `active + pending >= limit`, де `pending` — запрошення лікаря в статусі
+  `pending`. Ліміт перевіряють створення запрошення, прийняття запрошення пацієнтом,
+  відновлення з архіву й створення профілю пацієнта. Під час прийняття саме це запрошення в
+  підрахунку не береться, бо воно вже займає своє місце.
+- **Відповідь при досягненні ліміту:** `409`, `{"detail": "...", "code": "patient_limit_reached"}`.
+  Поле `detail` лишається текстом, а код дає змогу клієнту показати зрозуміле повідомлення.
+- `GET /therapists/me/plan` повертає `{plan, plan_name, limit, active, pending, free}`, де
+  `free = limit − active`. Лічильник `free` зменшується, коли пацієнт приєднується, і зростає,
+  коли його архівують.
+- Паралельні запити не обходять ліміт: рядок лікаря блокується на час перевірки
+  (`SELECT ... FOR UPDATE`).
+- Якщо адмін знижує тариф нижче поточної кількості пацієнтів, нікого не архівується: лише нові
+  запрошення блокуються.
+
+### Покупка тарифу й оплата
+
+`POST /therapists/me/plan/purchase` з `{"plan_code": "..."}` застосовує тариф одразу. Для
+платного тарифу створюється платіж через інтерфейс `PaymentProvider`
+(`app/services/payments.py`). Зараз є лише `MockPaymentProvider`, який завжди схвалює
+платіж і нічого не списує. Кожна спроба записується в `plan_payments` (статус `paid` або
+`failed`); відмовлений платіж дає `402` і не змінює тариф. Перехід на безкоштовний тариф
+платежу не створює; купівля поточного тарифу дає `409`. Щоб підключити справжнього
+провайдера, реалізуйте `PaymentProvider`, поверніть його з `get_payment_provider()` і
+вкажіть у `PAYMENT_PROVIDER`. Тариф діє без терміну: автопродовження й списань немає.
 
 ## Міграції БД (Alembic)
 
@@ -129,18 +284,23 @@ docker compose up --build -d
 
 ### Тести та CI
 
+Тести backend потребують запущеного PostgreSQL. Окрему БД `<ім'я_БД>_test` (або ту, що в
+`TEST_DATABASE_URL`) вони створюють самі, а на початку запуску **видаляють і створюють заново
+всі таблиці** в ній. Не вказуйте у `TEST_DATABASE_URL` базу з даними, які треба зберегти.
+
+```bash
+cd backend
+pytest -q                                   # усі тести
+pytest -q tests/test_patient_archive.py     # один файл
+```
+
+Модулі без БД (кути, DTW, оцінка, відео, JWT) працюють і без PostgreSQL.
+
 Тести створюють схему з моделей (`tests/conftest.py`), щоб працювати швидко. Тому окремий
 крок у CI (`.github/workflows/backend-ci.yml`) на чистій PostgreSQL виконує
 `alembic upgrade head`, `alembic check` (падає, якщо модель змінили без міграції), а потім
-`alembic downgrade base` і повторний `alembic upgrade head`.
-
-## API першого каркаса
-
-- `GET /health` — liveness check.
-- `GET /api/v1/patients` — тимчасовий список-заглушка, захищений вимогою передати bearer token лише після підключення повної auth dependency; зараз повертає порожній список.
-- `POST /api/v1/exercises` — заглушка створення вправи з назвою та описом.
-- `POST /api/v1/assignments` — заглушка призначення вправи пацієнту.
-- `POST /api/v1/sessions` — приймає метадані результату сесії; аналіз відео ще не реалізований.
+`alembic downgrade base` і повторний `alembic upgrade head`. Після міграцій CI запускає
+`pytest -q`.
 
 ## Video-comparison service
 
@@ -206,9 +366,9 @@ docker compose up --build -d
 Налаштування вправи: `reference_video_key` (ключ відео в S3 виду `videos/<id>/<32hex>.mp4`),
 `body_parts` (`left_arm`, `right_arm`, `left_leg`, `right_leg`, `torso`) і `joint_tolerances`
 (необов'язково; ключі: `l_elbow`, `r_elbow`, `l_shoulder`, `r_shoulder`, `l_hip`, `r_hip`,
-`l_knee`, `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів). Поки інтерфейс
-не вміє завантажувати еталон (SCRUM-19), ці поля задаються через API: завантажити відео
-лікарем через `/comparisons/uploads`, потім `PUT /api/v1/exercises/{id}` з ключем і частинами тіла.
+`l_knee`, `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів). У вебінтерфейсі лікар завантажує еталон і
+вибирає частини тіла у формі вправи. Через API це робиться так: завантажити відео через
+`/comparisons/uploads`, потім `PUT /api/v1/exercises/{id}` з ключем і частинами тіла.
 
 Приклад відповіді зі статусом `done`:
 
@@ -240,7 +400,7 @@ docker compose up --build -d
 
 ### Що ще не зроблено
 
-- Інтерфейс не завантажує еталон у вправу й не вибирає частини тіла (SCRUM-19), а екран
-  виконання не записує відео й не викликає `/comparisons` (окрема задача).
-- Лікар у відповіді сесії бачить `joint_deviations`, але окремого екрана для їх перегляду немає.
-- Відео в S3 не видаляються автоматично.
+- Лікар бачить у відповіді сесії `joint_deviations`, але в кабінеті лікаря немає окремого
+  екрана для їх перегляду (пацієнт бачить розбір результату після виконання).
+- Відео в S3 не видаляються автоматично: бакет потрібно чистити політикою зберігання самого
+  сховища.

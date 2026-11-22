@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import type { UserProfile } from '../../api/auth'
-import { CalendarIcon, ClockIcon, LockIcon, MailIcon, UserIcon } from '../../components/Icons'
+import { CalendarIcon, LockIcon, MailIcon, UserIcon } from '../../components/Icons'
 import { RoleBadge } from '../../components/RoleBadge'
-import { getRoleLabel } from '../../lib/profile'
 
 function Detail({
   label,
@@ -87,16 +86,6 @@ export function ProfileDetails({ profile, firstName, lastName, username }: Profi
               <span className="status-pill__dot" aria-hidden="true" />
               {profile.is_active ? 'Активний' : 'Неактивний'}
             </span>
-          </Detail>
-          <Detail label="Запит на роль">
-            {profile.pending_role ? (
-              <span className="pending-role">
-                <ClockIcon aria-hidden="true" />
-                {getRoleLabel(profile.pending_role)}
-              </span>
-            ) : (
-              'Немає активних запитів'
-            )}
           </Detail>
           <Detail label="Доступ до платформи">
             {profile.is_active ? 'Дозволено' : 'Заблоковано'}

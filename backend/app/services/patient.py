@@ -19,6 +19,7 @@ from app.services.patient_access import (
     require_patient_access,
     treated_by,
 )
+from app.services.plan import require_free_slot
 
 
 def _to_read(patient: Patient, archived_at: datetime | None = None) -> PatientRead:
@@ -96,6 +97,8 @@ def create_patient(
         )
         if len(therapists) != len(therapist_ids):
             raise HTTPException(status_code=404, detail="Therapist not found")
+        for therapist in therapists:
+            require_free_slot(db, therapist.id)
         patient.therapists = therapists
 
     db.add(patient)
@@ -168,6 +171,9 @@ def archive_patient(db: Session, patient_id: UUID, user: User) -> None:
 def restore_patient(db: Session, patient_id: UUID, user: User) -> None:
     """Return an archived patient to this therapist's active list."""
     _own_patient(db, patient_id, user)
+    if archived_at_for(db, patient_id, user.id) is None:
+        return
+    require_free_slot(db, user.id)
     db.execute(
         update(patient_therapist_table)
         .where(_link(patient_id, user.id))
