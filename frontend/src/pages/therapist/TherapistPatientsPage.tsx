@@ -138,7 +138,8 @@ export function TherapistPatientsPage() {
                   </span>
                   <Link to={`/therapist/patients/${patient.id}`}>
                     <strong>
-                      {[patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Пацієнт'}
+                      {[patient.first_name, patient.last_name].filter(Boolean).join(' ') ||
+                        'Пацієнт'}
                     </strong>
                     <small>Історія доступна для перегляду</small>
                   </Link>
