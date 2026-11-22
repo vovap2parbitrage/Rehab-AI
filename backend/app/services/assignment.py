@@ -19,6 +19,7 @@ from app.schemas.assignment import (
 )
 from app.core.statuses import AssignmentStatus
 from app.core.timezones import today_in
+from app.services.exercise import current_version
 from app.services.patient_access import (
     get_patient_for_therapist,
     get_patient_for_user,
@@ -133,12 +134,17 @@ def create_assignment(
     else:
         get_patient_for_therapist(payload.patient_id, user, db)
     require_not_archived(db, payload.patient_id, user)
-    if db.get(Exercise, payload.exercise_id) is None:
+    exercise = db.get(Exercise, payload.exercise_id)
+    if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
     _check_start_date(payload, user)
 
-    assignment = Assignment(**payload.model_dump(), therapist_id=user.id)
+    assignment = Assignment(
+        **payload.model_dump(),
+        therapist_id=user.id,
+        exercise_version_id=current_version(db, exercise).id,
+    )
     db.add(assignment)
     db.commit()
     db.refresh(assignment)

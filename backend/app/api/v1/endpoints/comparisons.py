@@ -7,7 +7,6 @@ from app.api.comparison_auth import require_user_id
 from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
-from app.models.exercise import Exercise
 from app.models.user import User
 from app.schemas.comparison import (
     ComparisonCreated,
@@ -18,6 +17,7 @@ from app.schemas.comparison import (
 )
 from app.services import comparison_service, storage
 from app.services.comparison_assignment import prepare_comparison
+from app.services.exercise import video_in_use
 
 router = APIRouter()
 
@@ -51,12 +51,7 @@ def delete_unreferenced_upload(
     if not store.is_owned_key(key, user_id):
         raise HTTPException(status_code=403, detail="Video does not belong to you")
 
-    referenced = (
-        db.query(Exercise.id)
-        .filter(Exercise.reference_video_key == key)
-        .first()
-    )
-    if referenced is not None:
+    if video_in_use(db, key):
         raise HTTPException(status_code=409, detail="Video is already in use")
 
     try:

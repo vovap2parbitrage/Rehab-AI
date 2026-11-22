@@ -40,6 +40,9 @@ export function ExerciseLibrary({
             <div>
               <h3>{item.name}</h3>
               <p>{item.description || 'Опис не додано.'}</p>
+              <small>
+                Версія {item.version} · активних призначень: {item.active_assignments}
+              </small>
               {item.reference_video_key && (
                 <ReferenceVideo
                   exerciseId={item.id}

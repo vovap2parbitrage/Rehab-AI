@@ -9,7 +9,7 @@ from app.core.auth import extract_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.exercise import ExerciseCreate, ExerciseRead
+from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
 from app.services import exercise
 
 router = APIRouter()
@@ -50,7 +50,7 @@ def get_exercise(
 @router.put("/{exercise_id}", response_model=ExerciseRead)
 def update_exercise(
     exercise_id: UUID,
-    payload: ExerciseCreate,
+    payload: ExerciseUpdate,
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

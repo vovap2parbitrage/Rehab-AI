@@ -19,6 +19,8 @@ export const MOCK_EXERCISE: Exercise = {
   joint_tolerances: {},
   body_parts: [],
   created_by: 'mock-therapist-1',
+  version: 1,
+  active_assignments: 0,
 }
 
 export const MOCK_ASSIGNMENT: Assignment = {

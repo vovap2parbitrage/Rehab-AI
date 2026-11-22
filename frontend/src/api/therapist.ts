@@ -20,6 +20,10 @@ export interface Exercise {
   joint_tolerances: Record<string, number>
   body_parts: string[]
   created_by: string
+  /** Number of the current version: it grows when the video, body parts or tolerances change. */
+  version: number
+  /** Active assignments of this exercise. */
+  active_assignments: number
 }
 
 export interface Assignment {
@@ -49,6 +53,8 @@ export interface ExercisePayload {
   reference_video_key: string | null
   joint_tolerances: Record<string, number>
   body_parts: string[]
+  /** On an edit: move the active assignments to the new version (default: they stay on theirs). */
+  apply_to_active_assignments?: boolean
 }
 
 export interface AssignmentPayload {

@@ -40,6 +40,7 @@ from app.models.user import User  # noqa: E402
 from app.schemas.assignment import AssignmentRead  # noqa: E402
 from app.schemas.patient import PatientRead  # noqa: E402
 from app.schemas.session import SessionRead  # noqa: E402
+from app.services.exercise import current_version  # noqa: E402
 
 # Modules that never need a database: they run without one.
 NO_DATABASE_MODULES = {
@@ -223,7 +224,10 @@ def seed_assignment(db_session):
         }
         assignment_data.update(overrides)
         assignment = AssignmentRead(**assignment_data)
-        db_assignment = Assignment(**assignment.model_dump())
+        version = current_version(db_session, exercise)
+        db_assignment = Assignment(
+            **assignment.model_dump(), exercise_version_id=version.id
+        )
         db_session.add(db_assignment)
         db_session.commit()
         db_session.refresh(db_assignment)

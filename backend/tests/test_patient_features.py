@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.dependencies import get_db
 from app.main import app
 from app.models.assignment import Assignment
+from app.services.exercise import current_version
 from app.models.exercise import Exercise
 from app.models.invitation import TherapistInvitation
 from app.models.patient import Patient
@@ -172,6 +173,7 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
     assignment = Assignment(
         patient_id=patient.id,
         exercise_id=exercise.id,
+        exercise_version_id=current_version(patient_features_db, exercise).id,
         repetitions=10,
         duration_weeks=4,
         weekdays=[0, 2, 4],
@@ -183,6 +185,7 @@ def test_patient_sees_only_own_assignments_and_persisted_sessions(
             Assignment(
                 patient_id=other_patient.id,
                 exercise_id=other_exercise.id,
+                exercise_version_id=current_version(patient_features_db, other_exercise).id,
                 repetitions=8,
                 duration_weeks=4,
                 weekdays=[0, 2],
@@ -214,6 +217,7 @@ def test_patient_completes_own_assignment_session(
     assignment = Assignment(
         patient_id=patient.id,
         exercise_id=exercise.id,
+        exercise_version_id=current_version(patient_features_db, exercise).id,
         repetitions=10,
         duration_weeks=4,
         weekdays=[0, 2, 4],
