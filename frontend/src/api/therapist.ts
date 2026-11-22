@@ -5,8 +5,8 @@ export interface Patient {
   id: string
   user_id: string
   therapist_ids: string[]
-  first_name: string
-  last_name: string
+  first_name: string | null
+  last_name: string | null
   date_of_birth: string | null
   notes: string | null
   archived_at: string | null

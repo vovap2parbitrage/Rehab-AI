@@ -121,6 +121,8 @@ def make_user(role: str) -> User:
         keycloak_sub=f"sub-{uuid.uuid4()}",
         is_active=True,
         is_verified=True,
+        first_name="Ivan" if role == "patient" else None,
+        last_name="Petrenko" if role == "patient" else None,
     )
 
 
@@ -184,8 +186,6 @@ def seed_patient(db_session):
     def _seed(owner: User, therapist: User) -> PatientRead:
         db_patient = Patient(
             user_id=owner.id,
-            first_name="Ivan",
-            last_name="Petrenko",
             therapists=[therapist],
         )
         db_session.add(db_patient)

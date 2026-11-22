@@ -14,7 +14,7 @@ def keycloak_calls(monkeypatch):
 
 
 def _empty_profile(db_session, user) -> Patient:
-    profile = Patient(user_id=user.id, first_name="Ivan", last_name="Petrenko")
+    profile = Patient(user_id=user.id)
     db_session.add(profile)
     db_session.commit()
     return profile
