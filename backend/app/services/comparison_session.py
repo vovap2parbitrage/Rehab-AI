@@ -18,6 +18,7 @@ def record_session(
     pain_score: int | None,
     report: dict,
     video_key: str | None = None,
+    exercise_version_id: str | None = None,
 ) -> str:
     """Create the session for a successful analysis and return its id.
 
@@ -41,6 +42,7 @@ def record_session(
         joint_deviations=deviations,
         pain_score=pain_score,
         video_key=video_key,
+        exercise_version_id=UUID(exercise_version_id) if exercise_version_id else None,
         completed_at=datetime.now(UTC),
     )
     with SessionLocal() as db:
