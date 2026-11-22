@@ -1,0 +1,69 @@
+/* Apply the shared mobile card spacing before patient-specific card styles. */
+@media (max-width: 720px) {
+  .card {
+    padding: 22px;
+    border-radius: 18px;
+  }
+}
+
+.workspace-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.workspace-page > .page-heading {
+  margin-bottom: 0;
+}
+
+.workspace-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.invitation-card__icon,
+.workspace-empty-state__icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 17px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 1.45rem;
+}
+
+.workspace-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 680px;
+  padding: 36px;
+}
+
+.workspace-empty-state__icon {
+  margin-bottom: 20px;
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.workspace-empty-state h2 {
+  margin-bottom: 8px;
+}
+
+.workspace-empty-state p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.workspace-empty-state > .button {
+  margin-top: 20px;
+}
+
+@media (max-width: 680px) {
+  .workspace-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
