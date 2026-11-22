@@ -5,6 +5,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.timezones import DEFAULT_TIMEZONE
 from app.db.base import Base
 
 from app.models.patient_therapist import patient_therapist_table
@@ -82,6 +83,14 @@ class User(Base):
         nullable=False,
         default="free",
         server_default="free",
+    )
+
+    # IANA time zone name: decides what "today" means for this user.
+    timezone: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=DEFAULT_TIMEZONE,
+        server_default=DEFAULT_TIMEZONE,
     )
 
     is_active: Mapped[bool] = mapped_column(

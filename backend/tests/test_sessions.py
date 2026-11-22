@@ -233,3 +233,17 @@ def test_session_read_says_when_it_has_a_video_but_never_shows_the_key(
 def test_unknown_session_video_is_404(api, login, patient_user):
     login(patient_user)
     assert api.get(f"/api/v1/sessions/{uuid.uuid4()}/video").status_code == 404
+
+
+def test_therapist_can_still_read_sessions_of_an_archived_patient(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, seed_session
+):
+    patient = seed_patient(patient_user, therapist)
+    seed_session(seed_assignment(patient))
+    login(therapist)
+    assert api.post(f"/api/v1/patients/{patient.id}/archive").status_code == 204
+
+    response = api.get(f"/api/v1/sessions/?patient_id={patient.id}")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1

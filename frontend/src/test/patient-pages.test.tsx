@@ -50,7 +50,7 @@ import { refreshAccessToken } from '../auth/keycloak'
 import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
 import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
-import { getSessionVideoUrl } from '../api/sessions'
+import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
@@ -98,6 +98,7 @@ vi.mock('../api/comparisons', () => ({
 
 vi.mock('../api/sessions', () => ({
   getSessionVideoUrl: vi.fn(),
+  listPatientSessions: vi.fn(),
 }))
 
 vi.mock('../api/uploads', () => ({
@@ -297,6 +298,7 @@ const currentPatient: UserProfile = {
 
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
+  vi.mocked(listPatientSessions).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
@@ -1021,13 +1023,13 @@ describe('Local assignment dates', () => {
     ).toBeInTheDocument()
   })
 
-  it('updates the therapist’s default date and submits a manually selected date', async () => {
+  it('moves the therapist’s default start to the next schedule day and keeps a manual date', async () => {
     vi.mocked(getPatient).mockResolvedValue(MOCK_PATIENT)
     vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
     vi.mocked(listAssignments).mockResolvedValue([])
     vi.mocked(listPatientHelpRequests).mockResolvedValue([])
     vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
-    vi.mocked(createAssignment).mockResolvedValue({ ...MOCK_ASSIGNMENT, starts_on: '2026-11-26' })
+    vi.mocked(createAssignment).mockResolvedValue({ ...MOCK_ASSIGNMENT, starts_on: '2026-11-27' })
 
     await act(async () => {
       render(
@@ -1039,24 +1041,27 @@ describe('Local assignment dates', () => {
       )
     })
 
+    // Sunday 22 Nov: the default plan is Mon, Wed, Fri, so it starts on Monday.
     const dateInput = screen.getByLabelText('Початок *')
-    expect(dateInput).toHaveValue('2026-11-22')
-
-    vi.setSystemTime(new Date(2026, 10, 23, 0, 1))
-    fireEvent.focus(window)
     expect(dateInput).toHaveValue('2026-11-23')
 
-    fireEvent.change(dateInput, { target: { value: '2026-11-26' } })
+    // Tuesday 24 Nov at 00:01: the next schedule day is Wednesday.
     vi.setSystemTime(new Date(2026, 10, 24, 0, 1))
     fireEvent.focus(window)
-    expect(dateInput).toHaveValue('2026-11-26')
+    expect(dateInput).toHaveValue('2026-11-25')
+
+    // A manually chosen date (Friday) stays when the day changes again.
+    fireEvent.change(dateInput, { target: { value: '2026-11-27' } })
+    vi.setSystemTime(new Date(2026, 10, 25, 0, 1))
+    fireEvent.focus(window)
+    expect(dateInput).toHaveValue('2026-11-27')
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Призначити план' }))
     })
 
     expect(createAssignment).toHaveBeenCalledWith(
-      expect.objectContaining({ starts_on: '2026-11-26' }),
+      expect.objectContaining({ starts_on: '2026-11-27' }),
     )
   })
 })

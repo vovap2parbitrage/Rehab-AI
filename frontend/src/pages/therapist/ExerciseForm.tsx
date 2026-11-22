@@ -9,7 +9,11 @@ interface ExerciseFormProps {
   videoError: string | null
   videoRequired: boolean
   isEditing: boolean
+  /** Active assignments of the exercise being edited. */
+  activeAssignments: number
+  applyToActive: boolean
   busy: boolean
+  onApplyToActiveChange: (apply: boolean) => void
   onChange: (values: ExerciseFormProps['values']) => void
   onToggleBodyPart: (part: string) => void
   onVideoChange: (file: File | null) => void
@@ -24,7 +28,10 @@ export function ExerciseForm({
   videoError,
   videoRequired,
   isEditing,
+  activeAssignments,
+  applyToActive,
   busy,
+  onApplyToActiveChange,
   onChange,
   onToggleBodyPart,
   onVideoChange,
@@ -37,7 +44,9 @@ export function ExerciseForm({
         <div>
           <h2>{isEditing ? 'Редагування вправи' : 'Нова вправа'}</h2>
           <p>
-            {isEditing ? 'Змініть назву або опис вправи.' : 'Додайте назву, опис і відео вправи.'}
+            {isEditing
+              ? 'Нову версію вправи створюють лише зміна відео, частин тіла чи допусків.'
+              : 'Додайте назву, опис і відео вправи.'}
           </p>
         </div>
         <span className="card__header-icon">
@@ -89,6 +98,21 @@ export function ExerciseForm({
           />
         </label>
         {videoError && <p className="error-message">{videoError}</p>}
+        {isEditing && activeAssignments > 0 && (
+          <label className="therapist-form__field therapist-form__apply">
+            <span>
+              <input
+                type="checkbox"
+                checked={applyToActive}
+                onChange={(event) => onApplyToActiveChange(event.target.checked)}
+              />
+              Застосувати до активних призначень ({activeAssignments})
+            </span>
+            <small>
+              Без цього вони лишаються на попередній версії й порівнюються зі старим еталоном.
+            </small>
+          </label>
+        )}
         <button className="button button--primary" disabled={busy}>
           {busy ? 'Зберігаємо…' : isEditing ? 'Зберегти зміни' : 'Створити вправу'}
         </button>

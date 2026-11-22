@@ -78,3 +78,10 @@ class Exercise(Base):
         "Assignment",
         back_populates="exercise",
     )
+
+    versions = relationship(
+        "ExerciseVersion",
+        back_populates="exercise",
+        cascade="all, delete-orphan",
+        order_by="ExerciseVersion.version",
+    )

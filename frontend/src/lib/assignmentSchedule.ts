@@ -11,6 +11,21 @@ export function getLocalDate(date = new Date()): string {
   return `${year}-${month}-${day}`
 }
 
+/** Monday is 0 and Sunday is 6, like the weekdays stored with an assignment. */
+export function weekdayOf(date: string): number {
+  return (new Date(`${date}T00:00:00`).getDay() + 6) % 7
+}
+
+/** The first date from `from` on (including it) that falls on one of the weekdays. */
+export function nextSessionDate(from: string, weekdays: number[]): string {
+  if (weekdays.length === 0) return from
+  const day = new Date(`${from}T00:00:00`)
+  while (!weekdays.includes(weekdayOf(getLocalDate(day)))) {
+    day.setDate(day.getDate() + 1)
+  }
+  return getLocalDate(day)
+}
+
 export function isAssignmentScheduledToday(
   startsOn: string,
   durationWeeks: number,

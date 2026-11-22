@@ -30,6 +30,16 @@ function getVideoDuration(file: File): Promise<number> {
   })
 }
 
+/** What the doctor is told after saving: a new version, and where the assignments stand. */
+function describeEdit(before: Exercise | undefined, after: Exercise, applied: boolean): string {
+  if (!before || after.version === before.version) return 'Вправу змінено.'
+  const active = before.active_assignments
+  if (active === 0) return `Вправу змінено. Створено версію ${after.version}.`
+  return applied
+    ? `Вправу змінено. Версію ${after.version} застосовано до активних призначень (${active}).`
+    : `Вправу змінено. Створено версію ${after.version}; активні призначення (${active}) лишились на попередній.`
+}
+
 export function TherapistExercisesPage() {
   const { exercises: resource } = useOutletContext<TherapistWorkspaceResources>()
   useRefreshOnEntry(resource)
@@ -43,6 +53,7 @@ export function TherapistExercisesPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [applyToActive, setApplyToActive] = useState(false)
   const videoPreview = useVideoPreview()
   const editingExercise = exercises.find((item) => item.id === editingId)
   const videoRequired = !editingId || !editingExercise?.reference_video_key
@@ -54,6 +65,7 @@ export function TherapistExercisesPage() {
       description: exercise.description || '',
     })
     setBodyParts(exercise.body_parts)
+    setApplyToActive(false)
     setVideoFile(null)
     if (videoInputRef.current) videoInputRef.current.value = ''
     setNotice(null)
@@ -62,6 +74,7 @@ export function TherapistExercisesPage() {
 
   const cancelEditing = () => {
     setEditingId(null)
+    setApplyToActive(false)
     setForm({ name: '', description: '' })
     setBodyParts([])
     setVideoFile(null)
@@ -135,6 +148,7 @@ export function TherapistExercisesPage() {
           reference_video_key: videoKey,
           joint_tolerances: editingExercise?.joint_tolerances ?? {},
           body_parts: bodyParts,
+          apply_to_active_assignments: applyToActive,
         })
         updateExercises((current) =>
           current.map((item) => (item.id === updated.id ? updated : item)),
@@ -145,7 +159,7 @@ export function TherapistExercisesPage() {
           await videoPreview.show(updated.id)
         }
         cancelEditing()
-        setNotice('Вправу змінено.')
+        setNotice(describeEdit(editingExercise, updated, applyToActive))
       } else {
         const created = await createExercise({
           name: form.name,
@@ -210,7 +224,10 @@ export function TherapistExercisesPage() {
           videoError={videoError}
           videoRequired={videoRequired}
           isEditing={Boolean(editingId)}
+          activeAssignments={editingExercise?.active_assignments ?? 0}
+          applyToActive={applyToActive}
           busy={busy}
+          onApplyToActiveChange={setApplyToActive}
           onChange={setForm}
           onToggleBodyPart={toggleBodyPart}
           onVideoChange={handleVideoChange}

@@ -50,11 +50,11 @@ def service(store):
 
 @pytest.fixture
 def setup(db_session, therapist, patient_user, seed_patient, seed_assignment):
-    """A patient with an assignment whose exercise is fully configured."""
+    """A patient with an assignment whose exercise version is fully configured."""
     patient = seed_patient(patient_user, therapist)
     assignment = seed_assignment(patient)
     db_assignment = db_session.get(Assignment, assignment.id)
-    exercise = db_assignment.exercise
+    exercise = db_assignment.exercise_version
     exercise.reference_video_key = f"videos/{therapist.id}/{'a' * 32}.mp4"
     exercise.body_parts = ["right_leg"]
     exercise.joint_tolerances = {"r_knee": 5, "not_a_joint": 3, "r_hip": 500}
@@ -84,7 +84,7 @@ def test_job_is_built_from_the_exercise(api, login, service, setup, patient_user
     job, user_id = service.jobs[0]
     assert user_id == str(patient_user.id)
     assert job.assignment_id == assignment.id
-    assert job.reference_key == db_assignment.exercise.reference_video_key
+    assert job.reference_key == db_assignment.exercise_version.reference_video_key
     assert job.body_parts == ["right_leg"]
     # Unknown joints and out-of-range tolerances from the exercise are dropped.
     assert job.tolerances_deg == {"r_knee": 5.0}
@@ -107,7 +107,7 @@ def test_request_cannot_override_the_exercise(api, login, service, setup, patien
     )
 
     job, _ = service.jobs[0]
-    assert job.reference_key == db_assignment.exercise.reference_video_key
+    assert job.reference_key == db_assignment.exercise_version.reference_video_key
     assert job.body_parts == ["right_leg"]
 
 
@@ -177,7 +177,7 @@ def test_someone_elses_video_is_403(api, login, service, setup, patient_user, ot
 )
 def test_unfinished_exercise_is_409(api, login, service, setup, patient_user, db_session, field, value):
     assignment, db_assignment = setup
-    setattr(db_assignment.exercise, field, value)
+    setattr(db_assignment.exercise_version, field, value)
     db_session.commit()
     login(patient_user)
     r = api.post(
@@ -201,15 +201,17 @@ REPORT = {
 
 
 def test_record_session_stores_score_and_deviations(setup, db_session):
-    assignment, _ = setup
+    assignment, db_assignment = setup
 
     video = f"videos/u/{'d' * 32}.mp4"
+    version = db_assignment.exercise_version_id
 
-    session_id = record_session(str(assignment.id), "task-9", 4, REPORT, video)
+    session_id = record_session(str(assignment.id), "task-9", 4, REPORT, video, str(version))
 
     saved = db_session.query(TrainingSession).one()
     assert session_id == str(saved.id)
     assert saved.video_key == video
+    assert saved.exercise_version_id == version
     assert saved.has_video
     assert saved.assignment_id == assignment.id
     assert saved.score == 8.5
@@ -235,7 +237,7 @@ def test_a_refused_request_deletes_the_unused_upload(
     api, login, service, store, setup, patient_user, db_session
 ):
     assignment, db_assignment = setup
-    db_assignment.exercise.body_parts = []  # the exercise is not ready for analysis
+    db_assignment.exercise_version.body_parts = []  # the exercise is not ready for analysis
     db_session.commit()
     login(patient_user)
     key = patient_key(patient_user)

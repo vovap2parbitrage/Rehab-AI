@@ -35,6 +35,12 @@ class Assignment(Base):
         nullable=False,
         index=True,
     )
+    # The version of the exercise this assignment is scored against (see ExerciseVersion).
+    exercise_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("exercise_versions.id"),
+        nullable=False,
+        index=True,
+    )
     therapist_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id"),
         nullable=True,
@@ -57,5 +63,6 @@ class Assignment(Base):
 
     patient = relationship("Patient", back_populates="assignments")
     exercise = relationship("Exercise", back_populates="assignments")
+    exercise_version = relationship("ExerciseVersion")
     therapist = relationship("User", foreign_keys=[therapist_id])
     sessions = relationship("TrainingSession", back_populates="assignment")

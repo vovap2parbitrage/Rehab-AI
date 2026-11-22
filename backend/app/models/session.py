@@ -57,6 +57,12 @@ class TrainingSession(Base):
         nullable=True,
     )
 
+    # The exercise version the video was scored against; empty for sessions without analysis.
+    exercise_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("exercise_versions.id"),
+        nullable=True,
+    )
+
     pain_score: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

@@ -6,6 +6,13 @@ from app.main import app
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.schemas.exercise import ExerciseRead
+from app.services.exercise import current_version
+
+
+def _version_id(db_session, exercise_id):
+    """The newest version of an exercise created through the API."""
+    exercise = db_session.get(Exercise, uuid.UUID(str(exercise_id)))
+    return current_version(db_session, exercise).id
 
 
 def exercise_payload(owner_id: str | None = None, **overrides) -> dict:
@@ -145,6 +152,7 @@ def test_patient_can_view_reference_video_for_assigned_exercise(
         Assignment(
             patient_id=patient.id,
             exercise_id=uuid.UUID(created["id"]),
+            exercise_version_id=_version_id(db_session, created["id"]),
             repetitions=10,
             duration_weeks=4,
             weekdays=[0, 2, 4],
@@ -179,6 +187,7 @@ def test_patient_cannot_view_video_for_unassigned_exercise(
         Assignment(
             patient_id=other_patient.id,
             exercise_id=uuid.UUID(created["id"]),
+            exercise_version_id=_version_id(db_session, created["id"]),
             repetitions=10,
             duration_weeks=4,
             weekdays=[0, 2, 4],
@@ -448,6 +457,7 @@ def test_therapist_cannot_delete_assigned_exercise(
         Assignment(
             patient_id=patient.id,
             exercise_id=db_exercise.id,
+            exercise_version_id=_version_id(db_session, db_exercise.id),
             repetitions=10,
             duration_weeks=4,
             weekdays=[0, 2, 4],
@@ -486,7 +496,8 @@ def test_exercise_read_schema_matches_model_columns():
 
     columns = {column.name for column in Exercise.__table__.columns}
 
-    assert set(ExerciseRead.model_fields) <= columns
+    # version and active_assignments are worked out from other tables, not stored here.
+    assert set(ExerciseRead.model_fields) - {"version", "active_assignments"} <= columns
 
 
 def test_exercise_stores_body_parts(api, login, therapist):

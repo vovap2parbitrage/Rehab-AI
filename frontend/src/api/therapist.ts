@@ -20,6 +20,10 @@ export interface Exercise {
   joint_tolerances: Record<string, number>
   body_parts: string[]
   created_by: string
+  /** Number of the current version: it grows when the video, body parts or tolerances change. */
+  version: number
+  /** Active assignments of this exercise. */
+  active_assignments: number
 }
 
 export interface Assignment {
@@ -49,6 +53,8 @@ export interface ExercisePayload {
   reference_video_key: string | null
   joint_tolerances: Record<string, number>
   body_parts: string[]
+  /** On an edit: move the active assignments to the new version (default: they stay on theirs). */
+  apply_to_active_assignments?: boolean
 }
 
 export interface AssignmentPayload {
@@ -135,5 +141,22 @@ export function createAssignment(payload: AssignmentPayload): Promise<Assignment
 export function cancelAssignment(assignmentId: string): Promise<void> {
   return apiRequest<void>(`/api/v1/assignments/${assignmentId}/cancel`, {
     method: 'POST',
+  })
+}
+
+/** What a doctor can change in an assignment. The start date is fixed. */
+export interface AssignmentUpdatePayload {
+  duration_weeks?: number
+  weekdays?: number[]
+  repetitions?: number
+}
+
+export function updateAssignment(
+  assignmentId: string,
+  payload: AssignmentUpdatePayload,
+): Promise<Assignment> {
+  return apiRequest<Assignment>(`/api/v1/assignments/${assignmentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   })
 }

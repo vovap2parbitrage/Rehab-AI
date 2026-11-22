@@ -26,6 +26,14 @@ class ExerciseCreate(BaseModel):
         return v
 
 
+class ExerciseUpdate(ExerciseCreate):
+    # Move the active assignments of this exercise to its newest version. By default they
+    # stay on the version they were given, so their scores remain comparable.
+    apply_to_active_assignments: bool = False
+
+
 class ExerciseRead(ExerciseCreate):
     id: UUID = Field(default_factory=uuid4)
     created_by: UUID
+    version: int = 1
+    active_assignments: int = 0

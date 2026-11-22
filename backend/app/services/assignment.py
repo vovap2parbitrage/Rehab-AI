@@ -11,8 +11,15 @@ from app.models.exercise import Exercise
 from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
-from app.schemas.assignment import AssignmentCreate, AssignmentRead, PatientAssignmentRead
+from app.schemas.assignment import (
+    AssignmentCreate,
+    AssignmentRead,
+    AssignmentUpdate,
+    PatientAssignmentRead,
+)
 from app.core.statuses import AssignmentStatus
+from app.core.timezones import today_in
+from app.services.exercise import current_version
 from app.services.patient_access import (
     get_patient_for_therapist,
     get_patient_for_user,
@@ -101,6 +108,21 @@ def list_assignments(
     return [AssignmentRead.model_validate(item, from_attributes=True) for item in assignments]
 
 
+def _check_start_date(payload: AssignmentCreate, user: User) -> None:
+    """The plan starts on a real session day, and not in the past."""
+    today = today_in(user.timezone)
+    if payload.starts_on < today:
+        raise HTTPException(
+            status_code=422,
+            detail=f"The start date cannot be before today ({today.isoformat()})",
+        )
+    if payload.starts_on.weekday() not in payload.weekdays:
+        raise HTTPException(
+            status_code=422,
+            detail="The start date must be one of the weekdays of the plan",
+        )
+
+
 def create_assignment(
     db: Session,
     payload: AssignmentCreate,
@@ -112,10 +134,17 @@ def create_assignment(
     else:
         get_patient_for_therapist(payload.patient_id, user, db)
     require_not_archived(db, payload.patient_id, user)
-    if db.get(Exercise, payload.exercise_id) is None:
+    exercise = db.get(Exercise, payload.exercise_id)
+    if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
-    assignment = Assignment(**payload.model_dump(), therapist_id=user.id)
+    _check_start_date(payload, user)
+
+    assignment = Assignment(
+        **payload.model_dump(),
+        therapist_id=user.id,
+        exercise_version_id=current_version(db, exercise).id,
+    )
     db.add(assignment)
     db.commit()
     db.refresh(assignment)
@@ -143,3 +172,23 @@ def cancel_assignment(db: Session, assignment_id: UUID, user: User) -> None:
     assignment.status = AssignmentStatus.CANCELLED.value
 
     db.commit()
+
+
+def update_assignment(
+    db: Session, assignment_id: UUID, payload: AssignmentUpdate, user: User
+) -> AssignmentRead:
+    assignment = db.get(Assignment, assignment_id)
+
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    if user.role != Role.ADMIN.value and assignment.therapist_id != user.id:
+        raise HTTPException(status_code=403, detail="You can edit only your assignments")
+    if assignment.status != AssignmentStatus.ACTIVE.value:
+        raise HTTPException(status_code=409, detail="Only active assignments can be edited")
+
+    for field, value in payload.model_dump(exclude_none=True).items():
+        setattr(assignment, field, value)
+
+    db.commit()
+    db.refresh(assignment)
+    return AssignmentRead.model_validate(assignment, from_attributes=True)

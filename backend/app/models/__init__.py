@@ -1,5 +1,6 @@
 from .assignment import Assignment
 from .exercise import Exercise
+from .exercise_version import ExerciseVersion
 from .help_request import HelpRequest
 from .invitation import TherapistInvitation
 from .patient import Patient
@@ -10,6 +11,7 @@ from .user import User
 __all__ = [
     'Assignment',
     'Exercise',
+    'ExerciseVersion',
     'HelpRequest',
     'TherapistInvitation',
     'Patient',
