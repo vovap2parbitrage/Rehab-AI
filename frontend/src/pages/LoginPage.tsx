@@ -3,23 +3,10 @@ import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { useAuthRedirectBusy } from '../auth/useAuthRedirectBusy'
 import { describeAuthActionError, describeAuthErrorCode } from '../auth/errors'
+import { readReturnPath } from '../auth/returnPath'
 import { AuthLayout } from '../components/AuthLayout'
 import { ErrorMessage } from '../components/ErrorMessage'
 import { LockIcon, ShieldCheckIcon } from '../components/Icons'
-
-interface LoginLocationState {
-  from?: unknown
-}
-
-function readReturnPath(state: unknown): string {
-  const from = (state as LoginLocationState | null)?.from
-
-  if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
-    return from
-  }
-
-  return '/profile'
-}
 
 export function LoginPage() {
   const { initialized, authenticated, initError, login } = useAuth()

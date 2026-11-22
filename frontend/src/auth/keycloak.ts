@@ -2,6 +2,7 @@ import Keycloak, { type KeycloakLoginOptions } from 'keycloak-js'
 import { appConfig } from '../config/appConfig'
 import { clearRegistrationRole } from '../lib/registrationRole'
 import { AuthSessionError } from './errors'
+import { normalizeReturnPath } from './returnPath'
 
 let keycloakInstance: Keycloak | null = null
 let initialization: Promise<boolean> | null = null
@@ -18,9 +19,8 @@ export function getKeycloak(): Keycloak {
   return keycloakInstance
 }
 
-function toAppUrl(path = '/profile'): string {
-  const safePath = path.startsWith('/') && !path.startsWith('//') ? path : '/profile'
-  return `${window.location.origin}${safePath}`
+function toAppUrl(path?: string): string {
+  return `${window.location.origin}${normalizeReturnPath(path)}`
 }
 
 /**
