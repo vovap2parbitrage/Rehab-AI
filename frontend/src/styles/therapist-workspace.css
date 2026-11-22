@@ -245,3 +245,8 @@
   color: var(--danger);
   font-weight: 650;
 }
+
+.therapist-form__apply small {
+  color: var(--muted);
+  font-weight: 500;
+}

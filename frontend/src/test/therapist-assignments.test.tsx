@@ -62,6 +62,8 @@ const exercise: Exercise = {
   joint_tolerances: {},
   body_parts: ['right_leg'],
   created_by: 'therapist-1',
+  version: 1,
+  active_assignments: 1,
 }
 
 const assignment: Assignment = {
