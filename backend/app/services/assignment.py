@@ -137,6 +137,8 @@ def create_assignment(
     exercise = db.get(Exercise, payload.exercise_id)
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
+    if exercise.hidden_at is not None:
+        raise HTTPException(status_code=409, detail="The exercise is hidden. Restore it first")
 
     _check_start_date(payload, user)
 

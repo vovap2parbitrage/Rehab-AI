@@ -53,6 +53,12 @@ class Exercise(Base):
         nullable=False,
     )
 
+    # When the therapist hid the exercise from the library (it can be restored).
+    hidden_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"),
         nullable=False,
@@ -71,6 +77,10 @@ class Exercise(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    @property
+    def hidden(self) -> bool:
+        return self.hidden_at is not None
 
     creator = relationship("User", back_populates="exercises")
 
