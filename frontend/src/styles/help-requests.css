@@ -125,3 +125,26 @@
   margin: 0;
   font-size: 1.18rem;
 }
+
+.help-request__session {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.help-request__session summary {
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.help-request__session[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.help-request__session > :not(summary) {
+  margin: 10px 12px;
+}

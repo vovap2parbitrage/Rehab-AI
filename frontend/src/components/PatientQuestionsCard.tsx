@@ -50,7 +50,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
         <EmptyState message="Пацієнт ще не ставив запитань." />
       ) : (
         <>
-          <HelpRequestList items={items.slice(0, PREVIEW_COUNT)} showExercise compact />
+          <HelpRequestList items={items.slice(0, PREVIEW_COUNT)} showExercise compact showSession />
           <div className="patient-questions__actions">
             <button
               type="button"
@@ -87,7 +87,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
             Закрити
           </button>
         </div>
-        <HelpRequestList items={items} showExercise />
+        <HelpRequestList items={items} showExercise showSession />
       </dialog>
     </section>
   )
