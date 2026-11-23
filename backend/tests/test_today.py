@@ -66,11 +66,9 @@ def named(rows):
 
 
 @pytest.fixture
-def make_patient(db_session, therapist, seed_patient):
-    from tests.conftest import make_user
-
+def make_patient(db_session, therapist, seed_patient, new_user):
     def _make(first_name):
-        user = make_user("patient")
+        user = new_user("patient")
         user.first_name = first_name
         user.last_name = "P"
         db_session.add(user)

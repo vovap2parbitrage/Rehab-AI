@@ -129,6 +129,13 @@ def make_user(role: str) -> User:
 
 
 @pytest.fixture
+def new_user():
+    """The user factory for tests that need an extra user (importing `tests.conftest`
+    only works when the working directory is on sys.path, which plain `pytest` does not do)."""
+    return make_user
+
+
+@pytest.fixture
 def login():
     """Authenticate requests as the given user (claims carry only that user's role)."""
 
