@@ -25,7 +25,7 @@ def test_a_therapist_writes_to_their_patient(api, login, therapist, patient):
     body = response.json()
     assert body["message"] == "Please do both exercises today"
     assert body["patient_id"] == str(patient.id)
-    assert body["patient_name"] == ""  # the seeded user has no name
+    assert body["patient_name"] == "Ivan Petrenko"
     assert body["therapist_name"] == therapist.email
     assert body["reply"] is None
     assert body["reply_seen"] is False
