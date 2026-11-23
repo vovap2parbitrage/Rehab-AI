@@ -15,6 +15,7 @@ from app.core.statuses import AssignmentStatus
 from app.models.user import User
 from app.schemas.comparison import KNOWN_JOINTS, MAX_TOLERANCE_DEG, ComparisonRequest
 from app.services import storage
+from app.services.schedule import require_session_today
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ def prepare_comparison(db: Session, req: ComparisonRequest, user: User) -> Prepa
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Assignment not found")
     if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status.HTTP_409_CONFLICT, "Assignment is not active")
+    require_session_today(db, assignment)
     if not storage.is_owned_key(req.patient_key, str(user.id)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Video does not belong to you")
 

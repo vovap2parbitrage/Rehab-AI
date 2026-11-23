@@ -3,16 +3,16 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.session import TrainingSession
 from app.schemas.assignment import AssignmentRead
 
 
-def first_session_day(weekdays, timezone=None) -> date:
-    """The first day from today on (in the given time zone) that is a plan weekday."""
-    day = today_in(timezone)
+def first_session_day(weekdays) -> date:
+    """The first day from today on that is a plan weekday."""
+    day = app_today()
     while day.weekday() not in weekdays:
         day += timedelta(days=1)
     return day
@@ -344,7 +344,7 @@ def test_an_assignment_cannot_start_in_the_past(
     exercise = Exercise(name="Squat", created_by=therapist.id)
     db_session.add(exercise)
     db_session.commit()
-    yesterday = (today_in(None) - timedelta(days=1)).isoformat()
+    yesterday = (app_today() - timedelta(days=1)).isoformat()
 
     response = _create(
         api, therapist, patient_user, seed_patient, login,
@@ -363,7 +363,7 @@ def test_an_assignment_can_start_today(
     exercise = Exercise(name="Squat", created_by=therapist.id)
     db_session.add(exercise)
     db_session.commit()
-    today = today_in(None)
+    today = app_today()
 
     response = _create(
         api, therapist, patient_user, seed_patient, login,
@@ -393,29 +393,3 @@ def test_the_start_date_must_be_a_weekday_of_the_plan(
 
     assert response.status_code == 422
     assert "weekdays of the plan" in response.json()["detail"]
-
-
-def test_today_is_taken_in_the_time_zone_of_the_therapist(
-    api, login, therapist, patient_user, seed_patient, db_session
-):
-    exercise = Exercise(name="Squat", created_by=therapist.id)
-    db_session.add(exercise)
-    db_session.commit()
-    patient = seed_patient(patient_user, therapist)
-    login(therapist)
-    # Pago Pago (UTC-11) is at least a calendar day behind Kiritimati (UTC+14).
-    behind = today_in("Pacific/Pago_Pago")
-    payload = assignment_payload(
-        patient.id,
-        exercise_id=str(exercise.id),
-        weekdays=[behind.weekday()],
-        starts_on=behind.isoformat(),
-    )
-
-    therapist.timezone = "Pacific/Kiritimati"
-    too_late = api.post("/api/v1/assignments/", json=payload)
-    therapist.timezone = "Pacific/Pago_Pago"
-    in_time = api.post("/api/v1/assignments/", json=payload)
-
-    assert too_late.status_code == 422
-    assert in_time.status_code == 201

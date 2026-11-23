@@ -80,6 +80,7 @@ vi.mock('../api/therapist', () => ({
   createAssignment: vi.fn(),
   getPatient: vi.fn(),
   getScoringOptions: vi.fn(),
+  getToday: vi.fn(),
   listArchivedPatients: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
@@ -247,6 +248,9 @@ const patientAssignment: PatientAssignment = {
     reference_video_key: null,
   },
   sessions: [],
+  scheduled_today: true,
+  done_today: false,
+  next_session_on: null,
 }
 
 const session: PatientSession = {
@@ -1335,6 +1339,60 @@ describe('Patient access and cabinet pages', () => {
     expect(getSessionVideoUrl).toHaveBeenCalledWith('session-1')
   })
 
+  describe('what a patient may do today', () => {
+    const due = {
+      ...patientAssignment,
+      id: 'due',
+      exercise: { ...patientAssignment.exercise, name: 'Присідання' },
+    }
+    const later = {
+      ...patientAssignment,
+      id: 'later',
+      exercise: { ...patientAssignment.exercise, name: 'Випади' },
+      scheduled_today: false,
+      next_session_on: '2026-11-26',
+    }
+    const finished = {
+      ...patientAssignment,
+      id: 'finished',
+      exercise: { ...patientAssignment.exercise, name: 'Міст' },
+      done_today: true,
+    }
+
+    it('offers to start only what is due today and not done yet', async () => {
+      const user = userEvent.setup()
+      vi.mocked(listPatientAssignments).mockResolvedValue([due, later, finished])
+      renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+
+      await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+
+      expect(screen.getAllByRole('link', { name: /Виконати вправу/ })).toHaveLength(1)
+      expect(screen.getByText('Сьогодні виконано')).toBeInTheDocument()
+      expect(screen.getByText(/Наступне заняття: .*26 листопада/)).toBeInTheDocument()
+      expect(screen.getByText('Виконати можна лише в день заняття.')).toBeInTheDocument()
+    })
+
+    it('does not open the exercise on a day it is not due', async () => {
+      vi.mocked(listPatientAssignments).mockResolvedValue([{ ...later, id: 'assignment-1' }])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+
+      expect(
+        await screen.findByRole('heading', { name: 'Сьогодні цю вправу виконувати не потрібно' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Наступне заняття: .*26 листопада/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Надіслати на аналіз' })).not.toBeInTheDocument()
+    })
+
+    it('does not let the patient do the same exercise twice in a day', async () => {
+      vi.mocked(listPatientAssignments).mockResolvedValue([{ ...finished, id: 'assignment-1' }])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+
+      expect(
+        await screen.findByRole('heading', { name: 'Сьогодні цю вправу вже виконано' }),
+      ).toBeInTheDocument()
+    })
+  })
+
   it('shows a workspace error when loading cabinet data fails and retries the request', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientInvitations).mockRejectedValueOnce(
@@ -1360,21 +1418,26 @@ describe('Local assignment dates', () => {
     vi.useRealTimers()
   })
 
-  it('refreshes the patient’s schedule at local midnight', async () => {
-    vi.mocked(listPatientAssignments).mockResolvedValue([
-      { ...patientAssignment, starts_on: '2026-11-23', weekdays: [0] },
-    ])
+  it('asks the server again at local midnight what is due today', async () => {
+    vi.mocked(listPatientAssignments)
+      .mockResolvedValueOnce([
+        { ...patientAssignment, scheduled_today: false, next_session_on: '2026-11-23' },
+      ])
+      .mockResolvedValue([{ ...patientAssignment, scheduled_today: true }])
     await act(async () => {
       renderPatientPage('/patient/exercises', <PatientExercisesPage />)
     })
 
     expect(screen.getByText('На сьогодні вправ немає')).toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(1_000))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
 
     expect(
       screen.getByRole('heading', { name: patientAssignment.exercise.name }),
     ).toBeInTheDocument()
+    expect(listPatientAssignments).toHaveBeenCalledTimes(2)
   })
 
   it('moves the therapist’s default start to the next schedule day and keeps a manual date', async () => {

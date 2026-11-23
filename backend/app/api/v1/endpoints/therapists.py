@@ -9,7 +9,8 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.plan import PlanChange, PlanPurchaseRead, TherapistPlanRead
-from app.services import plan
+from app.schemas.today import TodayRead
+from app.services import plan, today
 
 router = APIRouter()
 
@@ -41,3 +42,12 @@ def assign_plan(
     db: Session = Depends(get_db),
 ) -> TherapistPlanRead:
     return plan.assign_plan(db, user_id, payload.plan_code)
+
+
+@router.get("/me/today", response_model=TodayRead)
+def get_my_today(
+    _claims: dict[str, Any] = Depends(require_roles(Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> TodayRead:
+    return today.get_today(db, user)

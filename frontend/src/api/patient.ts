@@ -46,6 +46,10 @@ export interface PatientAssignment {
   status: AssignmentStatus
   exercise: PatientExercise
   sessions: PatientSession[]
+  /** What the patient may do today; the server decides from the plan's schedule. */
+  scheduled_today: boolean
+  done_today: boolean
+  next_session_on: string | null
 }
 
 export function listPatientTherapists(

@@ -61,6 +61,10 @@ class PatientAssignmentRead(AssignmentRead):
 
     exercise: PatientExerciseRead
     sessions: list[PatientSessionRead] = Field(default_factory=list)
+    # What the patient may do today (the server decides; see services/schedule.py).
+    scheduled_today: bool = False
+    done_today: bool = False
+    next_session_on: date | None = None
 
 
 class AssignmentUpdate(BaseModel):

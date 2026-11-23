@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.body_part import BodyPart
 from app.schemas.comparison import KNOWN_JOINTS, MAX_TOLERANCE_DEG
 from app.services.comparison.angles import BODY_PARTS as JOINTS_BY_BODY_PART
-from app.services.comparison.scoring import DEFAULT_TOLERANCE
 
 BODY_PARTS = {part.value for part in BodyPart}
 
