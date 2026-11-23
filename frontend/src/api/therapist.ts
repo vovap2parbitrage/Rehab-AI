@@ -188,3 +188,39 @@ export function updateAssignment(
     body: JSON.stringify(payload),
   })
 }
+
+export interface TodayItem {
+  assignment_id: string
+  exercise_name: string
+  done: boolean
+}
+
+export interface TodayPatient {
+  patient_id: string
+  patient_name: string
+  items: TodayItem[]
+  last_completed_at: string | null
+}
+
+export interface TodayCounters {
+  active_patients: number
+  due_today: number
+  finished: number
+  not_finished: number
+  missed_yesterday: number
+  open_questions: number
+}
+
+/** The therapist's "Today" page: who did what is due, who did not, who missed yesterday. */
+export interface Today {
+  date: string
+  timezone: string
+  counters: TodayCounters
+  not_finished: TodayPatient[]
+  finished: TodayPatient[]
+  missed_yesterday: TodayPatient[]
+}
+
+export function getToday(options: RequestOptions = {}): Promise<Today> {
+  return apiRequest<Today>('/api/v1/therapists/me/today', options)
+}
