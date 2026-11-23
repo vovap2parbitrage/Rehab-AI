@@ -2,6 +2,7 @@ import { EmptyState } from './EmptyState'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '../lib/errorMessage'
+import { HelpRequestSession } from './HelpRequestSession'
 import { replyToHelpRequest } from '../api/helpRequests'
 import { useTherapistQuestions } from '../lib/therapistQuestionsContext'
 import { ErrorMessage } from './ErrorMessage'
@@ -73,6 +74,7 @@ export function NeedsAttentionSection() {
                   </small>
                 </div>
                 <p>{item.message}</p>
+                <HelpRequestSession item={item} />
                 <form className="therapist-form" onSubmit={(event) => handleReply(event, item.id)}>
                   <label className="therapist-form__field">
                     <span>Відповідь пацієнту</span>

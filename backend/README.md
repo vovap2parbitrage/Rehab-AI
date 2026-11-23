@@ -367,7 +367,12 @@ pytest -q tests/test_patient_archive.py     # один файл
 Налаштування вправи: `reference_video_key` (ключ відео в S3 виду `videos/<id>/<32hex>.mp4`),
 `body_parts` (`left_arm`, `right_arm`, `left_leg`, `right_leg`, `torso`) і `joint_tolerances`
 (необов'язково; ключі: `l_elbow`, `r_elbow`, `l_shoulder`, `r_shoulder`, `l_hip`, `r_hip`,
-`l_knee`, `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів). У вебінтерфейсі лікар завантажує еталон і
+`l_knee`, `r_knee`, `torso_tilt`; значення від 0 (не включно) до 90 градусів; суглоб має належати
+вибраним частинам тіла, інакше відповідь 422; без значення діє допуск 10 градусів). Перелік суглобів
+по частинах тіла й межі віддає `GET /api/v1/exercises/scoring-options`. Вправу можна приховати з
+бібліотеки (`POST /api/v1/exercises/{id}/hide`, `GET /api/v1/exercises/?hidden=true`,
+`POST /api/v1/exercises/{id}/restore`): прихована вправа недоступна для нових призначень, наявні
+призначення працюють. У вебінтерфейсі лікар завантажує еталон і
 вибирає частини тіла у формі вправи. Через API це робиться так: завантажити відео через
 `/comparisons/uploads`, потім `PUT /api/v1/exercises/{id}` з ключем і частинами тіла.
 

@@ -24,6 +24,16 @@ export interface Exercise {
   version: number
   /** Active assignments of this exercise. */
   active_assignments: number
+  /** Every assignment ever made from it: while there is one, the exercise cannot be deleted. */
+  assignments_total: number
+  hidden: boolean
+}
+
+/** What the tolerance editor needs; comes from the scoring code on the server. */
+export interface ScoringOptions {
+  joints_by_body_part: Record<string, string[]>
+  default_tolerance_deg: number
+  max_tolerance_deg: number
 }
 
 export interface Assignment {
@@ -99,6 +109,24 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
 
 export function listExercises(options: RequestOptions = {}): Promise<Exercise[]> {
   return apiRequest<Exercise[]>('/api/v1/exercises/', options)
+}
+
+export function listHiddenExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  return apiRequest<Exercise[]>('/api/v1/exercises/?hidden=true', options)
+}
+
+export function getScoringOptions(options: RequestOptions = {}): Promise<ScoringOptions> {
+  return apiRequest<ScoringOptions>('/api/v1/exercises/scoring-options', options)
+}
+
+export function hideExercise(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/exercises/${encodeURIComponent(id)}/hide`, { method: 'POST' })
+}
+
+export function restoreExercise(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/exercises/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  })
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {

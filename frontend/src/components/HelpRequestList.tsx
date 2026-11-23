@@ -1,4 +1,5 @@
 import type { HelpRequest } from '../api/helpRequests'
+import { HelpRequestSession } from './HelpRequestSession'
 
 interface HelpRequestListProps {
   items: HelpRequest[]
@@ -6,6 +7,8 @@ interface HelpRequestListProps {
   showExercise?: boolean
   /** Short preview: the question and the reply are cut to one line each. */
   compact?: boolean
+  /** Therapist: also show the analysis and video of the session the question is about. */
+  showSession?: boolean
 }
 
 /** Read-only list of patient questions with the therapist's replies. */
@@ -13,6 +16,7 @@ export function HelpRequestList({
   items,
   showExercise = false,
   compact = false,
+  showSession = false,
 }: HelpRequestListProps) {
   return (
     <div className={compact ? 'help-request-list help-request-list--compact' : 'help-request-list'}>
@@ -35,6 +39,7 @@ export function HelpRequestList({
             </span>
           </div>
           <p>{item.message}</p>
+          {showSession && <HelpRequestSession item={item} />}
           {item.reply && (
             <p className="help-request__reply">
               <strong>

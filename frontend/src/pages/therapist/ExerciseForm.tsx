@@ -1,10 +1,17 @@
 import type { FormEvent, RefObject } from 'react'
 import { CheckIcon } from '../../components/Icons'
+import type { ScoringOptions } from '../../api/therapist'
 import { BODY_PARTS } from '../../lib/bodyParts'
+import { jointLabel } from '../../lib/jointLabels'
 
 interface ExerciseFormProps {
   values: { name: string; description: string }
   bodyParts: string[]
+  /** Which joints each body part has, and the tolerance limits; absent until loaded. */
+  scoringOptions: ScoringOptions | undefined
+  /** Tolerance per joint as typed; an empty value means the default. */
+  tolerances: Record<string, string>
+  onToleranceChange: (joint: string, value: string) => void
   videoInputRef: RefObject<HTMLInputElement | null>
   videoError: string | null
   videoRequired: boolean
@@ -24,6 +31,9 @@ interface ExerciseFormProps {
 export function ExerciseForm({
   values,
   bodyParts,
+  scoringOptions,
+  tolerances,
+  onToleranceChange,
   videoInputRef,
   videoError,
   videoRequired,
@@ -87,6 +97,14 @@ export function ExerciseForm({
             ))}
           </div>
         </div>
+        {scoringOptions && (
+          <ToleranceFields
+            options={scoringOptions}
+            bodyParts={bodyParts}
+            tolerances={tolerances}
+            onChange={onToleranceChange}
+          />
+        )}
         <label className="therapist-form__field">
           <span>Відео {videoRequired && '*'}</span>
           <input
@@ -123,5 +141,45 @@ export function ExerciseForm({
         )}
       </form>
     </section>
+  )
+}
+
+interface ToleranceFieldsProps {
+  options: ScoringOptions
+  bodyParts: string[]
+  tolerances: Record<string, string>
+  onChange: (joint: string, value: string) => void
+}
+
+/** How far each joint may deviate from the reference before the score drops. */
+function ToleranceFields({ options, bodyParts, tolerances, onChange }: ToleranceFieldsProps) {
+  const joints = BODY_PARTS.filter((part) => bodyParts.includes(part.value)).flatMap(
+    (part) => options.joints_by_body_part[part.value] ?? [],
+  )
+  if (joints.length === 0) return null
+
+  return (
+    <fieldset className="therapist-form__field therapist-form__tolerances">
+      <legend>Допуски, градуси</legend>
+      <small>
+        Наскільки кут суглоба може відхилятись від еталона без штрафу. Менше значення означає
+        суворішу оцінку. Порожнє поле: {options.default_tolerance_deg}°.
+      </small>
+      {joints.map((joint) => (
+        <label key={joint}>
+          <span>{jointLabel(joint)}</span>
+          <input
+            type="number"
+            min={1}
+            max={options.max_tolerance_deg}
+            step="any"
+            inputMode="decimal"
+            placeholder={String(options.default_tolerance_deg)}
+            value={tolerances[joint] ?? ''}
+            onChange={(event) => onChange(joint, event.target.value)}
+          />
+        </label>
+      ))}
+    </fieldset>
   )
 }

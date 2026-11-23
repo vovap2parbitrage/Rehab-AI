@@ -22,7 +22,8 @@ def exercise_payload(owner_id: str | None = None, **overrides) -> dict:
         "reference_video_key": (
             f"videos/{owner_id or 'test-owner'}/{uuid.uuid4().hex}.mp4"
         ),
-        "joint_tolerances": {"knee": 5.0},
+        "body_parts": ["right_leg"],
+        "joint_tolerances": {"r_knee": 5.0},
     }
     payload.update(overrides)
     return payload
@@ -39,7 +40,7 @@ def test_therapist_creates_exercise_and_created_by_is_set(api, login, therapist)
     body = response.json()
     assert body["name"] == "Knee flexion"
     assert body["created_by"] == str(therapist.id)
-    assert body["joint_tolerances"] == {"knee": 5.0}
+    assert body["joint_tolerances"] == {"r_knee": 5.0}
 
 
 def test_created_by_cannot_be_set_by_client(api, login, therapist):
@@ -503,8 +504,9 @@ def test_exercise_read_schema_matches_model_columns():
 
     columns = {column.name for column in Exercise.__table__.columns}
 
-    # version and active_assignments are worked out from other tables, not stored here.
-    assert set(ExerciseRead.model_fields) - {"version", "active_assignments"} <= columns
+    # These are worked out from other data, not stored in the exercise row itself.
+    derived = {"version", "active_assignments", "assignments_total", "hidden"}
+    assert set(ExerciseRead.model_fields) - derived <= columns
 
 
 def test_exercise_stores_body_parts(api, login, therapist):
@@ -524,9 +526,10 @@ def test_exercise_stores_body_parts(api, login, therapist):
 def test_exercise_body_parts_default_to_empty(api, login, therapist):
     login(therapist)
 
-    response = api.post(
-        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
-    )
+    payload = exercise_payload(str(therapist.id), joint_tolerances={})
+    del payload["body_parts"]
+
+    response = api.post("/api/v1/exercises/", json=payload)
 
     assert response.json()["body_parts"] == []
 

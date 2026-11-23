@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
@@ -9,7 +9,7 @@ from app.core.auth import extract_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
+from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate, ScoringOptions
 from app.services import exercise
 
 router = APIRouter()
@@ -17,13 +17,21 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ExerciseRead])
 def list_exercises(
+    hidden: bool = False,
     claims: dict[str, Any] = Depends(
         require_roles(Role.ADMIN, Role.THERAPIST)
     ),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[ExerciseRead]:
-    return exercise.list_exercises(db, user, extract_roles(claims))
+    return exercise.list_exercises(db, user, extract_roles(claims), hidden=hidden)
+
+
+@router.get("/scoring-options", response_model=ScoringOptions)
+def scoring_options(
+    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+) -> ScoringOptions:
+    return exercise.scoring_options()
 
 @router.post("/", response_model=ExerciseRead, status_code=201)
 def create_exercise(
@@ -85,3 +93,23 @@ def get_exercise_video(
             db, exercise_id, user, extract_roles(claims)
         )
     }
+
+
+@router.post("/{exercise_id}/hide", status_code=status.HTTP_204_NO_CONTENT)
+def hide_exercise(
+    exercise_id: UUID,
+    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> None:
+    exercise.hide_exercise(db, exercise_id, user, extract_roles(claims))
+
+
+@router.post("/{exercise_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+def restore_exercise(
+    exercise_id: UUID,
+    claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> None:
+    exercise.restore_exercise(db, exercise_id, user, extract_roles(claims))
