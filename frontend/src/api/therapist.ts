@@ -1,4 +1,5 @@
 import { apiRequest, type RequestOptions } from './client'
+import { pageQuery, type Page, type PageRequestOptions } from './pagination'
 import type { AssignmentStatus, InvitationStatus } from './statuses'
 
 export interface Patient {
@@ -76,12 +77,12 @@ export interface AssignmentPayload {
   starts_on: string
 }
 
-export function listPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/', options)
+export function listPatients(options: PageRequestOptions = {}): Promise<Page<Patient>> {
+  return apiRequest<Page<Patient>>(`/api/v1/patients/?${pageQuery(options)}`, options)
 }
 
-export function listArchivedPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/?archived=true', options)
+export function listArchivedPatients(options: PageRequestOptions = {}): Promise<Page<Patient>> {
+  return apiRequest<Page<Patient>>(`/api/v1/patients/?archived=true&${pageQuery(options)}`, options)
 }
 
 export function archivePatient(id: string): Promise<void> {
@@ -107,12 +108,32 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
   })
 }
 
-export function listExercises(options: RequestOptions = {}): Promise<Exercise[]> {
-  return apiRequest<Exercise[]>('/api/v1/exercises/', options)
+export function listExercises(options: PageRequestOptions = {}): Promise<Page<Exercise>> {
+  return apiRequest<Page<Exercise>>(`/api/v1/exercises/?${pageQuery(options)}`, options)
+}
+
+/** Every page of a library listing, for views that show the whole set. */
+async function listEveryExercise(hidden: boolean, options: RequestOptions): Promise<Exercise[]> {
+  const items: Exercise[] = []
+  let offset = 0
+  let total = 0
+  while (offset === 0 || offset < total) {
+    const query = `${pageQuery({ limit: 100, offset })}${hidden ? '&hidden=true' : ''}`
+    const page = await apiRequest<Page<Exercise>>(`/api/v1/exercises/?${query}`, options)
+    items.push(...page.items)
+    total = page.total
+    if (page.items.length === 0) break
+    offset += page.items.length
+  }
+  return items
+}
+
+export function listAllExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  return listEveryExercise(false, options)
 }
 
 export function listHiddenExercises(options: RequestOptions = {}): Promise<Exercise[]> {
-  return apiRequest<Exercise[]>('/api/v1/exercises/?hidden=true', options)
+  return listEveryExercise(true, options)
 }
 
 export function getScoringOptions(options: RequestOptions = {}): Promise<ScoringOptions> {

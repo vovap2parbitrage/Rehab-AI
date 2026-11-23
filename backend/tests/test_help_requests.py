@@ -96,7 +96,34 @@ def test_needs_attention_shows_only_own_patients_unanswered_requests(
     response = api.get("/api/v1/help-requests/needs-attention")
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [own_request["id"]]
+    assert [item["id"] for item in response.json()["items"]] == [own_request["id"]]
+
+
+def test_question_list_searches_and_paginates(
+    api, login, db_session, therapist, patient_user, seed_patient, seed_assignment
+):
+    patient = seed_patient(patient_user, therapist)
+    session = _completed_session(db_session, seed_assignment(patient))
+    login(patient_user)
+    first = _ask(api, session, "Pain after walking").json()
+    _ask(api, session, "Knee feels stiff")
+
+    login(therapist)
+    response = api.get(
+        "/api/v1/help-requests/needs-attention",
+        params={"q": "Pain", "limit": 1, "offset": 0},
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["id"] == first["id"]
+
+    page = api.get(
+        "/api/v1/help-requests/",
+        params={"patient_id": str(patient.id), "limit": 1, "offset": 1},
+    )
+    assert page.status_code == 200
+    assert page.json()["total"] == 2
+    assert len(page.json()["items"]) == 1
 
 
 def test_reply_removes_request_from_needs_attention_and_patient_sees_it(
@@ -117,7 +144,7 @@ def test_reply_removes_request_from_needs_attention_and_patient_sees_it(
     assert reply.json()["reply"] == "Reduce the repetitions to 5 and put ice on the knee."
     assert reply.json()["replied_at"]
     assert reply.json()["replied_by_email"] == therapist.email
-    assert api.get("/api/v1/help-requests/needs-attention").json() == []
+    assert api.get("/api/v1/help-requests/needs-attention").json()["items"] == []
 
     again = api.patch(f"/api/v1/help-requests/{request_id}/reply", json={"reply": "Again"})
     assert again.status_code == 409
@@ -184,15 +211,16 @@ def test_question_goes_only_to_the_therapist_who_assigned_the_exercise(
     request_id = _ask(api, session).json()["id"]
 
     login(other_therapist)
-    assert api.get("/api/v1/help-requests/needs-attention").json() == []
-    assert api.get(f"/api/v1/help-requests/?patient_id={patient.id}").json() == []
+    assert api.get("/api/v1/help-requests/needs-attention").json()["items"] == []
+    assert api.get(f"/api/v1/help-requests/?patient_id={patient.id}").json()["items"] == []
     forbidden = api.patch(f"/api/v1/help-requests/{request_id}/reply", json={"reply": "Hi"})
     assert forbidden.status_code == 403
 
     login(therapist)
-    assert [item["id"] for item in api.get("/api/v1/help-requests/needs-attention").json()] == [
-        request_id
-    ]
+    assert [
+        item["id"]
+        for item in api.get("/api/v1/help-requests/needs-attention").json()["items"]
+    ] == [request_id]
 
 
 def test_patient_history_keeps_answered_questions_newest_first(
@@ -210,7 +238,7 @@ def test_patient_history_keeps_answered_questions_newest_first(
 
     login(therapist)
     api.patch(f"/api/v1/help-requests/{first_id}/reply", json={"reply": "Answer"})
-    history = api.get(f"/api/v1/help-requests/?patient_id={patient.id}").json()
+    history = api.get(f"/api/v1/help-requests/?patient_id={patient.id}").json()["items"]
 
     assert [item["id"] for item in history] == [second_id, first_id]
     assert history[1]["reply"] == "Answer"
@@ -245,7 +273,7 @@ def test_the_therapist_sees_how_the_session_of_a_question_was_scored(
     _ask(api, session)
 
     login(therapist)
-    item = api.get("/api/v1/help-requests/needs-attention").json()[0]
+    item = api.get("/api/v1/help-requests/needs-attention").json()["items"][0]
 
     assert item["score"] == 8.5
     assert item["has_video"] is True
@@ -263,7 +291,7 @@ def test_a_question_about_a_session_without_a_video_says_so(
     _ask(api, session)
 
     login(therapist)
-    item = api.get("/api/v1/help-requests/needs-attention").json()[0]
+    item = api.get("/api/v1/help-requests/needs-attention").json()["items"][0]
 
     assert item["has_video"] is False
     assert item["score"] is None

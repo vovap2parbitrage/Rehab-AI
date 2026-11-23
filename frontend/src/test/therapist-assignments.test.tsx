@@ -6,6 +6,7 @@ import {
   cancelAssignment,
   createAssignment,
   getPatient,
+  listAllExercises,
   listAssignments,
   listExercises,
   updateAssignment,
@@ -17,12 +18,14 @@ import { ApiError } from '../api/client'
 import { getPatientHistory, type PatientHistory } from '../api/history'
 import { listPatientHelpRequests } from '../api/helpRequests'
 import { listPatientSessions } from '../api/sessions'
+import type { Page } from '../api/pagination'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { getLocalDate, nextSessionDate, weekdayOf } from '../lib/assignmentSchedule'
 
 vi.mock('../api/therapist', () => ({
   getPatient: vi.fn(),
   listExercises: vi.fn(),
+  listAllExercises: vi.fn(),
   listAssignments: vi.fn(),
   createAssignment: vi.fn(),
   updateAssignment: vi.fn(),
@@ -52,6 +55,10 @@ const patient: Patient = {
   date_of_birth: null,
   notes: null,
   archived_at: null,
+}
+
+function page<T>(items: T[]): Page<T> {
+  return { items, total: items.length, limit: 20, offset: 0 }
 }
 
 const exercise: Exercise = {
@@ -110,11 +117,12 @@ function renderPage() {
 
 beforeEach(() => {
   vi.mocked(getPatient).mockResolvedValue(patient)
-  vi.mocked(listExercises).mockResolvedValue([exercise])
+  vi.mocked(listExercises).mockResolvedValue(page([exercise]))
+  vi.mocked(listAllExercises).mockResolvedValue([exercise])
   vi.mocked(listAssignments).mockResolvedValue([assignment])
   vi.mocked(getPatientHistory).mockResolvedValue(emptyHistory)
-  vi.mocked(listPatientHelpRequests).mockResolvedValue([])
-  vi.mocked(listPatientSessions).mockResolvedValue([])
+  vi.mocked(listPatientHelpRequests).mockResolvedValue(page([]))
+  vi.mocked(listPatientSessions).mockResolvedValue(page([]))
   vi.mocked(updateAssignment).mockImplementation(async (_id, payload) => ({
     ...assignment,
     ...payload,

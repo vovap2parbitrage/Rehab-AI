@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session, joinedload
 
 from app.core.roles import Role
@@ -11,6 +12,7 @@ from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.help_request import HelpRequestCreate, HelpRequestRead
+from app.schemas.pagination import Page
 from app.services.patient_access import get_patient_for_therapist, treated_by
 
 
@@ -103,19 +105,76 @@ def list_patient_help_requests(db: Session, user: User) -> list[HelpRequestRead]
     return [_to_read(item) for item in help_requests]
 
 
-def list_needs_attention(db: Session, user: User) -> list[HelpRequestRead]:
+def _search_questions(query: Query, q: str | None) -> Query:
+    if q and q.strip():
+        query = query.join(HelpRequest.patient).join(Patient.user)
+    for term in q.strip().split() if q else []:
+        pattern = f"%{term}%"
+        query = query.filter(
+            or_(
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
+                HelpRequest.message.ilike(pattern),
+            )
+        )
+    return query
+
+
+def list_needs_attention(
+    db: Session,
+    user: User,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[HelpRequestRead]:
     """Unanswered questions addressed to this therapist (all of them for an admin)."""
-    query = _for_therapist(_query(db).filter(HelpRequest.reply.is_(None)), user)
-    return [_to_read(item) for item in query.order_by(HelpRequest.created_at).all()]
+    query = _search_questions(
+        _for_therapist(_query(db).filter(HelpRequest.reply.is_(None)), user), q
+    )
+    total = query.count()
+    items = (
+        query.order_by(HelpRequest.created_at.desc(), HelpRequest.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return Page(
+        items=[_to_read(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
-def list_for_patient(db: Session, patient_id: UUID, user: User) -> list[HelpRequestRead]:
+def list_for_patient(
+    db: Session,
+    patient_id: UUID,
+    user: User,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[HelpRequestRead]:
     """All questions of one patient with replies, newest first (the therapist's history)."""
     get_patient_for_therapist(patient_id, user, db)
     query = _for_therapist(
         _query(db).filter(HelpRequest.patient_id == patient_id), user, active_only=False
     )
-    return [_to_read(item) for item in query.order_by(HelpRequest.created_at.desc()).all()]
+    query = _search_questions(query, q)
+    total = query.count()
+    items = (
+        query.order_by(HelpRequest.created_at.desc(), HelpRequest.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return Page(
+        items=[_to_read(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def reply_to_help_request(

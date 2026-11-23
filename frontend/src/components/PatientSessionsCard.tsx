@@ -1,18 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { PatientSession } from '../api/patient'
+import type { Page } from '../api/pagination'
 import { listPatientSessions } from '../api/sessions'
 import { getErrorMessage } from '../lib/errorMessage'
+import { useSearchParams } from 'react-router-dom'
 import { CalendarIcon } from './Icons'
 import { EmptyState } from './EmptyState'
 import { ErrorMessage } from './ErrorMessage'
+import { ListPagination } from './ListControls'
 import { Loading } from './Loading'
 import { SessionResult } from './SessionResult'
 
-const PAGE_SIZE = 10
-
-function sessionDate(session: PatientSession): string {
-  return session.completed_at ?? session.created_at
-}
+const PAGE_SIZE = 20
 
 interface PatientSessionsCardProps {
   patientId: string
@@ -20,34 +19,56 @@ interface PatientSessionsCardProps {
   exerciseNameFor: (assignmentId: string) => string
 }
 
-/** Therapist: every session of the patient with its analysis and recorded video. */
+/** Therapist: a page of the patient's sessions with their analysis and recorded video. */
 export function PatientSessionsCard({ patientId, exerciseNameFor }: PatientSessionsCardProps) {
-  const [sessions, setSessions] = useState<PatientSession[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const offset = Math.max(0, Number(searchParams.get('sessionsOffset')) || 0)
+  const [data, setData] = useState<Page<PatientSession> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [visible, setVisible] = useState(PAGE_SIZE)
+
+  const loadPage = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const page = await listPatientSessions(patientId, {
+          limit: PAGE_SIZE,
+          offset,
+          signal,
+        })
+        if (!signal?.aborted) setData(page)
+      } catch (reason: unknown) {
+        if (!signal?.aborted) {
+          setError(getErrorMessage(reason, 'Не вдалося завантажити сесії пацієнта.'))
+        }
+      } finally {
+        if (!signal?.aborted) setLoading(false)
+      }
+    },
+    [patientId, offset],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
-    listPatientSessions(patientId, { signal: controller.signal })
-      .then((loaded) => {
-        setSessions(loaded.slice().sort((a, b) => sessionDate(b).localeCompare(sessionDate(a))))
-      })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return
-        setError(getErrorMessage(reason, 'Не вдалося завантажити сесії пацієнта.'))
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
+    void loadPage(controller.signal)
     return () => controller.abort()
-  }, [patientId])
+  }, [loadPage])
+
+  const updateOffset = (nextOffset: number) => {
+    const next = new URLSearchParams(searchParams)
+    if (nextOffset === 0) next.delete('sessionsOffset')
+    else next.set('sessionsOffset', String(nextOffset))
+    setSearchParams(next)
+  }
+
+  const sessions = data?.items ?? []
 
   return (
     <section className="card" aria-labelledby="patient-sessions-title">
       <div className="card__header">
         <div>
-          <h2 id="patient-sessions-title">Сесії пацієнта ({sessions.length})</h2>
+          <h2 id="patient-sessions-title">Сесії пацієнта ({data?.total ?? 0})</h2>
           <p>Відео виконання, оцінка техніки та помилки по суглобах.</p>
         </div>
         <span className="card__header-icon">
@@ -61,7 +82,7 @@ export function PatientSessionsCard({ patientId, exerciseNameFor }: PatientSessi
         <EmptyState message="Пацієнт ще не завершив жодної сесії." />
       ) : (
         <div className="assignment-sessions">
-          {sessions.slice(0, visible).map((session) => (
+          {sessions.map((session) => (
             <SessionResult
               key={session.id}
               session={session}
@@ -70,15 +91,12 @@ export function PatientSessionsCard({ patientId, exerciseNameFor }: PatientSessi
               }`}
             />
           ))}
-          {sessions.length > visible && (
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => setVisible((count) => count + PAGE_SIZE)}
-            >
-              Показати ще ({sessions.length - visible})
-            </button>
-          )}
+          <ListPagination
+            total={data?.total ?? 0}
+            limit={PAGE_SIZE}
+            offset={offset}
+            onChange={updateOffset}
+          />
         </div>
       )}
     </section>

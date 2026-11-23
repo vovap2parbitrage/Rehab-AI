@@ -122,7 +122,7 @@ def get_today(db: Session, user: User) -> TodayRead:
             finished=len(finished_rows),
             not_finished=len(not_finished_rows),
             missed_yesterday=len(missed_rows),
-            open_questions=len(list_needs_attention(db, user)),
+            open_questions=list_needs_attention(db, user, limit=1).total,
             new_replies=count_unseen_replies(db, user),
         ),
         not_finished=not_finished_rows,

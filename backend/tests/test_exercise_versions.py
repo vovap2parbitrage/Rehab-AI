@@ -192,7 +192,7 @@ def test_the_exercise_counts_its_active_assignments(api, exercise, assign):
     assign()
     api.post(f"/api/v1/assignments/{first}/cancel")
 
-    listed = api.get(EXERCISES).json()[0]
+    listed = api.get(EXERCISES).json()["items"][0]
 
     assert listed["active_assignments"] == 1
 

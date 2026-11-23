@@ -5,6 +5,10 @@ import { useAuth } from '../auth/useAuth'
 import { TherapistQuestionsContext } from './therapistQuestionsContext'
 import { useCachedResource } from './useCachedResource'
 
+function loadQuestionCount({ signal }: { signal: AbortSignal }) {
+  return listNeedsAttention({ limit: 1, offset: 0, signal })
+}
+
 export function TherapistQuestionsProvider({ children }: { children: ReactNode }) {
   const { authenticated, role, tokenParsed } = useAuth()
   const enabled = authenticated && (role === 'therapist' || role === 'admin')
@@ -20,7 +24,7 @@ export function TherapistQuestionsProvider({ children }: { children: ReactNode }
 function TherapistQuestionsCache({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const { pathname } = useLocation()
   const questions = useCachedResource(
-    listNeedsAttention,
+    loadQuestionCount,
     'Не вдалося завантажити запитання пацієнтів.',
   )
   const { load, invalidate } = questions

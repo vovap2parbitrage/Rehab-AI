@@ -11,6 +11,7 @@ import { Header } from '../components/Header'
 import { NeedsAttentionSection } from '../components/NeedsAttentionSection'
 import type { PatientAssignment, PatientInvitation, PatientSession } from '../api/patient'
 import type { HelpRequest } from '../api/helpRequests'
+import type { Page } from '../api/pagination'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
 import { PatientDashboardPage } from '../pages/patient/PatientDashboardPage'
@@ -40,6 +41,7 @@ import { listMyMessages, replyToMessage, type TherapistMessage } from '../api/me
 import {
   createAssignment,
   getPatient,
+  listAllExercises,
   listAssignments,
   listExercises,
   listPatients,
@@ -56,7 +58,6 @@ import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
-import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
 import { TherapistWorkspaceLayout } from '../pages/therapist/TherapistWorkspaceLayout'
@@ -85,6 +86,7 @@ vi.mock('../api/therapist', () => ({
   listArchivedPatients: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
+  listAllExercises: vi.fn(),
   listHiddenExercises: vi.fn(),
   listPatients: vi.fn(),
   restorePatient: vi.fn(),
@@ -161,7 +163,12 @@ function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue
 
 function LocationDisplay() {
   const location = useLocation()
-  return <output data-testid="location">{location.pathname}</output>
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+    </output>
+  )
 }
 
 function renderWithAuth(
@@ -315,16 +322,24 @@ const currentPatient: UserProfile = {
   is_active: true,
 }
 
+function page<T>(items: T[], total = items.length, offset = 0): Page<T> {
+  return { items, total, limit: 20, offset }
+}
+
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
-  vi.mocked(listPatientSessions).mockResolvedValue([])
+  vi.mocked(listPatientSessions).mockResolvedValue(page([]))
   vi.mocked(listMyMessages).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
   vi.mocked(listMyHelpRequests).mockResolvedValue([])
-  vi.mocked(listArchivedPatients).mockResolvedValue([])
-  vi.mocked(listNeedsAttention).mockResolvedValue([])
+  vi.mocked(listArchivedPatients).mockResolvedValue(page([]))
+  vi.mocked(listNeedsAttention).mockResolvedValue(page([]))
+  vi.mocked(listPatientHelpRequests).mockResolvedValue(page([]))
+  vi.mocked(listExercises).mockResolvedValue(page([]))
+  vi.mocked(listPatients).mockResolvedValue(page([]))
+  vi.mocked(listAllExercises).mockResolvedValue([])
   vi.mocked(respondToPatientInvitation).mockResolvedValue(pendingInvitation)
   vi.mocked(completePatientAssignment).mockResolvedValue(session)
   vi.mocked(createHelpRequest).mockResolvedValue(helpRequest)
@@ -1502,9 +1517,9 @@ describe('Local assignment dates', () => {
 
   it('moves the therapist’s default start to the next schedule day and keeps a manual date', async () => {
     vi.mocked(getPatient).mockResolvedValue(MOCK_PATIENT)
-    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listAllExercises).mockResolvedValue([MOCK_EXERCISE])
     vi.mocked(listAssignments).mockResolvedValue([])
-    vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+    vi.mocked(listPatientHelpRequests).mockResolvedValue(page([]))
     vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
     vi.mocked(createAssignment).mockResolvedValue({ ...MOCK_ASSIGNMENT, starts_on: '2026-11-27' })
 
@@ -1554,8 +1569,8 @@ describe('Archiving a patient', () => {
     )
 
   beforeEach(() => {
-    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
-    vi.mocked(listPatientHelpRequests).mockResolvedValue([])
+    vi.mocked(listAllExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listPatientHelpRequests).mockResolvedValue(page([]))
     vi.mocked(getPatientHistory).mockRejectedValue(new ApiError('No history', 'not-found', 404))
   })
 
@@ -1689,8 +1704,8 @@ describe('Patient limit', () => {
   })
 
   it('shows the plan usage to a therapist on the patients page', async () => {
-    vi.mocked(listPatients).mockResolvedValue([MOCK_PATIENT])
-    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listPatients).mockResolvedValue(page([MOCK_PATIENT]))
+    vi.mocked(listExercises).mockResolvedValue(page([MOCK_EXERCISE]))
     vi.mocked(getMyPlan).mockResolvedValue(FREE_PLAN_USAGE)
 
     renderWithAuth(
@@ -1792,57 +1807,45 @@ describe('Shared account data', () => {
 })
 
 describe('Therapist workspace', () => {
-  it('keeps the patient list visible while refreshing it after a tab switch', async () => {
+  it('searches and paginates patients while keeping filters in the URL', async () => {
     const user = userEvent.setup()
-    let finishPatients!: (patients: Awaited<ReturnType<typeof listPatients>>) => void
-    vi.mocked(listPatients)
-      .mockResolvedValueOnce([MOCK_PATIENT])
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishPatients = resolve
-          }),
-      )
-    vi.mocked(listExercises).mockResolvedValue([MOCK_EXERCISE])
+    vi.mocked(listPatients).mockResolvedValue(page([MOCK_PATIENT], 21))
+    vi.mocked(listArchivedPatients).mockResolvedValue(page([]))
 
     renderWithAuth(
-      <StrictMode>
-        <Link to="/therapist/patients">До списку пацієнтів</Link>
-        <Link to="/therapist/exercises">До бібліотеки</Link>
+      <>
+        <LocationDisplay />
         <Routes>
           <Route path="/therapist" element={<TherapistWorkspaceLayout />}>
             <Route path="patients" element={<TherapistPatientsPage />} />
-            <Route path="exercises" element={<TherapistExercisesPage />} />
           </Route>
         </Routes>
-      </StrictMode>,
+      </>,
       createAuth({ authenticated: true, role: 'therapist' }),
       ['/therapist/patients'],
     )
 
     expect(await screen.findByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
-    expect(listPatients).toHaveBeenCalledTimes(1)
-    expect(listExercises).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole('link', { name: 'До бібліотеки' }))
-    expect(await screen.findByRole('heading', { name: MOCK_EXERCISE.name })).toBeInTheDocument()
-    expect(listPatients).toHaveBeenCalledTimes(1)
-
-    await user.click(screen.getByRole('link', { name: 'До списку пацієнтів' }))
-    expect(screen.getByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
-    expect(screen.queryByText('Завантажуємо пацієнтів…')).not.toBeInTheDocument()
-    expect(listPatients).toHaveBeenCalledTimes(2)
-    expect(listExercises).toHaveBeenCalledTimes(1)
-
-    await act(async () => finishPatients([{ ...MOCK_PATIENT, first_name: 'Андрій' }]))
-    expect(screen.getByRole('link', { name: /Андрій Коваленко/ })).toBeInTheDocument()
+    await user.type(screen.getByRole('searchbox', { name: 'Пошук пацієнтів' }), 'Olena')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=Olena'))
+    await user.click(screen.getByRole('button', { name: 'Наступна' }))
+    await waitFor(() =>
+      expect(listPatients).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: 'Olena', limit: 20, offset: 20 }),
+      ),
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('offset=20')
   })
 
   it('restores an archived patient to the active list', async () => {
     const user = userEvent.setup()
     const archived = { ...MOCK_PATIENT, archived_at: '2026-11-20T10:00:00Z' }
-    vi.mocked(listPatients).mockResolvedValueOnce([]).mockResolvedValueOnce([MOCK_PATIENT])
-    vi.mocked(listArchivedPatients).mockResolvedValue([archived])
+    vi.mocked(listPatients)
+      .mockResolvedValueOnce(page([]))
+      .mockResolvedValueOnce(page([MOCK_PATIENT]))
+    vi.mocked(listArchivedPatients)
+      .mockResolvedValueOnce(page([archived]))
+      .mockResolvedValue(page([]))
     vi.mocked(restorePatient).mockResolvedValue(undefined)
 
     renderWithAuth(
@@ -1860,6 +1863,9 @@ describe('Therapist workspace', () => {
     expect(restorePatient).toHaveBeenCalledWith(MOCK_PATIENT.id)
     expect(await screen.findByText('Пацієнта повернено до активного списку.')).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: /Олександр Коваленко/ })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Відновити/ })).not.toBeInTheDocument(),
+    )
     expect(screen.queryByRole('button', { name: /Відновити/ })).not.toBeInTheDocument()
   })
 })
@@ -1867,7 +1873,11 @@ describe('Therapist workspace', () => {
 describe('Therapist questions', () => {
   it('shares one request and updates the header badge when a reply is sent', async () => {
     const user = userEvent.setup()
-    vi.mocked(listNeedsAttention).mockResolvedValueOnce([helpRequest])
+    vi.mocked(listNeedsAttention)
+      .mockResolvedValueOnce(page([helpRequest]))
+      .mockResolvedValueOnce(page([helpRequest]))
+      .mockResolvedValueOnce(page([]))
+      .mockResolvedValueOnce(page([]))
     vi.mocked(replyToHelpRequest).mockResolvedValue({
       ...helpRequest,
       reply: 'Так, усе правильно.',
@@ -1883,7 +1893,7 @@ describe('Therapist questions', () => {
 
     expect(await screen.findByText(helpRequest.message)).toBeInTheDocument()
     expect(screen.getByLabelText('1 нових запитань')).toBeInTheDocument()
-    expect(listNeedsAttention).toHaveBeenCalledTimes(1)
+    expect(listNeedsAttention).toHaveBeenCalledTimes(2)
 
     await user.type(
       screen.getByRole('textbox', { name: 'Відповідь пацієнту' }),
@@ -1894,6 +1904,6 @@ describe('Therapist questions', () => {
     expect(await screen.findByText('Нових запитань від пацієнтів немає.')).toBeInTheDocument()
     expect(screen.queryByLabelText('1 нових запитань')).not.toBeInTheDocument()
     expect(replyToHelpRequest).toHaveBeenCalledWith(helpRequest.id, 'Так, усе правильно.')
-    expect(listNeedsAttention).toHaveBeenCalledTimes(2)
+    expect(listNeedsAttention).toHaveBeenCalledTimes(4)
   })
 })

@@ -2,19 +2,22 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.auth import extract_roles
 from app.core.roles import Role
 from app.core.statuses import AssignmentStatus
 from app.models.assignment import Assignment
+from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
+from app.schemas.pagination import Page
 from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
 from app.services import storage
-from app.services.patient_access import can_access_patient_id, require_patient_access
-from app.services.schedule import require_session_today
 from app.services.assignment import complete_finished_assignments
+from app.services.patient_access import require_patient_access
+from app.services.schedule import require_session_today
 
 
 def _patient_id_of(session: TrainingSession) -> UUID:
@@ -26,20 +29,42 @@ def list_sessions(
     user: User,
     claims: dict,
     patient_id: UUID | None,
-) -> list[SessionRead]:
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[SessionRead]:
     roles = extract_roles(claims)
     if patient_id is not None:
         require_patient_access(patient_id, user, roles, db)
-    query = db.query(TrainingSession)
+    query = db.query(TrainingSession).join(TrainingSession.assignment).join(Assignment.patient)
     if patient_id is not None:
-        query = query.join(TrainingSession.assignment).filter(
-            Assignment.patient_id == patient_id
+        query = query.filter(Assignment.patient_id == patient_id)
+    elif Role.ADMIN.value not in roles:
+        if Role.THERAPIST.value in roles:
+            access = Patient.therapists.any(User.id == user.id)
+            if Role.PATIENT.value in roles:
+                access = or_(access, Patient.user_id == user.id)
+            query = query.filter(access)
+        else:
+            query = query.filter(Patient.user_id == user.id)
+
+    total = query.count()
+    sessions = (
+        query.order_by(
+            func.coalesce(TrainingSession.completed_at, TrainingSession.created_at).desc(),
+            TrainingSession.created_at.desc(),
+            TrainingSession.id,
         )
-    return [
-        SessionRead.model_validate(item, from_attributes=True)
-        for item in query.all()
-        if can_access_patient_id(_patient_id_of(item), user, roles, db)
-    ]
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return Page(
+        items=[SessionRead.model_validate(item, from_attributes=True) for item in sessions],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def create_session(

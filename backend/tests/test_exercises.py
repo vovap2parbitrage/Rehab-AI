@@ -366,8 +366,29 @@ def test_therapist_can_get_his_exercise(api, login, therapist):
     fetched = api.get(f"/api/v1/exercises/{created['id']}")
 
     assert listed.status_code == 200
-    assert [item["id"] for item in listed.json()] == [created["id"]]
+    assert [item["id"] for item in listed.json()["items"]] == [created["id"]]
     assert fetched.status_code == 200
+
+
+def test_exercise_list_searches_and_paginates(api, login, therapist):
+    login(therapist)
+    for name in ("Knee extension", "Knee flexion", "Shoulder raise"):
+        response = api.post(
+            "/api/v1/exercises/",
+            json=exercise_payload(str(therapist.id), name=name),
+        )
+        assert response.status_code == 201
+
+    page = api.get(
+        "/api/v1/exercises/", params={"q": "Knee", "limit": 1, "offset": 1}
+    )
+    assert page.status_code == 200
+    assert page.json()["total"] == 2
+    assert page.json()["limit"] == 1
+    assert page.json()["offset"] == 1
+    assert len(page.json()["items"]) == 1
+    assert page.json()["items"][0]["name"] == "Knee flexion"
+    assert api.get("/api/v1/exercises/", params={"limit": 101}).status_code == 422
 
 
 def test_unknown_exercise_returns_404(api, login, therapist):

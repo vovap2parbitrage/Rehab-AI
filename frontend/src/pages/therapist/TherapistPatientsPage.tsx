@@ -1,32 +1,91 @@
 import { EmptyState } from '../../components/EmptyState'
 import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
-import { useState, type FormEvent } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../lib/errorMessage'
-import { restorePatient, sendInvitation, type Patient } from '../../api/therapist'
+import {
+  listArchivedPatients,
+  listPatients,
+  restorePatient,
+  sendInvitation,
+  type Patient,
+} from '../../api/therapist'
 import { MailIcon, UserIcon } from '../../components/Icons'
 import { ErrorMessage } from '../../components/ErrorMessage'
+import { ListPagination, ListSearch } from '../../components/ListControls'
 import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
+const PAGE_SIZE = 20
+
 export function TherapistPatientsPage() {
-  const {
-    patients: resource,
-    archivedPatients: archivedResource,
-    plan,
-  } = useOutletContext<TherapistWorkspaceResources>()
+  const { plan } = useOutletContext<TherapistWorkspaceResources>()
   const { role } = useAuth()
-  useRefreshOnEntry(resource)
-  useRefreshOnEntry(archivedResource)
   useRefreshOnEntry(plan, role === 'therapist')
-  const { data: patients = [], loading, error: loadError } = resource
-  const { data: archivedPatients = [], error: archiveLoadError } = archivedResource
+  const [searchParams, setSearchParams] = useSearchParams()
+  const q = searchParams.get('q') ?? ''
+  const offset = Math.max(0, Number(searchParams.get('offset')) || 0)
+  const archivedOffset = Math.max(0, Number(searchParams.get('archivedOffset')) || 0)
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [patientTotal, setPatientTotal] = useState(0)
+  const [archivedPatients, setArchivedPatients] = useState<Patient[]>([])
+  const [archivedTotal, setArchivedTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [archiveLoading, setArchiveLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [archiveLoadError, setArchiveLoadError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState({ email: '' })
+
+  const loadLists = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      setArchiveLoading(true)
+      setLoadError(null)
+      setArchiveLoadError(null)
+      const [activeResult, archivedResult] = await Promise.allSettled([
+        listPatients({ q, limit: PAGE_SIZE, offset, signal }),
+        listArchivedPatients({ q, limit: PAGE_SIZE, offset: archivedOffset, signal }),
+      ])
+      if (signal?.aborted) return
+      if (activeResult.status === 'fulfilled') {
+        setPatients(activeResult.value.items)
+        setPatientTotal(activeResult.value.total)
+      } else {
+        setLoadError(getErrorMessage(activeResult.reason, 'Не вдалося завантажити пацієнтів.'))
+      }
+      if (archivedResult.status === 'fulfilled') {
+        setArchivedPatients(archivedResult.value.items)
+        setArchivedTotal(archivedResult.value.total)
+      } else {
+        setArchiveLoadError(
+          getErrorMessage(archivedResult.reason, 'Не вдалося завантажити архів пацієнтів.'),
+        )
+      }
+      setLoading(false)
+      setArchiveLoading(false)
+    },
+    [q, offset, archivedOffset],
+  )
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadLists(controller.signal)
+    return () => controller.abort()
+  }, [loadLists])
+
+  const updateQuery = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams)
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === '') next.delete(key)
+      else next.set(key, value)
+    }
+    setSearchParams(next)
+  }
 
   const handleRestore = async (patient: Patient) => {
     setBusy(true)
@@ -34,8 +93,7 @@ export function TherapistPatientsPage() {
     setError(null)
     try {
       await restorePatient(patient.id)
-      archivedResource.update((current) => current.filter((item) => item.id !== patient.id))
-      resource.invalidate()
+      void loadLists()
       plan.invalidate()
       setNotice('Пацієнта повернено до активного списку.')
     } catch (reason: unknown) {
@@ -96,13 +154,19 @@ export function TherapistPatientsPage() {
         <section className="card">
           <div className="card__header">
             <div>
-              <h2>Пацієнти ({patients.length})</h2>
+              <h2>Пацієнти ({patientTotal})</h2>
               <p>Натисніть на пацієнта, щоб призначити план.</p>
             </div>
             <span className="card__header-icon">
               <UserIcon />
             </span>
           </div>
+          <ListSearch
+            label="Пошук пацієнтів"
+            value={q}
+            placeholder="Ім’я, прізвище або email"
+            onChange={(value) => updateQuery({ q: value, offset: '0', archivedOffset: '0' })}
+          />
           <div className="patient-cards">
             {patients.map((patient) => (
               <Link
@@ -117,20 +181,27 @@ export function TherapistPatientsPage() {
                   <strong>
                     {[patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Пацієнт'}
                   </strong>
-                  <small>{patient.user_id}</small>
                 </span>
               </Link>
             ))}
             {loading && <Loading label="Завантажуємо пацієнтів…" />}
             {loadError && <ErrorMessage message={loadError} />}
             {!loading && !loadError && patients.length === 0 && (
-              <EmptyState message="Пацієнтів поки немає." />
+              <EmptyState
+                message={q ? 'Пацієнтів за цим пошуком не знайдено.' : 'Пацієнтів поки немає.'}
+              />
             )}
           </div>
+          <ListPagination
+            total={patientTotal}
+            limit={PAGE_SIZE}
+            offset={offset}
+            onChange={(nextOffset) => updateQuery({ offset: String(nextOffset) })}
+          />
           {archiveLoadError && <ErrorMessage message={archiveLoadError} />}
-          {archivedPatients.length > 0 && (
+          {(archivedTotal > 0 || archiveLoading) && (
             <div className="patient-cards patient-cards--archived">
-              <h3>Архів ({archivedPatients.length})</h3>
+              <h3>Архів ({archivedTotal})</h3>
               {archivedPatients.map((patient) => (
                 <div className="patient-card patient-card--archived" key={patient.id}>
                   <span className="avatar avatar--md" aria-hidden="true">
@@ -154,6 +225,13 @@ export function TherapistPatientsPage() {
                   </button>
                 </div>
               ))}
+              {archiveLoading && <Loading label="Завантажуємо архів…" />}
+              <ListPagination
+                total={archivedTotal}
+                limit={PAGE_SIZE}
+                offset={archivedOffset}
+                onChange={(nextOffset) => updateQuery({ archivedOffset: String(nextOffset) })}
+              />
             </div>
           )}
         </section>

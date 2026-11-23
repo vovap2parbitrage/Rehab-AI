@@ -200,7 +200,9 @@ def test_restore_is_refused_at_the_limit_and_allowed_with_room(
 
     assert refused.status_code == 409
     assert refused.json()["code"] == LIMIT_CODE
-    assert api.get("/api/v1/patients/?archived=true").json()[0]["id"] == str(patients[0].id)
+    assert api.get("/api/v1/patients/?archived=true").json()["items"][0]["id"] == str(
+        patients[0].id
+    )
 
     invitation = db_session.query(TherapistInvitation).one()
     invitation.status = "revoked"

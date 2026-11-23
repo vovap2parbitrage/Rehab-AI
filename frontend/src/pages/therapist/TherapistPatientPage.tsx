@@ -6,8 +6,8 @@ import {
   cancelAssignment,
   createAssignment,
   getPatient,
+  listAllExercises,
   listAssignments,
-  listExercises,
   restorePatient,
   updateAssignment,
   type Assignment,
@@ -57,7 +57,7 @@ export function TherapistPatientPage() {
     setNotFound(false)
     Promise.all([
       getPatient(patientId, options),
-      listExercises(options),
+      listAllExercises(options),
       listAssignments(patientId, options),
     ])
       .then(([loadedPatient, loadedExercises, loadedAssignments]) => {
@@ -199,8 +199,6 @@ export function TherapistPatientPage() {
       setAssignments((current) =>
         current.map((item) => (item.status === 'active' ? { ...item, status: 'cancelled' } : item)),
       )
-      workspace?.patients.invalidate()
-      workspace?.archivedPatients.invalidate()
       workspace?.plan.invalidate()
       setNotice('Пацієнта архівовано. Активні призначення скасовано.')
     } catch (reason: unknown) {
@@ -218,8 +216,6 @@ export function TherapistPatientPage() {
     try {
       await restorePatient(patient.id)
       setPatient({ ...patient, archived_at: null })
-      workspace?.patients.invalidate()
-      workspace?.archivedPatients.invalidate()
       workspace?.plan.invalidate()
       setNotice('Пацієнта повернено до активного списку.')
     } catch (reason: unknown) {

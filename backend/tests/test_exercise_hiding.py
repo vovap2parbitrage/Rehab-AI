@@ -25,7 +25,7 @@ def exercise(api, login, therapist):
 
 
 def names(response) -> list[str]:
-    return [item["name"] for item in response.json()]
+    return [item["name"] for item in response.json()["items"]]
 
 
 def test_a_hidden_exercise_leaves_the_library_and_shows_in_the_hidden_list(api, exercise):
@@ -34,7 +34,7 @@ def test_a_hidden_exercise_leaves_the_library_and_shows_in_the_hidden_list(api, 
     assert names(api.get(EXERCISES)) == []
     hidden = api.get(EXERCISES, params={"hidden": True})
     assert names(hidden) == ["Squat"]
-    assert hidden.json()[0]["hidden"] is True
+    assert hidden.json()["items"][0]["hidden"] is True
 
 
 def test_a_hidden_exercise_can_be_restored(api, exercise):
@@ -44,7 +44,7 @@ def test_a_hidden_exercise_can_be_restored(api, exercise):
 
     assert names(api.get(EXERCISES)) == ["Squat"]
     assert names(api.get(EXERCISES, params={"hidden": True})) == []
-    assert api.get(EXERCISES).json()[0]["hidden"] is False
+    assert api.get(EXERCISES).json()["items"][0]["hidden"] is False
 
 
 def test_hiding_twice_is_harmless(api, exercise):
@@ -138,7 +138,7 @@ def test_the_read_model_counts_every_assignment_of_the_exercise(
         ids.append(response.json()["id"])
     api.post(f"/api/v1/assignments/{ids[0]}/cancel")
 
-    listed = api.get(EXERCISES).json()[0]
+    listed = api.get(EXERCISES).json()["items"][0]
 
     # One is cancelled, but it still stops the exercise from being deleted.
     assert listed["active_assignments"] == 1

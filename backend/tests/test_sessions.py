@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -94,7 +95,33 @@ def test_patient_list_without_patient_id_returns_only_own(
     response = api.get("/api/v1/sessions/")
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [str(own.id)]
+    assert [item["id"] for item in response.json()["items"]] == [str(own.id)]
+
+
+def test_patient_session_list_paginates_newest_first(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, seed_session, db_session
+):
+    assignment = seed_assignment(seed_patient(patient_user, therapist))
+    old_session = TrainingSession(
+        assignment_id=assignment.id,
+        completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    new_session = TrainingSession(
+        assignment_id=assignment.id,
+        completed_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+    )
+    db_session.add_all([old_session, new_session])
+    db_session.commit()
+    login(therapist)
+
+    response = api.get(
+        f"/api/v1/sessions/?patient_id={assignment.patient_id}",
+        params={"limit": 1, "offset": 0},
+    )
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert len(response.json()["items"]) == 1
+    assert response.json()["items"][0]["id"] == str(new_session.id)
 
 
 def test_list_with_patient_id_filters_and_checks_access(
@@ -108,7 +135,7 @@ def test_list_with_patient_id_filters_and_checks_access(
 
     login(therapist)
     response = api.get(f"/api/v1/sessions/?patient_id={own_patient.id}")
-    assert [item["id"] for item in response.json()] == [str(own.id)]
+    assert [item["id"] for item in response.json()["items"]] == [str(own.id)]
 
     login(patient_user)
     forbidden = api.get(f"/api/v1/sessions/?patient_id={foreign_patient.id}")
@@ -125,7 +152,7 @@ def test_therapist_list_excludes_foreign_patients(
 
     response = api.get("/api/v1/sessions/")
 
-    assert [item["id"] for item in response.json()] == [str(own.id)]
+    assert [item["id"] for item in response.json()["items"]] == [str(own.id)]
 
 
 def test_admin_list_returns_everything(
@@ -138,7 +165,7 @@ def test_admin_list_returns_everything(
 
     response = api.get("/api/v1/sessions/")
 
-    assert len(response.json()) == 2
+    assert response.json()["total"] == 2
 
 
 def test_session_schemas_match_model_columns():
@@ -246,4 +273,4 @@ def test_therapist_can_still_read_sessions_of_an_archived_patient(
     response = api.get(f"/api/v1/sessions/?patient_id={patient.id}")
 
     assert response.status_code == 200
-    assert len(response.json()) == 1
+    assert response.json()["total"] == 1

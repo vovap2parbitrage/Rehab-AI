@@ -182,6 +182,19 @@
   font-size: 1rem;
 }
 
+.list-search {
+  max-width: 420px;
+  margin-block: 12px;
+}
+
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .patient-card--archived {
   justify-content: space-between;
   opacity: 0.85;

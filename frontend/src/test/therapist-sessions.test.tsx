@@ -1,7 +1,9 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PatientSession } from '../api/patient'
+import type { Page } from '../api/pagination'
 import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { PatientSessionsCard } from '../components/PatientSessionsCard'
 
@@ -41,17 +43,23 @@ const names: Record<string, string> = {
   'assignment-2': 'Випади',
 }
 
+function page<T>(items: T[], total = items.length, offset = 0): Page<T> {
+  return { items, total, limit: 20, offset }
+}
+
 function renderCard() {
   return render(
-    <PatientSessionsCard
-      patientId="patient-1"
-      exerciseNameFor={(assignmentId) => names[assignmentId] ?? 'Вправа'}
-    />,
+    <MemoryRouter initialEntries={['/therapist/patients/patient-1']}>
+      <PatientSessionsCard
+        patientId="patient-1"
+        exerciseNameFor={(assignmentId) => names[assignmentId] ?? 'Вправа'}
+      />
+    </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
-  vi.mocked(listPatientSessions).mockResolvedValue([makeSession({})])
+  vi.mocked(listPatientSessions).mockResolvedValue(page([makeSession({})]))
 })
 
 afterEach(() => {
@@ -67,19 +75,21 @@ describe('Sessions of a patient (therapist view)', () => {
     expect(screen.getByRole('heading', { name: 'Сесії пацієнта (1)' })).toBeInTheDocument()
   })
 
-  it('lists the newest session first', async () => {
-    vi.mocked(listPatientSessions).mockResolvedValue([
-      makeSession({
-        id: 'old',
-        assignment_id: 'assignment-1',
-        completed_at: '2026-01-01T10:00:00Z',
-      }),
-      makeSession({
-        id: 'new',
-        assignment_id: 'assignment-2',
-        completed_at: '2026-03-05T10:00:00Z',
-      }),
-    ])
+  it('renders the server-provided session order', async () => {
+    vi.mocked(listPatientSessions).mockResolvedValue(
+      page([
+        makeSession({
+          id: 'new',
+          assignment_id: 'assignment-2',
+          completed_at: '2026-03-05T10:00:00Z',
+        }),
+        makeSession({
+          id: 'old',
+          assignment_id: 'assignment-1',
+          completed_at: '2026-01-01T10:00:00Z',
+        }),
+      ]),
+    )
     renderCard()
 
     const titles = (await screen.findAllByText(/ · 8.5 із 10/)).map((node) => node.textContent)
@@ -109,9 +119,9 @@ describe('Sessions of a patient (therapist view)', () => {
 
   it('offers no video button for a session without a video', async () => {
     const user = userEvent.setup()
-    vi.mocked(listPatientSessions).mockResolvedValue([
-      makeSession({ has_video: false, score: null, joint_deviations: {} }),
-    ])
+    vi.mocked(listPatientSessions).mockResolvedValue(
+      page([makeSession({ has_video: false, score: null, joint_deviations: {} })]),
+    )
     renderCard()
 
     await user.click(await screen.findByText('Присідання'))
@@ -123,7 +133,7 @@ describe('Sessions of a patient (therapist view)', () => {
   })
 
   it('shows an empty message when the patient has no sessions', async () => {
-    vi.mocked(listPatientSessions).mockResolvedValue([])
+    vi.mocked(listPatientSessions).mockResolvedValue(page([]))
     renderCard()
 
     expect(await screen.findByText('Пацієнт ще не завершив жодної сесії.')).toBeInTheDocument()
@@ -136,23 +146,25 @@ describe('Sessions of a patient (therapist view)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Сервер недоступний')
   })
 
-  it('shows ten sessions first and the rest on request', async () => {
+  it('loads the next server page when requested', async () => {
     const user = userEvent.setup()
-    vi.mocked(listPatientSessions).mockResolvedValue(
-      Array.from({ length: 12 }, (_, index) =>
-        makeSession({
-          id: `session-${index}`,
-          completed_at: `2026-03-${String(index + 1).padStart(2, '0')}T10:00:00Z`,
-        }),
-      ),
-    )
+    vi.mocked(listPatientSessions)
+      .mockResolvedValueOnce(
+        page(
+          Array.from({ length: 20 }, (_, index) => makeSession({ id: `session-${index}` })),
+          21,
+          0,
+        ),
+      )
+      .mockResolvedValueOnce(page([makeSession({ id: 'session-last' })], 21, 20))
     renderCard()
 
-    expect(await screen.findAllByText('Присідання · 8.5 із 10')).toHaveLength(10)
-
-    await user.click(screen.getByRole('button', { name: 'Показати ще (2)' }))
-
-    expect(screen.getAllByText('Присідання · 8.5 із 10')).toHaveLength(12)
-    expect(screen.queryByRole('button', { name: /Показати ще/ })).not.toBeInTheDocument()
+    expect(await screen.findAllByText('Присідання · 8.5 із 10')).toHaveLength(20)
+    await user.click(screen.getByRole('button', { name: 'Наступна' }))
+    expect(await screen.findByText('Присідання · 8.5 із 10')).toBeInTheDocument()
+    expect(listPatientSessions).toHaveBeenLastCalledWith(
+      'patient-1',
+      expect.objectContaining({ limit: 20, offset: 20 }),
+    )
   })
 })

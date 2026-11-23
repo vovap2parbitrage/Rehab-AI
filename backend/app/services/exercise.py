@@ -15,6 +15,7 @@ from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.comparison import MAX_TOLERANCE_DEG
 from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate, ScoringOptions
+from app.schemas.pagination import Page
 from app.services.comparison.angles import BODY_PARTS
 from app.services.comparison.scoring import DEFAULT_TOLERANCE
 from app.services import storage
@@ -161,8 +162,12 @@ def list_exercises(
     db: Session,
     user: User,
     roles: set[str],
+    *,
+    q: str | None = None,
     hidden: bool = False,
-) -> list[ExerciseRead]:
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[ExerciseRead]:
     """The library, or with ``hidden=True`` the exercises the therapist has hidden."""
     query = db.query(Exercise)
     if Role.ADMIN.value not in roles:
@@ -170,7 +175,21 @@ def list_exercises(
     query = query.filter(
         Exercise.hidden_at.is_not(None) if hidden else Exercise.hidden_at.is_(None)
     )
-    return _read_many(db, query.all())
+    if q and q.strip():
+        query = query.filter(Exercise.name.ilike(f"%{q.strip()}%"))
+    total = query.count()
+    exercises = (
+        query.order_by(func.lower(Exercise.name), Exercise.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return Page(
+        items=_read_many(db, exercises),
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def create_exercise(

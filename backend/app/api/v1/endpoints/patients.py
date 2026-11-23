@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
@@ -10,24 +10,31 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.history import HistoryPeriod, PatientHistoryRead
+from app.schemas.pagination import Page
 from app.schemas.patient import PatientCreate, PatientRead
 from app.services import history, patient
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[PatientRead])
+@router.get("/", response_model=Page[PatientRead])
 def list_patients(
     archived: bool = False,
+    q: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> list[PatientRead]:
+) -> Page[PatientRead]:
     return patient.list_patients(
         db,
         is_admin=Role.ADMIN.value in extract_roles(claims),
         therapist_id=user.id,
         archived=archived,
+        q=q,
+        limit=limit,
+        offset=offset,
     )
 
 

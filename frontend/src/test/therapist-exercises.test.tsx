@@ -1,21 +1,27 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   hideExercise,
+  listExercises,
+  listHiddenExercises,
   restoreExercise,
   updateExercise,
   type Exercise,
   type ScoringOptions,
 } from '../api/therapist'
+import type { Page } from '../api/pagination'
 import type { CachedResource } from '../lib/useCachedResource'
-import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import type { TherapistWorkspaceResources } from '../pages/therapist/TherapistWorkspaceLayout'
+import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 
 vi.mock('../api/therapist', () => ({
   createExercise: vi.fn(),
   deleteExercise: vi.fn(),
+  listExercises: vi.fn(),
+  listHiddenExercises: vi.fn(),
+  getScoringOptions: vi.fn(),
   updateExercise: vi.fn(),
   hideExercise: vi.fn(),
   restoreExercise: vi.fn(),
@@ -39,6 +45,10 @@ const exercise: Exercise = {
   active_assignments: 3,
   assignments_total: 5,
   hidden: false,
+}
+
+function page(items: Exercise[]): Page<Exercise> {
+  return { items, total: items.length, limit: 20, offset: 0 }
 }
 
 const options: ScoringOptions = {
@@ -65,12 +75,11 @@ function makeResource<T>(data: T): CachedResource<T> {
   } as CachedResource<T>
 }
 
-function renderPage(exercises: Exercise[], hidden: Exercise[] = []) {
-  const resources = {
-    exercises: makeResource(exercises),
-    hiddenExercises: makeResource(hidden),
-    scoringOptions: makeResource(options),
-  }
+/** Renders the library once both the library and the hidden exercises have loaded. */
+async function renderPage(exercises: Exercise[], hidden: Exercise[] = []) {
+  vi.mocked(listExercises).mockResolvedValue(page(exercises))
+  vi.mocked(listHiddenExercises).mockResolvedValue(hidden)
+  const resources = { scoringOptions: makeResource(options) }
 
   render(
     <MemoryRouter initialEntries={['/therapist/exercises']}>
@@ -81,10 +90,16 @@ function renderPage(exercises: Exercise[], hidden: Exercise[] = []) {
       </Routes>
     </MemoryRouter>,
   )
+  await waitFor(() => {
+    expect(screen.queryByText('Завантажуємо вправи…')).not.toBeInTheDocument()
+    expect(listHiddenExercises).toHaveBeenCalled()
+  })
   return resources
 }
 
 beforeEach(() => {
+  vi.mocked(listExercises).mockResolvedValue(page([exercise]))
+  vi.mocked(listHiddenExercises).mockResolvedValue([])
   vi.mocked(updateExercise).mockImplementation(async (_id, payload) => ({
     ...exercise,
     ...payload,
@@ -99,31 +114,35 @@ afterEach(() => {
 })
 
 describe('Exercise versions in the library', () => {
-  it('shows the version and the active assignments of every exercise', () => {
-    renderPage([exercise])
+  it('shows the version and the active assignments of every exercise', async () => {
+    await renderPage([exercise])
 
     expect(screen.getByText(/Версія 2 · призначень: 5 \(активних:\s*3\)/)).toBeInTheDocument()
   })
 
   it('offers to apply an edit to active assignments only when there are some', async () => {
     const user = userEvent.setup()
-    renderPage([exercise, { ...exercise, id: 'exercise-2', name: 'Випади', active_assignments: 0 }])
+    await renderPage([
+      exercise,
+      { ...exercise, id: 'exercise-2', name: 'Випади', active_assignments: 0 },
+    ])
 
+    expect(await screen.findByRole('button', { name: 'Змінити Присідання' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/Застосувати до активних призначень/)).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     expect(screen.getByLabelText(/Застосувати до активних призначень \(3\)/)).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Скасувати' }))
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Випади' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Випади' }))
     expect(screen.queryByLabelText(/Застосувати до активних призначень/)).not.toBeInTheDocument()
   })
 
   it('keeps the active assignments on their version unless the doctor applies the edit', async () => {
     const user = userEvent.setup()
-    renderPage([exercise])
+    await renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
     expect(updateExercise).toHaveBeenCalledWith(
@@ -137,9 +156,9 @@ describe('Exercise versions in the library', () => {
 
   it('applies the new version to the active assignments when the doctor chooses to', async () => {
     const user = userEvent.setup()
-    renderPage([exercise])
+    await renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByLabelText(/Застосувати до активних призначень/))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
@@ -158,9 +177,9 @@ describe('Exercise versions in the library', () => {
       ...exercise,
       ...payload,
     }))
-    renderPage([exercise])
+    await renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Вправу змінено.')
@@ -177,7 +196,7 @@ describe('Joint tolerances in the exercise form', () => {
 
   it('shows a field for each joint of the chosen body parts, filled with what is saved', async () => {
     const user = userEvent.setup()
-    renderPage([withTolerances])
+    await renderPage([withTolerances])
 
     await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
 
@@ -190,7 +209,7 @@ describe('Joint tolerances in the exercise form', () => {
 
   it('saves the typed tolerances as numbers and leaves empty fields out', async () => {
     const user = userEvent.setup()
-    renderPage([withTolerances])
+    await renderPage([withTolerances])
 
     await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
     const hip = screen.getByLabelText('Праве стегно')
@@ -206,7 +225,7 @@ describe('Joint tolerances in the exercise form', () => {
 
   it('drops the tolerances of a body part that is unticked', async () => {
     const user = userEvent.setup()
-    renderPage([withTolerances])
+    await renderPage([withTolerances])
 
     await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('checkbox', { name: 'Тулуб' }))
@@ -223,7 +242,7 @@ describe('Joint tolerances in the exercise form', () => {
 
   it('does not save a tolerance outside the allowed range', async () => {
     const user = userEvent.setup()
-    renderPage([withTolerances])
+    await renderPage([withTolerances])
 
     await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
     const knee = screen.getByLabelText('Праве коліно')
@@ -240,37 +259,40 @@ describe('Joint tolerances in the exercise form', () => {
 describe('Hiding exercises', () => {
   it('hides an exercise and tells where to find it again', async () => {
     const user = userEvent.setup()
-    const resources = renderPage([exercise])
+    await renderPage([exercise])
 
+    vi.mocked(listExercises).mockResolvedValue(page([]))
     await user.click(screen.getByRole('button', { name: 'Приховати Присідання' }))
 
     expect(hideExercise).toHaveBeenCalledWith('exercise-1')
     expect(await screen.findByRole('status')).toHaveTextContent('Приховані вправи')
-    expect(resources.exercises.update).toHaveBeenCalled()
-    expect(resources.hiddenExercises.invalidate).toHaveBeenCalled()
+    // Both lists are loaded again from the server.
+    await waitFor(() => expect(listExercises).toHaveBeenCalledTimes(2))
+    expect(listHiddenExercises).toHaveBeenCalledTimes(2)
   })
 
   it('opens the hidden exercises and brings one back', async () => {
     const user = userEvent.setup()
     const hidden = { ...exercise, id: 'exercise-9', name: 'Випади', hidden: true }
-    const resources = renderPage([exercise], [hidden])
+    await renderPage([exercise], [hidden])
 
     await user.click(screen.getByRole('button', { name: 'Приховані вправи (1)' }))
     expect(screen.getByRole('heading', { name: 'Приховані вправи (1)' })).toBeInTheDocument()
     expect(screen.getByText('Випади')).toBeInTheDocument()
     expect(screen.queryByText('Присідання')).not.toBeInTheDocument()
 
+    vi.mocked(listHiddenExercises).mockResolvedValue([])
     await user.click(screen.getByRole('button', { name: 'Повернути' }))
 
     expect(restoreExercise).toHaveBeenCalledWith('exercise-9')
     expect(await screen.findByRole('status')).toHaveTextContent('повернуто до бібліотеки')
-    expect(resources.hiddenExercises.update).toHaveBeenCalled()
-    expect(resources.exercises.invalidate).toHaveBeenCalled()
+    await waitFor(() => expect(listHiddenExercises).toHaveBeenCalledTimes(2))
+    expect(listExercises).toHaveBeenCalledTimes(2)
   })
 
   it('shows a message when nothing is hidden', async () => {
     const user = userEvent.setup()
-    renderPage([exercise])
+    await renderPage([exercise])
 
     await user.click(screen.getByRole('button', { name: 'Приховані вправи (0)' }))
 
@@ -279,7 +301,7 @@ describe('Hiding exercises', () => {
 
   it('goes back to the library from the hidden exercises', async () => {
     const user = userEvent.setup()
-    renderPage([exercise])
+    await renderPage([exercise])
 
     await user.click(screen.getByRole('button', { name: 'Приховані вправи (0)' }))
     await user.click(screen.getByRole('button', { name: 'Показати бібліотеку' }))
@@ -287,8 +309,11 @@ describe('Hiding exercises', () => {
     expect(screen.getByText('Присідання')).toBeInTheDocument()
   })
 
-  it('does not offer to delete an exercise that is used in assignments', () => {
-    renderPage([exercise, { ...exercise, id: 'exercise-2', name: 'Випади', assignments_total: 0 }])
+  it('does not offer to delete an exercise that is used in assignments', async () => {
+    await renderPage([
+      exercise,
+      { ...exercise, id: 'exercise-2', name: 'Випади', assignments_total: 0 },
+    ])
 
     expect(screen.getByRole('button', { name: 'Видалити Присідання' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Видалити Присідання' })).toHaveAttribute(

@@ -92,7 +92,7 @@ def test_an_exercise_saved_with_old_rules_can_still_be_read(
     response = api.get(EXERCISES)
 
     assert response.status_code == 200
-    assert response.json()[0]["joint_tolerances"] == {"knee": 5.0}
+    assert response.json()["items"][0]["joint_tolerances"] == {"knee": 5.0}
 
 
 def test_the_scoring_options_come_from_the_scoring_code(api, login, therapist):
