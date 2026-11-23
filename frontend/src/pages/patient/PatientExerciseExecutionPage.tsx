@@ -239,6 +239,7 @@ export function PatientExerciseExecutionPage() {
           {source === 'record' ? (
             <VideoRecorder
               recorder={recorder}
+              bodyParts={assignment.exercise.body_parts}
               disabled={analysing}
               onDiscard={resetFinishedAnalysis}
               onUseFileInstead={() => changeSource('upload')}

@@ -262,6 +262,7 @@ const patientAssignment: PatientAssignment = {
     name: 'Розгинання коліна',
     description: 'Виконуйте вправу повільно.',
     reference_video_key: null,
+    body_parts: ['right_leg'],
   },
   sessions: [],
   scheduled_today: true,

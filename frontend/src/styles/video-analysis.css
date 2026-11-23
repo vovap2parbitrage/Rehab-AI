@@ -167,6 +167,59 @@
   font-size: 0.9rem;
 }
 
+.video-recorder__assistant {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  font-size: 0.9rem;
+}
+
+.video-recorder__assistant-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.video-recorder__voice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.video-recorder__voice input {
+  margin: 0;
+}
+
+.video-recorder__assistant p,
+.video-recorder__assistant ul {
+  margin: 0;
+}
+
+.video-recorder__assistant ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+}
+
+.video-recorder__auto-start {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.video-recorder__auto-start input {
+  margin-top: 3px;
+}
+
 .video-recorder__actions {
   display: flex;
   flex-wrap: wrap;

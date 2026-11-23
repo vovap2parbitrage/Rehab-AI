@@ -8,13 +8,14 @@
     "build": "tsc -b && vite build",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
-    "lint": "oxlint",
+    "lint": "oxlint --ignore-pattern \"public/mediapipe/**\"",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3",
     "keycloak-js": "^26.2.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
