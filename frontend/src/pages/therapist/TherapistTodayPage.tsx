@@ -4,6 +4,7 @@ import type { TodayPatient } from '../../api/therapist'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import { Loading } from '../../components/Loading'
+import { MessageComposer } from '../../components/MessageComposer'
 import { PageHeading } from '../../components/PageHeading'
 import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
@@ -71,6 +72,10 @@ export function TherapistTodayPage() {
               <strong>{data.counters.open_questions}</strong>
               <span>запитань чекають відповіді</span>
             </Link>
+            <Link to="/therapist/questions" className="card today-counter">
+              <strong>{data.counters.new_replies}</strong>
+              <span>нових відповідей на ваші повідомлення</span>
+            </Link>
           </section>
 
           {data.counters.due_today === 0 && data.counters.missed_yesterday === 0 && (
@@ -97,6 +102,12 @@ export function TherapistTodayPage() {
                           Виконано {patient.items.length - left.length} з {patient.items.length}.
                           Лишилось: {left.map((item) => item.exercise_name).join(', ')}
                         </small>
+                        <MessageComposer
+                          patientId={patient.patient_id}
+                          initialText={`Добрий день! Сьогодні у вас лишились вправи: ${left
+                            .map((item) => item.exercise_name)
+                            .join(', ')}. Чи все гаразд?`}
+                        />
                       </PatientRow>
                     )
                   })}
@@ -145,6 +156,12 @@ export function TherapistTodayPage() {
                     <small>
                       Не виконано: {patient.items.map((item) => item.exercise_name).join(', ')}
                     </small>
+                    <MessageComposer
+                      patientId={patient.patient_id}
+                      initialText={`Добрий день! Вчора ви не виконали: ${patient.items
+                        .map((item) => item.exercise_name)
+                        .join(', ')}. Що завадило? Чи потрібна допомога?`}
+                    />
                   </PatientRow>
                 ))}
               </ul>

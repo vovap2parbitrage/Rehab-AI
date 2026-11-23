@@ -209,6 +209,8 @@ export interface TodayCounters {
   not_finished: number
   missed_yesterday: number
   open_questions: number
+  /** Replies to the therapist's messages that have not been looked at yet. */
+  new_replies: number
 }
 
 /** The therapist's "Today" page: who did what is due, who did not, who missed yesterday. */

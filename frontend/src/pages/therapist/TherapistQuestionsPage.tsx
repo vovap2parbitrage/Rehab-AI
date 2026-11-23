@@ -1,5 +1,6 @@
 import { PageHeading } from '../../components/PageHeading'
 import { NeedsAttentionSection } from '../../components/NeedsAttentionSection'
+import { SentMessagesSection } from '../../components/SentMessagesSection'
 
 export function TherapistQuestionsPage() {
   return (
@@ -10,6 +11,7 @@ export function TherapistQuestionsPage() {
         lead="Запитання, які пацієнти поставили після виконання ваших призначень."
       />
       <NeedsAttentionSection />
+      <SentMessagesSection />
     </div>
   )
 }
