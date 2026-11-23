@@ -6,6 +6,7 @@ from .invitation import TherapistInvitation
 from .patient import Patient
 from .plan import Plan, PlanPayment
 from .session import TrainingSession
+from .therapist_message import TherapistMessage
 from .user import User
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     'Patient',
     'Plan',
     'PlanPayment',
+    'TherapistMessage',
     'TrainingSession',
     'User',
 ]

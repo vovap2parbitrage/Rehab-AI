@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     exercises,
     help_requests,
     invitations,
+    messages,
     patients,
     plans,
     sessions,
@@ -22,6 +23,7 @@ api_router.include_router(invitations.router, prefix="/invitations", tags=["invi
 api_router.include_router(exercises.router, prefix="/exercises", tags=["exercises"])
 api_router.include_router(assignments.router, prefix="/assignments", tags=["assignments"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(
     help_requests.router, prefix="/help-requests", tags=["help-requests"]
 )

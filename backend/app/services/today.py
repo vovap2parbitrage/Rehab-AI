@@ -14,6 +14,7 @@ from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.today import TodayCounters, TodayItem, TodayPatient, TodayRead
 from app.services.help_request import list_needs_attention
+from app.services.message import count_unseen_replies
 from app.services.patient_access import treated_by
 from app.services.schedule import assignments_done_on, is_session_day
 
@@ -122,6 +123,7 @@ def get_today(db: Session, user: User) -> TodayRead:
             not_finished=len(not_finished_rows),
             missed_yesterday=len(missed_rows),
             open_questions=len(list_needs_attention(db, user)),
+            new_replies=count_unseen_replies(db, user),
         ),
         not_finished=not_finished_rows,
         finished=finished_rows,

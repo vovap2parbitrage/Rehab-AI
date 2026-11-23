@@ -26,6 +26,8 @@ class TodayCounters(BaseModel):
     not_finished: int
     missed_yesterday: int
     open_questions: int
+    # Replies to the therapist's messages that have not been looked at yet.
+    new_replies: int
 
 
 class TodayRead(BaseModel):
