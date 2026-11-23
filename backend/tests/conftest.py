@@ -52,6 +52,7 @@ NO_DATABASE_MODULES = {
     "test_health",
     "test_jwt",
     "test_pose",
+    "test_pose_mapping",
     "test_repetitions",
     "test_scoring",
     "test_signal_utils",

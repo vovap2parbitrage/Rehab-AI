@@ -130,24 +130,13 @@ def test_done_report_is_saved_as_a_session_with_the_video(monkeypatch, deleted):
     monkeypatch.setattr(comparison_analysis, "download_video", _fake_download)
     monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "done", "score": 9.0})
     monkeypatch.setattr(comparison_analysis, "record_session", fake_record)
-    video_sha256 = "c" * 64
 
-    result = analyze_video_task.run(
-        REF, PAT, ["torso"], {}, ASSIGNMENT, 2, "task-1", "version-1", video_sha256
-    )
+    result = analyze_video_task.run(REF, PAT, ["torso"], {}, ASSIGNMENT, 2, "task-1", "version-1")
 
     assert result == {"status": "done", "score": 9.0, "session_id": "session-1"}
     # The session remembers the exercise version the video was scored against.
     assert saved == [
-        (
-            ASSIGNMENT,
-            "task-1",
-            2,
-            {"status": "done", "score": 9.0},
-            PAT,
-            "version-1",
-            video_sha256,
-        )
+        (ASSIGNMENT, "task-1", 2, {"status": "done", "score": 9.0}, PAT, "version-1")
     ]
     assert deleted == []  # the video now belongs to the session
 

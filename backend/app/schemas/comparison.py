@@ -24,7 +24,6 @@ class ComparisonRequest(BaseModel):
     assignment_id: UUID
     patient_key: str = Field(pattern=VIDEO_KEY_PATTERN)
     pain_score: int | None = Field(default=None, ge=0, le=10)
-    video_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class ComparisonCreated(BaseModel):

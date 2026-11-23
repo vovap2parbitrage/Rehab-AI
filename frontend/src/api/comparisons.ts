@@ -34,7 +34,6 @@ export interface ComparisonPayload {
   assignment_id: string
   patient_key: string
   pain_score: number | null
-  video_sha256?: string
 }
 
 /** Queues the analysis of an uploaded video for an assignment. */

@@ -60,7 +60,11 @@ def list_patient_assignments(db: Session, user: User) -> list[PatientAssignmentR
     patient = get_patient_profile(db, user)
     assignments = (
         db.query(Assignment)
-        .options(joinedload(Assignment.exercise), selectinload(Assignment.sessions))
+        .options(
+            joinedload(Assignment.exercise),
+            joinedload(Assignment.exercise_version),
+            selectinload(Assignment.sessions),
+        )
         .filter(
             Assignment.patient_id == patient.id,
             Assignment.status != AssignmentStatus.CANCELLED.value,
@@ -71,19 +75,26 @@ def list_patient_assignments(db: Session, user: User) -> list[PatientAssignmentR
     complete_finished_assignments(db, assignments)
     today = app_today()
     done_today = assignments_done_on(db, [item.id for item in assignments], today)
-    return [
-        PatientAssignmentRead.model_validate(item, from_attributes=True).model_copy(
-            update={
-                "scheduled_today": item.status == AssignmentStatus.ACTIVE.value
-                and is_session_day(item, today),
-                "done_today": item.id in done_today,
-                "next_session_on": next_session_day(item, today)
-                if item.status == AssignmentStatus.ACTIVE.value
-                else None,
-            }
+    result = []
+    for item in assignments:
+        assignment = PatientAssignmentRead.model_validate(item, from_attributes=True)
+        exercise = assignment.exercise.model_copy(
+            update={"body_parts": item.exercise_version.body_parts}
         )
-        for item in assignments
-    ]
+        result.append(
+            assignment.model_copy(
+                update={
+                    "exercise": exercise,
+                    "scheduled_today": item.status == AssignmentStatus.ACTIVE.value
+                    and is_session_day(item, today),
+                    "done_today": item.id in done_today,
+                    "next_session_on": next_session_day(item, today)
+                    if item.status == AssignmentStatus.ACTIVE.value
+                    else None,
+                }
+            )
+        )
+    return result
 
 
 def list_assignments(

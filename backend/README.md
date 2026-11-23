@@ -156,7 +156,6 @@ T — лікар, P — пацієнт).
 | `GET /assignments/{id}` | A, T, P | Одне призначення |
 | `POST /assignments/{id}/cancel` | A, T | Скасувати активне призначення |
 | `GET /sessions/` | A, T, P | Сесії виконання; `patient_id`, `limit` (20, максимум 100), `offset` |
-| `POST /sessions/duplicate-video` | P | Перевірити SHA-256 відео серед власних збережених сесій |
 | `GET /sessions/{id}` | A, T, P | Одна сесія |
 | `POST /sessions/` | A, T, P | Створити сесію |
 | `POST /sessions/assignments/{assignment_id}` | P | Завершити призначення без відео |
@@ -357,9 +356,8 @@ pytest -q tests/test_patient_archive.py     # один файл
    повертає короткоживучу підписану ціль завантаження `{key, url, fields}`.
 2. Застосунок завантажує відео пацієнта напряму в S3-бакет (multipart POST на `url` з `fields`
    і файлом).
-3. `POST /api/v1/comparisons` з `{assignment_id, patient_key, pain_score, video_sha256}`
-   (`pain_score` необов'язковий, 0-10; `video_sha256` — необов'язковий SHA-256 hex-рядок)
-   ставить аналіз у чергу і повертає `{task_id}` (202). Запит може
+3. `POST /api/v1/comparisons` з `{assignment_id, patient_key, pain_score}` (`pain_score`
+   необов'язковий, 0-10) ставить аналіз у чергу і повертає `{task_id}` (202). Запит може
    зробити лише пацієнт, якому належить активне призначення (інакше 404 або 409), а
    `patient_key` має бути його власним ключем (інакше 403). Якщо у вправи немає еталона або
    частин тіла, відповідь 409.
@@ -367,14 +365,9 @@ pytest -q tests/test_patient_archive.py     # один файл
    `no_repetitions` або `failed`. Читати задачу може лише користувач, який її створив.
 5. Коли аналіз завершився зі статусом `done`, worker сам створює сесію (`TrainingSession`)
    призначення: `score`, `joint_deviations` (бали по суглобах, помилкові відрізки, кількість
-   повторень), `pain_score`, `completed_at` і наданий SHA-256. Поле `sessions.comparison_task_id` унікальне, тому
+   повторень), `pain_score`, `completed_at`. Поле `sessions.comparison_task_id` унікальне, тому
    один аналіз не дає двох сесій. Для `rerecord`, `no_repetitions` і `failed` сесія не
    створюється.
-
-   Перед завантаженням клієнт може обчислити SHA-256 файлу та перевірити його через
-   `POST /api/v1/sessions/duplicate-video` з `{"video_sha256":"<64 lowercase hex characters>"}`.
-   Перевірка охоплює всі призначення поточного пацієнта й повертає дату останньої збереженої
-   сесії або `null`; незбережені/невдалі аналізи не враховуються.
 
 Налаштування вправи: `reference_video_key` (ключ відео в S3 виду `videos/<id>/<32hex>.mp4`),
 `body_parts` (`left_arm`, `right_arm`, `left_leg`, `right_leg`, `torso`) і `joint_tolerances`

@@ -142,6 +142,23 @@ def test_patient_list_marks_expired_assignment_completed(
     assert response.json()[0]["status"] == "completed"
 
 
+def test_patient_assignment_includes_body_parts_from_pinned_exercise_version(
+    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
+):
+    patient = seed_patient(patient_user, therapist)
+    assignment = seed_assignment(patient)
+    pinned = db_session.get(Assignment, assignment.id)
+    pinned.exercise_version.body_parts = ["left_leg"]
+    pinned.exercise.body_parts = ["right_arm"]
+    db_session.commit()
+    login(patient_user)
+
+    response = api.get("/api/v1/assignments/mine")
+
+    assert response.status_code == 200
+    assert response.json()[0]["exercise"]["body_parts"] == ["left_leg"]
+
+
 def test_assignment_becomes_completed_after_all_planned_sessions(
     api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
 ):
