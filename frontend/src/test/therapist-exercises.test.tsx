@@ -1,15 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { updateExercise, type Exercise } from '../api/therapist'
-import type { CachedResource } from '../lib/useCachedResource'
+import { listExercises, updateExercise, type Exercise } from '../api/therapist'
+import type { Page } from '../api/pagination'
 import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
-import type { TherapistWorkspaceResources } from '../pages/therapist/TherapistWorkspaceLayout'
 
 vi.mock('../api/therapist', () => ({
   createExercise: vi.fn(),
   deleteExercise: vi.fn(),
+  listExercises: vi.fn(),
   updateExercise: vi.fn(),
 }))
 
@@ -31,31 +31,23 @@ const exercise: Exercise = {
   active_assignments: 3,
 }
 
-function renderPage(exercises: Exercise[]) {
-  const resource = {
-    data: exercises,
-    loading: false,
-    error: null,
-    idle: false,
-    load: vi.fn(),
-    update: vi.fn(),
-    invalidate: vi.fn(),
-  } as CachedResource<Exercise[]>
+function page(items: Exercise[]): Page<Exercise> {
+  return { items, total: items.length, limit: 20, offset: 0 }
+}
 
+function renderPage(exercises: Exercise[]) {
+  vi.mocked(listExercises).mockResolvedValue(page(exercises))
   return render(
     <MemoryRouter initialEntries={['/therapist/exercises']}>
       <Routes>
-        <Route
-          element={<Outlet context={{ exercises: resource } as TherapistWorkspaceResources} />}
-        >
-          <Route path="/therapist/exercises" element={<TherapistExercisesPage />} />
-        </Route>
+        <Route path="/therapist/exercises" element={<TherapistExercisesPage />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
+  vi.mocked(listExercises).mockResolvedValue(page([exercise]))
   vi.mocked(updateExercise).mockImplementation(async (_id, payload) => ({
     ...exercise,
     ...payload,
@@ -68,23 +60,24 @@ afterEach(() => {
 })
 
 describe('Exercise versions in the library', () => {
-  it('shows the version and the active assignments of every exercise', () => {
+  it('shows the version and the active assignments of every exercise', async () => {
     renderPage([exercise])
 
-    expect(screen.getByText('Версія 2 · активних призначень: 3')).toBeInTheDocument()
+    expect(await screen.findByText('Версія 2 · активних призначень: 3')).toBeInTheDocument()
   })
 
   it('offers to apply an edit to active assignments only when there are some', async () => {
     const user = userEvent.setup()
     renderPage([exercise, { ...exercise, id: 'exercise-2', name: 'Випади', active_assignments: 0 }])
 
+    expect(await screen.findByRole('button', { name: 'Змінити Присідання' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/Застосувати до активних призначень/)).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     expect(screen.getByLabelText(/Застосувати до активних призначень \(3\)/)).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Скасувати' }))
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Випади' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Випади' }))
     expect(screen.queryByLabelText(/Застосувати до активних призначень/)).not.toBeInTheDocument()
   })
 
@@ -92,7 +85,7 @@ describe('Exercise versions in the library', () => {
     const user = userEvent.setup()
     renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
     expect(updateExercise).toHaveBeenCalledWith(
@@ -108,7 +101,7 @@ describe('Exercise versions in the library', () => {
     const user = userEvent.setup()
     renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByLabelText(/Застосувати до активних призначень/))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
@@ -129,7 +122,7 @@ describe('Exercise versions in the library', () => {
     }))
     renderPage([exercise])
 
-    await user.click(screen.getByRole('button', { name: 'Змінити Присідання' }))
+    await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Вправу змінено.')

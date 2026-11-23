@@ -49,6 +49,27 @@ def test_therapist_is_assigned_automatically(api, login, therapist, patient_user
     assert response.json()["therapist_ids"] == [str(therapist.id)]
 
 
+def test_patient_list_searches_email_and_paginates(
+    api, login, therapist, patient_user, other_patient_user, seed_patient
+):
+    seed_patient(patient_user, therapist)
+    seed_patient(other_patient_user, therapist)
+    login(therapist)
+
+    response = api.get("/api/v1/patients/", params={"q": patient_user.email, "limit": 1})
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["limit"] == 1
+    assert response.json()["offset"] == 0
+    assert len(response.json()["items"]) == 1
+    assert response.json()["items"][0]["user_id"] == str(patient_user.id)
+
+    page = api.get("/api/v1/patients/", params={"limit": 1, "offset": 1}).json()
+    assert page["total"] == 2
+    assert len(page["items"]) == 1
+    assert api.get("/api/v1/patients/", params={"limit": 101}).status_code == 422
+
+
 def test_cannot_create_profile_for_non_patient_user(
     api, login, therapist, other_therapist
 ):
@@ -139,7 +160,7 @@ def test_therapist_patient_list_is_limited_to_assigned_patients(
     response = api.get("/api/v1/patients/")
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [own.json()["id"]]
+    assert [item["id"] for item in response.json()["items"]] == [own.json()["id"]]
 
 
 def test_admin_reads_any_patient(api, login, admin, therapist, patient_user, seed_patient):

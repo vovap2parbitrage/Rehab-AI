@@ -1,4 +1,5 @@
 import { apiRequest, type RequestOptions } from './client'
+import { pageQuery, type Page, type PageRequestOptions } from './pagination'
 import type { AssignmentStatus, InvitationStatus } from './statuses'
 
 export interface Patient {
@@ -66,12 +67,12 @@ export interface AssignmentPayload {
   starts_on: string
 }
 
-export function listPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/', options)
+export function listPatients(options: PageRequestOptions = {}): Promise<Page<Patient>> {
+  return apiRequest<Page<Patient>>(`/api/v1/patients/?${pageQuery(options)}`, options)
 }
 
-export function listArchivedPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/?archived=true', options)
+export function listArchivedPatients(options: PageRequestOptions = {}): Promise<Page<Patient>> {
+  return apiRequest<Page<Patient>>(`/api/v1/patients/?archived=true&${pageQuery(options)}`, options)
 }
 
 export function archivePatient(id: string): Promise<void> {
@@ -97,8 +98,22 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
   })
 }
 
-export function listExercises(options: RequestOptions = {}): Promise<Exercise[]> {
-  return apiRequest<Exercise[]>('/api/v1/exercises/', options)
+export function listExercises(options: PageRequestOptions = {}): Promise<Page<Exercise>> {
+  return apiRequest<Page<Exercise>>(`/api/v1/exercises/?${pageQuery(options)}`, options)
+}
+
+export async function listAllExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  const items: Exercise[] = []
+  let offset = 0
+  let total = 0
+  while (offset === 0 || offset < total) {
+    const page = await listExercises({ ...options, limit: 100, offset })
+    items.push(...page.items)
+    total = page.total
+    if (page.items.length === 0) break
+    offset += page.items.length
+  }
+  return items
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {

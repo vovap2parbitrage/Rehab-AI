@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
@@ -10,20 +10,26 @@ from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
+from app.schemas.pagination import Page
 from app.services import exercise
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ExerciseRead])
+@router.get("/", response_model=Page[ExerciseRead])
 def list_exercises(
+    q: str | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     claims: dict[str, Any] = Depends(
         require_roles(Role.ADMIN, Role.THERAPIST)
     ),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> list[ExerciseRead]:
-    return exercise.list_exercises(db, user, extract_roles(claims))
+) -> Page[ExerciseRead]:
+    return exercise.list_exercises(
+        db, user, extract_roles(claims), q=q, limit=limit, offset=offset
+    )
 
 @router.post("/", response_model=ExerciseRead, status_code=201)
 def create_exercise(

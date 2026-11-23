@@ -1,17 +1,23 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { createExercise, deleteExercise, updateExercise, type Exercise } from '../../api/therapist'
+import {
+  createExercise,
+  deleteExercise,
+  listExercises,
+  updateExercise,
+  type Exercise,
+} from '../../api/therapist'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import { ArrowRightIcon } from '../../components/Icons'
 import { PageHeading } from '../../components/PageHeading'
 import { deleteUploadedVideo, uploadVideo } from '../../api/uploads'
 import { getErrorMessage } from '../../lib/errorMessage'
-import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import { useVideoPreview } from '../../lib/useVideoPreview'
 import { ExerciseForm } from './ExerciseForm'
 import { ExerciseLibrary } from './ExerciseLibrary'
-import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
+
+const PAGE_SIZE = 20
 
 function getVideoDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -41,9 +47,13 @@ function describeEdit(before: Exercise | undefined, after: Exercise, applied: bo
 }
 
 export function TherapistExercisesPage() {
-  const { exercises: resource } = useOutletContext<TherapistWorkspaceResources>()
-  useRefreshOnEntry(resource)
-  const { data: exercises = [], loading, error: loadError, update: updateExercises } = resource
+  const [searchParams, setSearchParams] = useSearchParams()
+  const q = searchParams.get('q') ?? ''
+  const offset = Math.max(0, Number(searchParams.get('offset')) || 0)
+  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', description: '' })
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
@@ -57,6 +67,41 @@ export function TherapistExercisesPage() {
   const videoPreview = useVideoPreview()
   const editingExercise = exercises.find((item) => item.id === editingId)
   const videoRequired = !editingId || !editingExercise?.reference_video_key
+
+  const refreshExercises = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const page = await listExercises({ q, limit: PAGE_SIZE, offset, signal })
+        if (signal?.aborted) return
+        setExercises(page.items)
+        setTotal(page.total)
+      } catch (reason: unknown) {
+        if (!signal?.aborted) {
+          setLoadError(getErrorMessage(reason, 'Не вдалося завантажити вправи.'))
+        }
+      } finally {
+        if (!signal?.aborted) setLoading(false)
+      }
+    },
+    [q, offset],
+  )
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void refreshExercises(controller.signal)
+    return () => controller.abort()
+  }, [refreshExercises])
+
+  const updateQuery = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams)
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === '') next.delete(key)
+      else next.set(key, value)
+    }
+    setSearchParams(next)
+  }
 
   const startEditing = (exercise: Exercise) => {
     setEditingId(exercise.id)
@@ -87,7 +132,7 @@ export function TherapistExercisesPage() {
     setError(null)
     try {
       await deleteExercise(exercise.id)
-      updateExercises((current) => current.filter((item) => item.id !== exercise.id))
+      await refreshExercises()
       if (editingId === exercise.id) cancelEditing()
       setNotice('Вправу видалено.')
     } catch (reason: unknown) {
@@ -150,9 +195,7 @@ export function TherapistExercisesPage() {
           body_parts: bodyParts,
           apply_to_active_assignments: applyToActive,
         })
-        updateExercises((current) =>
-          current.map((item) => (item.id === updated.id ? updated : item)),
-        )
+        await refreshExercises()
         if (videoFile) {
           // The old link points at the replaced video: drop it and load the new one.
           videoPreview.hide(updated.id)
@@ -161,16 +204,15 @@ export function TherapistExercisesPage() {
         cancelEditing()
         setNotice(describeEdit(editingExercise, updated, applyToActive))
       } else {
-        const created = await createExercise({
+        await createExercise({
           name: form.name,
           description: form.description || null,
           reference_video_key: videoKey,
           joint_tolerances: {},
           body_parts: bodyParts,
         })
-        updateExercises((current) =>
-          current.some((item) => item.id === created.id) ? current : [...current, created],
-        )
+        if (offset > 0) updateQuery({ offset: '0' })
+        else await refreshExercises()
         setForm({ name: '', description: '' })
         setVideoFile(null)
         if (videoInputRef.current) videoInputRef.current.value = ''
@@ -236,6 +278,12 @@ export function TherapistExercisesPage() {
         />
         <ExerciseLibrary
           exercises={exercises}
+          total={total}
+          query={q}
+          limit={PAGE_SIZE}
+          offset={offset}
+          onQueryChange={(value) => updateQuery({ q: value, offset: '0' })}
+          onPageChange={(nextOffset) => updateQuery({ offset: String(nextOffset) })}
           loading={loading}
           loadError={loadError}
           busy={busy}

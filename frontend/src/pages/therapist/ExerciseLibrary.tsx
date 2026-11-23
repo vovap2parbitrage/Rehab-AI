@@ -4,10 +4,17 @@ import { ErrorMessage } from '../../components/ErrorMessage'
 import { PencilIcon, TrashIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
 import { ReferenceVideo } from '../../components/ReferenceVideo'
+import { ListPagination, ListSearch } from '../../components/ListControls'
 import type { VideoPreview } from '../../lib/useVideoPreview'
 
 interface ExerciseLibraryProps {
   exercises: Exercise[]
+  total: number
+  query: string
+  limit: number
+  offset: number
+  onQueryChange: (value: string) => void
+  onPageChange: (offset: number) => void
   loading: boolean
   loadError: string | null
   busy: boolean
@@ -18,6 +25,12 @@ interface ExerciseLibraryProps {
 
 export function ExerciseLibrary({
   exercises,
+  total,
+  query,
+  limit,
+  offset,
+  onQueryChange,
+  onPageChange,
   loading,
   loadError,
   busy,
@@ -29,11 +42,17 @@ export function ExerciseLibrary({
     <section className="card">
       <div className="card__header">
         <div>
-          <h2>Мої вправи ({exercises.length})</h2>
+          <h2>Мої вправи ({total})</h2>
           <p>Вправи доступні для призначення пацієнтам.</p>
         </div>
       </div>
 
+      <ListSearch
+        label="Пошук вправ"
+        value={query}
+        placeholder="Назва вправи"
+        onChange={onQueryChange}
+      />
       <div className="exercise-library">
         {exercises.map((item) => (
           <article className="exercise-card" key={item.id}>
@@ -78,9 +97,10 @@ export function ExerciseLibrary({
         {loading && <Loading label="Завантажуємо вправи…" />}
         {loadError && <ErrorMessage message={loadError} />}
         {!loading && !loadError && exercises.length === 0 && (
-          <EmptyState message="Вправ поки немає." />
+          <EmptyState message={query ? 'Вправ за цим пошуком не знайдено.' : 'Вправ поки немає.'} />
         )}
       </div>
+      <ListPagination total={total} limit={limit} offset={offset} onChange={onPageChange} />
     </section>
   )
 }

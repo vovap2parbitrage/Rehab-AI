@@ -1,4 +1,5 @@
 import { apiRequest, type RequestOptions } from './client'
+import { pageQuery, type Page, type PageRequestOptions } from './pagination'
 
 export interface HelpRequest {
   id: string
@@ -29,19 +30,21 @@ export function listMyHelpRequests(options: RequestOptions = {}): Promise<HelpRe
 }
 
 /** Therapist: unanswered questions of their patients ("Needs attention"). */
-export function listNeedsAttention(options: RequestOptions = {}): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>('/api/v1/help-requests/needs-attention', options)
+export function listNeedsAttention(options: PageRequestOptions = {}): Promise<Page<HelpRequest>> {
+  return apiRequest<Page<HelpRequest>>(
+    `/api/v1/help-requests/needs-attention?${pageQuery(options)}`,
+    options,
+  )
 }
 
 /** Therapist: all questions of one patient with replies, newest first. */
 export function listPatientHelpRequests(
   patientId: string,
-  options: RequestOptions = {},
-): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>(
-    `/api/v1/help-requests/?patient_id=${encodeURIComponent(patientId)}`,
-    options,
-  )
+  options: PageRequestOptions = {},
+): Promise<Page<HelpRequest>> {
+  const params = new URLSearchParams(pageQuery(options))
+  params.set('patient_id', patientId)
+  return apiRequest<Page<HelpRequest>>(`/api/v1/help-requests/?${params}`, options)
 }
 
 /** Therapist: answer a patient's question; it then leaves the "Needs attention" list. */

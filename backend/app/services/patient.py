@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, update
+from sqlalchemy import and_, func, or_, update
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role
@@ -12,6 +12,7 @@ from app.models.patient import Patient
 from app.models.patient_therapist import patient_therapist_table
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead
+from app.schemas.pagination import Page
 from app.services.patient_access import (
     archived_at_for,
     archived_by,
@@ -41,18 +42,49 @@ def list_patients(
     is_admin: bool,
     therapist_id: UUID | None,
     archived: bool = False,
-) -> list[PatientRead]:
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[PatientRead]:
     """Active patients, or with ``archived`` the ones this therapist has archived."""
+    query = db.query(Patient)
     if archived:
-        patients = db.query(Patient).filter(archived_by(therapist_id)).all()
+        query = query.filter(archived_by(therapist_id))
+    elif not is_admin:
+        query = query.filter(treated_by(therapist_id))
+
+    terms = q.strip().split() if q else []
+    if terms:
+        query = query.join(Patient.user)
+    for term in terms:
+        pattern = f"%{term}%"
+        query = query.filter(
+            or_(
+                Patient.first_name.ilike(pattern),
+                Patient.last_name.ilike(pattern),
+                User.email.ilike(pattern),
+            )
+        )
+
+    total = query.count()
+    patients = (
+        query.order_by(
+            func.lower(Patient.first_name),
+            func.lower(Patient.last_name),
+            Patient.id,
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    if archived:
         archived_at = {
             patient.id: archived_at_for(db, patient.id, therapist_id) for patient in patients
         }
-        return [_to_read(patient, archived_at[patient.id]) for patient in patients]
-    query = db.query(Patient)
-    if not is_admin:
-        query = query.filter(treated_by(therapist_id))
-    return [_to_read(patient) for patient in query.all()]
+        items = [_to_read(patient, archived_at[patient.id]) for patient in patients]
+    else:
+        items = [_to_read(patient) for patient in patients]
+    return Page(items=items, total=total, limit=limit, offset=offset)
 
 
 def create_patient(

@@ -6,8 +6,8 @@ import {
   cancelAssignment,
   createAssignment,
   getPatient,
+  listAllExercises,
   listAssignments,
-  listExercises,
   restorePatient,
   updateAssignment,
   type Assignment,
@@ -22,12 +22,7 @@ import { PatientHistorySection } from '../../components/history/PatientHistorySe
 import { PageHeading } from '../../components/PageHeading'
 import { PatientQuestionsCard } from '../../components/PatientQuestionsCard'
 import { PatientSessionsCard } from '../../components/PatientSessionsCard'
-import {
-  formatWeekdays,
-  nextSessionDate,
-  WEEKDAYS,
-  weekdayOf,
-} from '../../lib/assignmentSchedule'
+import { formatWeekdays, nextSessionDate, WEEKDAYS, weekdayOf } from '../../lib/assignmentSchedule'
 import { getErrorMessage } from '../../lib/errorMessage'
 import { useLocalToday } from '../../lib/useLocalToday'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
@@ -62,7 +57,7 @@ export function TherapistPatientPage() {
     setNotFound(false)
     Promise.all([
       getPatient(patientId, options),
-      listExercises(options),
+      listAllExercises(options),
       listAssignments(patientId, options),
     ])
       .then(([loadedPatient, loadedExercises, loadedAssignments]) => {
@@ -204,8 +199,6 @@ export function TherapistPatientPage() {
       setAssignments((current) =>
         current.map((item) => (item.status === 'active' ? { ...item, status: 'cancelled' } : item)),
       )
-      workspace?.patients.invalidate()
-      workspace?.archivedPatients.invalidate()
       workspace?.plan.invalidate()
       setNotice('Пацієнта архівовано. Активні призначення скасовано.')
     } catch (reason: unknown) {
@@ -223,8 +216,6 @@ export function TherapistPatientPage() {
     try {
       await restorePatient(patient.id)
       setPatient({ ...patient, archived_at: null })
-      workspace?.patients.invalidate()
-      workspace?.archivedPatients.invalidate()
       workspace?.plan.invalidate()
       setNotice('Пацієнта повернено до активного списку.')
     } catch (reason: unknown) {
@@ -366,7 +357,9 @@ export function TherapistPatientPage() {
                   min={1}
                   max={500}
                   value={form.repetitions}
-                  onChange={(event) => setForm({ ...form, repetitions: Number(event.target.value) })}
+                  onChange={(event) =>
+                    setForm({ ...form, repetitions: Number(event.target.value) })
+                  }
                   required
                 />
               </label>
@@ -392,14 +385,13 @@ export function TherapistPatientPage() {
                 type="submit"
                 className="button button--primary"
                 disabled={
-                  busy || exercises.length === 0 || form.weekdays.length === 0 || startError !== null
+                  busy ||
+                  exercises.length === 0 ||
+                  form.weekdays.length === 0 ||
+                  startError !== null
                 }
               >
-                {busy
-                  ? 'Зберігаємо…'
-                  : editingId
-                    ? 'Зберегти зміни'
-                    : 'Призначити план'}
+                {busy ? 'Зберігаємо…' : editingId ? 'Зберегти зміни' : 'Призначити план'}
               </button>
               {editingId && (
                 <button

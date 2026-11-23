@@ -24,7 +24,7 @@ export function Header() {
   const isTherapist = role === 'therapist' || role === 'admin'
   const isPatient = role === 'patient'
   const { data: questions } = useTherapistQuestions()
-  const openQuestions = questions?.length ?? 0
+  const openQuestions = questions?.total ?? 0
 
   return (
     <header className="site-header">

@@ -13,6 +13,7 @@ from app.models.exercise_version import ExerciseVersion
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
+from app.schemas.pagination import Page
 from app.services import storage
 from app.services.patient_access import get_patient_profile
 
@@ -149,13 +150,30 @@ def _delete_video_if_unreferenced(db: Session, key: str | None) -> None:
 def list_exercises(
     db: Session,
     user: User,
-    roles: set[str]
-    ) -> list[ExerciseRead]:
-    
+    roles: set[str],
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Page[ExerciseRead]:
     query = db.query(Exercise)
     if Role.ADMIN.value not in roles:
         query = query.filter(Exercise.created_by == user.id)
-    return _read_many(db, query.all())
+    if q and q.strip():
+        query = query.filter(Exercise.name.ilike(f"%{q.strip()}%"))
+    total = query.count()
+    exercises = (
+        query.order_by(func.lower(Exercise.name), Exercise.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return Page(
+        items=_read_many(db, exercises),
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def create_exercise(

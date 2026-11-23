@@ -127,7 +127,7 @@ T — лікар, P — пацієнт).
 
 | Метод і шлях | Ролі | Опис |
 | --- | --- | --- |
-| `GET /patients/` | A, T | Активні пацієнти лікаря; `?archived=true` — архів лікаря |
+| `GET /patients/` | A, T | Пацієнти лікаря; `?archived=true` — архів. `q`, `limit` (20, максимум 100), `offset` |
 | `POST /patients/` | A, T | Створити профіль пацієнта (перевіряє ліміт тарифу) |
 | `GET /patients/{id}` | A, T, P | Профіль; містить `archived_at` для лікаря |
 | `GET /patients/{id}/therapists` | A, T, P | Лікарі пацієнта |
@@ -147,14 +147,16 @@ T — лікар, P — пацієнт).
 
 | Метод і шлях | Ролі | Опис |
 | --- | --- | --- |
-| `GET`, `POST /exercises/`; `GET`, `PUT`, `DELETE /exercises/{id}` | A, T | Бібліотека вправ |
+| `GET /exercises/` | A, T | Бібліотека вправ; `q`, `limit` (20, максимум 100), `offset` |
+| `POST /exercises/`; `GET`, `PUT`, `DELETE /exercises/{id}` | A, T | Керування вправами |
 | `GET /exercises/{id}/video` | A, T, P | Посилання на еталонне відео |
 | `GET /assignments/` | A, T, P | Призначення; `?patient_id=` фільтрує за пацієнтом |
 | `GET /assignments/mine` | P | Власні призначення без скасованих |
 | `POST /assignments/` | A, T | Призначити вправу (409 для архівованого пацієнта) |
 | `GET /assignments/{id}` | A, T, P | Одне призначення |
 | `POST /assignments/{id}/cancel` | A, T | Скасувати активне призначення |
-| `GET /sessions/`, `GET /sessions/{id}` | A, T, P | Сесії виконання |
+| `GET /sessions/` | A, T, P | Сесії виконання; `patient_id`, `limit` (20, максимум 100), `offset` |
+| `GET /sessions/{id}` | A, T, P | Одна сесія |
 | `POST /sessions/` | A, T, P | Створити сесію |
 | `POST /sessions/assignments/{assignment_id}` | P | Завершити призначення без відео |
 | `GET /sessions/{id}/video` | A, T, P | Посилання на відео сесії |
@@ -165,9 +167,12 @@ T — лікар, P — пацієнт).
 | --- | --- | --- |
 | `POST /help-requests/` | P | Поставити запитання після сесії |
 | `GET /help-requests/mine` | P | Власні запитання |
-| `GET /help-requests/needs-attention` | A, T | Запитання без відповіді |
-| `GET /help-requests/?patient_id=` | A, T | Історія запитань пацієнта (архівованого теж) |
+| `GET /help-requests/needs-attention` | A, T | Запитання без відповіді; `q`, `limit` (20, максимум 100), `offset` |
+| `GET /help-requests/?patient_id=` | A, T | Історія запитань пацієнта; `q`, `limit` (20, максимум 100), `offset` |
 | `PATCH /help-requests/{id}/reply` | A, T | Відповісти |
+
+Пагіновані `GET /patients/`, `/exercises/`, `/sessions/`, `/help-requests/needs-attention`
+та `/help-requests/?patient_id=` повертають `{items, total, limit, offset}`.
 
 ### Тарифи — `/plans`, `/therapists`
 

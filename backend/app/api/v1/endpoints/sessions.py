@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, require_roles
@@ -14,21 +14,26 @@ from app.schemas.session import (
     SessionRead,
     SessionVideoRead,
 )
+from app.schemas.pagination import Page
 from app.services import session
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[SessionRead])
+@router.get("/", response_model=Page[SessionRead])
 def list_sessions(
     patient_id: UUID | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     claims: dict[str, Any] = Depends(
         require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
     ),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> list[SessionRead]:
-    return session.list_sessions(db, user, claims, patient_id)
+) -> Page[SessionRead]:
+    return session.list_sessions(
+        db, user, claims, patient_id, limit=limit, offset=offset
+    )
 
 
 @router.post("/", response_model=SessionRead, status_code=201)

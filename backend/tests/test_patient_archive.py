@@ -35,7 +35,7 @@ def _restore(api, patient):
 
 
 def _ids(response) -> list[str]:
-    return [item["id"] for item in response.json()]
+    return [item["id"] for item in response.json()["items"]]
 
 
 def test_archived_patient_leaves_the_active_list_and_can_be_restored(
@@ -46,15 +46,15 @@ def test_archived_patient_leaves_the_active_list_and_can_be_restored(
 
     assert _archive(api, patient).status_code == 204
 
-    assert api.get("/api/v1/patients/").json() == []
+    assert api.get("/api/v1/patients/").json()["items"] == []
     archived = api.get("/api/v1/patients/?archived=true")
     assert _ids(archived) == [str(patient.id)]
-    assert archived.json()[0]["archived_at"] is not None
+    assert archived.json()["items"][0]["archived_at"] is not None
 
     assert _restore(api, patient).status_code == 204
 
     assert _ids(api.get("/api/v1/patients/")) == [str(patient.id)]
-    assert api.get("/api/v1/patients/?archived=true").json() == []
+    assert api.get("/api/v1/patients/?archived=true").json()["items"] == []
     assert api.get(f"/api/v1/patients/{patient.id}").json()["archived_at"] is None
 
 
@@ -70,9 +70,9 @@ def test_archived_patient_stays_readable_with_history(
     assert record.status_code == 200
     assert record.json()["archived_at"] is not None
     assert api.get(f"/api/v1/patients/{patient.id}/history").status_code == 200
-    assert _ids(api.get(f"/api/v1/assignments/?patient_id={patient.id}")) == [
-        str(assignment.id)
-    ]
+    assert [
+        item["id"] for item in api.get(f"/api/v1/assignments/?patient_id={patient.id}").json()
+    ] == [str(assignment.id)]
     assert api.get(f"/api/v1/sessions/?patient_id={patient.id}").status_code == 200
     assert api.get("/api/v1/assignments/").json() == []
 
@@ -94,7 +94,7 @@ def test_archived_patient_question_history_stays_readable(
     login(therapist)
     assert _archive(api, patient).status_code == 204
 
-    assert api.get("/api/v1/help-requests/needs-attention").json() == []
+    assert api.get("/api/v1/help-requests/needs-attention").json()["items"] == []
     history = api.get(f"/api/v1/help-requests/?patient_id={patient.id}")
     assert _ids(history) == [asked.json()["id"]]
 
@@ -137,9 +137,11 @@ def test_archiving_does_not_affect_another_therapists_link(
     login(other_therapist)
 
     assert _ids(api.get("/api/v1/patients/")) == [str(patient.id)]
-    assert api.get("/api/v1/patients/?archived=true").json() == []
+    assert api.get("/api/v1/patients/?archived=true").json()["items"] == []
     assert api.get(f"/api/v1/patients/{patient.id}").json()["archived_at"] is None
-    assert _ids(api.get("/api/v1/assignments/")) == [str(foreign.id)]
+    assert [item["id"] for item in api.get("/api/v1/assignments/").json()] == [
+        str(foreign.id)
+    ]
     created = api.post("/api/v1/assignments/", json=assignment_payload(patient.id))
     assert created.status_code != 409
 
