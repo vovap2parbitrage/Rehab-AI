@@ -1,4 +1,5 @@
 import { apiRequest, type RequestOptions } from './client'
+import { listAllPages } from './pagination'
 
 export interface HelpRequest {
   id: string
@@ -33,7 +34,7 @@ export function listMyHelpRequests(options: RequestOptions = {}): Promise<HelpRe
 
 /** Therapist: unanswered questions of their patients ("Needs attention"). */
 export function listNeedsAttention(options: RequestOptions = {}): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>('/api/v1/help-requests/needs-attention', options)
+  return listAllPages<HelpRequest>('/api/v1/help-requests/needs-attention', options)
 }
 
 /** Therapist: all questions of one patient with replies, newest first. */
@@ -41,7 +42,7 @@ export function listPatientHelpRequests(
   patientId: string,
   options: RequestOptions = {},
 ): Promise<HelpRequest[]> {
-  return apiRequest<HelpRequest[]>(
+  return listAllPages<HelpRequest>(
     `/api/v1/help-requests/?patient_id=${encodeURIComponent(patientId)}`,
     options,
   )

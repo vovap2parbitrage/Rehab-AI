@@ -1,4 +1,5 @@
 import { apiRequest, type RequestOptions } from './client'
+import { listAllPages } from './pagination'
 import type { AssignmentStatus, InvitationStatus } from './statuses'
 
 export interface Patient {
@@ -67,11 +68,11 @@ export interface AssignmentPayload {
 }
 
 export function listPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/', options)
+  return listAllPages<Patient>('/api/v1/patients/', options)
 }
 
 export function listArchivedPatients(options: RequestOptions = {}): Promise<Patient[]> {
-  return apiRequest<Patient[]>('/api/v1/patients/?archived=true', options)
+  return listAllPages<Patient>('/api/v1/patients/?archived=true', options)
 }
 
 export function archivePatient(id: string): Promise<void> {
@@ -98,7 +99,7 @@ export function sendInvitation(email: string, message?: string): Promise<Invitat
 }
 
 export function listExercises(options: RequestOptions = {}): Promise<Exercise[]> {
-  return apiRequest<Exercise[]>('/api/v1/exercises/', options)
+  return listAllPages<Exercise>('/api/v1/exercises/', options)
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {
