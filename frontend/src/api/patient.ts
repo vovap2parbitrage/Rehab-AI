@@ -22,6 +22,7 @@ export interface PatientExercise {
   name: string
   description: string | null
   reference_video_key: string | null
+  body_parts: string[]
 }
 
 export interface PatientSession {

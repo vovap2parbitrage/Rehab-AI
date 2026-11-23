@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -98,86 +98,17 @@ def test_patient_list_without_patient_id_returns_only_own(
     assert [item["id"] for item in response.json()["items"]] == [str(own.id)]
 
 
-def test_duplicate_video_check_searches_all_of_the_patients_assignments(
-    api, login, therapist, patient_user, seed_patient, seed_assignment, db_session
-):
-    patient = seed_patient(patient_user, therapist)
-    first_assignment = seed_assignment(patient)
-    seed_assignment(patient)
-    video_sha256 = "a" * 64
-    session_date = datetime(2026, 2, 1, tzinfo=UTC)
-    db_session.add(
-        TrainingSession(
-            assignment_id=first_assignment.id,
-            video_sha256=video_sha256,
-            completed_at=session_date,
-        )
-    )
-    db_session.commit()
-    login(patient_user)
-
-    response = api.post(
-        "/api/v1/sessions/duplicate-video",
-        json={"video_sha256": video_sha256},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["session_date"] == "2026-02-01T00:00:00Z"
-
-
-def test_another_patients_identical_video_is_not_a_duplicate(
-    api, login, therapist, patient_user, other_patient_user,
-    seed_patient, seed_assignment, db_session,
-):
-    video_sha256 = "b" * 64
-    foreign_assignment = seed_assignment(seed_patient(other_patient_user, therapist))
-    db_session.add(
-        TrainingSession(
-            assignment_id=foreign_assignment.id,
-            video_sha256=video_sha256,
-        )
-    )
-    db_session.commit()
-    login(patient_user)
-
-    response = api.post(
-        "/api/v1/sessions/duplicate-video",
-        json={"video_sha256": video_sha256},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["session_date"] is None
-
-
-def test_duplicate_video_check_requires_a_valid_hash_and_patient_role(
-    api, login, therapist, patient_user
-):
-    login(patient_user)
-    invalid_hash = api.post(
-        "/api/v1/sessions/duplicate-video",
-        json={"video_sha256": "not-a-hash"},
-    )
-    assert invalid_hash.status_code == 422
-
-    login(therapist)
-    forbidden = api.post(
-        "/api/v1/sessions/duplicate-video",
-        json={"video_sha256": "c" * 64},
-    )
-    assert forbidden.status_code == 403
-
-
 def test_patient_session_list_paginates_newest_first(
     api, login, therapist, patient_user, seed_patient, seed_assignment, seed_session, db_session
 ):
     assignment = seed_assignment(seed_patient(patient_user, therapist))
     old_session = TrainingSession(
         assignment_id=assignment.id,
-        completed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     new_session = TrainingSession(
         assignment_id=assignment.id,
-        completed_at=datetime(2026, 2, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
     )
     db_session.add_all([old_session, new_session])
     db_session.commit()
@@ -244,7 +175,6 @@ def test_session_schemas_match_model_columns():
     # has_video is derived from video_key, so it is not a column itself.
     assert set(SessionRead.model_fields) - {"has_video"} <= columns
     assert "video_key" in columns
-    assert "video_sha256" in columns
 
 
 def test_score_uses_the_zero_to_ten_scale():

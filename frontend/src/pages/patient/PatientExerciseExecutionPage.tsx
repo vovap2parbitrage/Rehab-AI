@@ -8,22 +8,14 @@ import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { analysisNotice } from '../../lib/analysisNotice'
 import { formatDay, formatWeekdays } from '../../lib/assignmentSchedule'
-import { getErrorMessage } from '../../lib/errorMessage'
-import { checkVideoDuplicate } from '../../api/sessions'
 import { usePatientData, usePatientWorkspace } from '../../lib/usePatientWorkspace'
 import { useVideoAnalysis } from '../../lib/useVideoAnalysis'
 import { useVideoRecorder } from '../../lib/useVideoRecorder'
-import { sha256File } from '../../lib/videoHash'
 import { AskForHelpForm } from './AskForHelpForm'
 import { VideoRecorder } from './VideoRecorder'
 import { WorkspaceError } from './WorkspaceError'
 
 type VideoSource = 'record' | 'upload'
-
-type VideoDuplicateCheck =
-  | { file: File; status: 'clear'; videoSha256: string | null }
-  | { file: File; status: 'duplicate'; videoSha256: string; sessionDate: string }
-  | { file: File; status: 'error'; videoSha256: string | null; message: string }
 
 export function PatientExerciseExecutionPage() {
   const { assignmentId } = useParams()
@@ -32,9 +24,7 @@ export function PatientExerciseExecutionPage() {
   const [painScore, setPainScore] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [duplicateCheck, setDuplicateCheck] = useState<VideoDuplicateCheck | null>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
-  const duplicateCheckRun = useRef(0)
   const recorder = useVideoRecorder()
   const [source, setSource] = useState<VideoSource>(() =>
     recorder.supported ? 'record' : 'upload',
@@ -49,13 +39,6 @@ export function PatientExerciseExecutionPage() {
   // The countdown counts too: the patient is already stepping back to record.
   const recording = recorder.status === 'recording' || recorder.status === 'countdown'
   const videoFile = source === 'record' ? recorder.file : uploadedFile
-  const currentDuplicateCheck = duplicateCheck?.file === videoFile ? duplicateCheck : null
-  const videoSha256 = currentDuplicateCheck?.videoSha256 ?? null
-  const duplicateMatch =
-    currentDuplicateCheck?.status === 'duplicate' ? currentDuplicateCheck : null
-  const duplicateCheckError =
-    currentDuplicateCheck?.status === 'error' ? currentDuplicateCheck.message : null
-  const checkingDuplicate = Boolean(videoFile) && !currentDuplicateCheck
   const painValue = painScore === '' ? null : Number(painScore)
   const saved = analysis.result?.status === 'done' ? analysis.result : null
   const savedSessionId = sessionId ?? saved?.session_id ?? null
@@ -64,65 +47,13 @@ export function PatientExerciseExecutionPage() {
   const problemRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const request = ++duplicateCheckRun.current
-    const controller = new AbortController()
-
-    if (!videoFile) {
-      return () => controller.abort()
-    }
-
-    void (async () => {
-      let videoSha256: string | null = null
-      try {
-        const hash = await sha256File(videoFile)
-        if (controller.signal.aborted || request !== duplicateCheckRun.current) return
-        videoSha256 = hash
-        if (!hash) {
-          setDuplicateCheck({ file: videoFile, status: 'clear', videoSha256: null })
-          return
-        }
-
-        const previous = await checkVideoDuplicate(hash, { signal: controller.signal })
-        if (controller.signal.aborted || request !== duplicateCheckRun.current) return
-        if (previous.session_date) {
-          setDuplicateCheck({
-            file: videoFile,
-            status: 'duplicate',
-            videoSha256: hash,
-            sessionDate: previous.session_date,
-          })
-        } else {
-          setDuplicateCheck({ file: videoFile, status: 'clear', videoSha256: hash })
-        }
-      } catch (reason: unknown) {
-        if (!controller.signal.aborted && request === duplicateCheckRun.current) {
-          setDuplicateCheck({
-            file: videoFile,
-            status: 'error',
-            videoSha256,
-            message: getErrorMessage(
-              reason,
-              'Не вдалося перевірити, чи надсилали ви це відео раніше.',
-            ),
-          })
-        }
-      }
-    })()
-
-    return () => {
-      controller.abort()
-      duplicateCheckRun.current += 1
-    }
-  }, [videoFile])
-
-  useEffect(() => {
     if (problem) problemRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
   }, [problem])
 
   const handleAnalyse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!videoFile || checkingDuplicate || duplicateMatch) return
-    await analysis.start(videoFile, painValue, videoSha256)
+    if (!videoFile) return
+    await analysis.start(videoFile, painValue)
   }
 
   const handleCompleteWithoutVideo = async () => {
@@ -134,19 +65,6 @@ export function PatientExerciseExecutionPage() {
   const clearUploadedFile = () => {
     setUploadedFile(null)
     if (uploadInputRef.current) uploadInputRef.current.value = ''
-  }
-
-  const chooseAnotherVideo = () => {
-    if (source === 'record') recorder.discard()
-    else clearUploadedFile()
-  }
-
-  const sendDuplicateAnyway = async () => {
-    const file = videoFile
-    if (!file || !duplicateMatch) return
-    const hash = duplicateMatch.videoSha256
-    setDuplicateCheck({ file, status: 'clear', videoSha256: hash })
-    await analysis.start(file, painValue, hash)
   }
 
   const handleTryAgain = () => {
@@ -321,6 +239,7 @@ export function PatientExerciseExecutionPage() {
           {source === 'record' ? (
             <VideoRecorder
               recorder={recorder}
+              bodyParts={assignment.exercise.body_parts}
               disabled={analysing}
               onDiscard={resetFinishedAnalysis}
               onUseFileInstead={() => changeSource('upload')}
@@ -340,16 +259,8 @@ export function PatientExerciseExecutionPage() {
               />
             </label>
           )}
-          {checkingDuplicate && (
-            <p className="analysis-progress" role="status">
-              Перевіряємо, чи надсилали ви це відео раніше…
-            </p>
-          )}
           {/* Next to the video, where the patient is looking, rather than at the top of the form. */}
           <div ref={problemRef} className="exercise-upload__problem">
-            {duplicateCheckError && (
-              <ErrorMessage title="Не вдалося перевірити відео" message={duplicateCheckError} />
-            )}
             {analysis.error && <ErrorMessage title="Відео не надіслано" message={analysis.error} />}
             {notice && <ErrorMessage title={notice.title} message={notice.message} />}
           </div>
@@ -377,13 +288,7 @@ export function PatientExerciseExecutionPage() {
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={
-                  !videoFile ||
-                  analysing ||
-                  recording ||
-                  checkingDuplicate ||
-                  Boolean(duplicateMatch)
-                }
+                disabled={!videoFile || analysing || recording}
               >
                 {analysing ? 'Аналізуємо…' : 'Надіслати на аналіз'}
               </button>
@@ -399,36 +304,6 @@ export function PatientExerciseExecutionPage() {
             </button>
           </div>
         </form>
-      )}
-      {duplicateMatch && (
-        <div className="video-duplicate-backdrop">
-          <section
-            className="video-duplicate-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="video-duplicate-title"
-            aria-describedby="video-duplicate-description"
-          >
-            <h2 id="video-duplicate-title">Це відео вже надсилали</h2>
-            <p id="video-duplicate-description">
-              Ви вже надсилали це відео{' '}
-              {new Date(duplicateMatch.sessionDate).toLocaleDateString('uk-UA')}. Це була помилка?
-            </p>
-            <div className="video-duplicate-dialog__actions">
-              <button
-                type="button"
-                className="button button--primary"
-                autoFocus
-                onClick={() => void sendDuplicateAnyway()}
-              >
-                Надіслати все одно
-              </button>
-              <button type="button" className="button button--ghost" onClick={chooseAnotherVideo}>
-                Вибрати інше відео
-              </button>
-            </div>
-          </section>
-        </div>
       )}
     </div>
   )

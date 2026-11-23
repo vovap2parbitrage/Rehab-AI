@@ -1,13 +1,16 @@
-import { useEffect, useRef, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import {
   COUNTDOWN_OPTIONS,
   MAX_RECORDING_SECONDS,
   type VideoRecorderState,
 } from '../../lib/useVideoRecorder'
+import { usePoseAssistant } from '../../lib/usePoseAssistant'
+import { getPoseSpeechMessage } from '../../lib/poseSpeech'
 
 interface VideoRecorderProps {
   recorder: VideoRecorderState
+  bodyParts: readonly string[]
   disabled?: boolean
   /** Called when the patient throws the recording away to record a new one. */
   onDiscard?: () => void
@@ -34,12 +37,74 @@ function revealDuration(event: SyntheticEvent<HTMLVideoElement>) {
 
 export function VideoRecorder({
   recorder,
+  bodyParts,
   disabled = false,
   onDiscard,
   onUseFileInstead,
 }: VideoRecorderProps) {
   const liveRef = useRef<HTMLVideoElement>(null)
+  const autoStartRequested = useRef(false)
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null)
+  const [videoReadyStream, setVideoReadyStream] = useState<MediaStream | null>(null)
+  const [autoStart, setAutoStart] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const lastSpokenMessage = useRef<string | null>(null)
   const { status, stream } = recorder
+  const videoReady = stream !== null && videoReadyStream === stream
+  const recording = status === 'recording'
+  const counting = status === 'countdown'
+  const monitoring = status === 'ready' || counting || recording
+  const speechSupported =
+    typeof window !== 'undefined' &&
+    typeof window.speechSynthesis !== 'undefined' &&
+    typeof SpeechSynthesisUtterance !== 'undefined'
+  const startRecording = recorder.startRecording
+  const setLiveVideo = useCallback((element: HTMLVideoElement | null) => {
+    liveRef.current = element
+    setVideo(element)
+  }, [])
+  const assistant = usePoseAssistant({
+    video,
+    stream,
+    videoReady,
+    active: monitoring,
+    bodyParts,
+  })
+  const speechMessage = getPoseSpeechMessage(
+    status,
+    recorder.countdownLeft,
+    assistant,
+    recorder.error,
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!voiceEnabled) {
+      window.speechSynthesis?.cancel()
+      lastSpokenMessage.current = null
+      return
+    }
+    if (!speechSupported || !speechMessage || lastSpokenMessage.current === speechMessage) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (lastSpokenMessage.current === speechMessage) return
+      const utterance = new SpeechSynthesisUtterance(speechMessage)
+      utterance.lang = 'uk-UA'
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(utterance)
+      lastSpokenMessage.current = speechMessage
+    }, 650)
+    return () => window.clearTimeout(timeout)
+  }, [speechMessage, speechSupported, voiceEnabled])
+
+  useEffect(
+    () => () => {
+      if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+    },
+    [],
+  )
 
   useEffect(() => {
     const video = liveRef.current
@@ -52,7 +117,18 @@ export function VideoRecorder({
       // A stopped camera left in srcObject would hide any `src` set on this element later.
       if (video.srcObject === stream) video.srcObject = null
     }
-  }, [stream, status])
+  }, [stream])
+
+  useEffect(() => {
+    if (!stream) {
+      autoStartRequested.current = false
+      return
+    }
+    if (assistant.ready && autoStart && status === 'ready' && !autoStartRequested.current) {
+      autoStartRequested.current = true
+      startRecording()
+    }
+  }, [assistant.ready, autoStart, startRecording, status, stream])
 
   const recordAgain = () => {
     onDiscard?.()
@@ -144,18 +220,17 @@ export function VideoRecorder({
     )
   }
 
-  const recording = status === 'recording'
-  const counting = status === 'countdown'
   return (
     <div className="video-recorder">
       <div className="video-recorder__frame">
         <video
           key="camera"
-          ref={liveRef}
+          ref={setLiveVideo}
           className={`video-recorder__video${recorder.facing === 'user' ? ' video-recorder__video--mirrored' : ''}`}
           autoPlay
           muted
           playsInline
+          onLoadedData={() => setVideoReadyStream(stream)}
           aria-label="Зображення з камери"
         />
         {recording && (
@@ -170,6 +245,38 @@ export function VideoRecorder({
           </span>
         )}
       </div>
+      {monitoring && (
+        <div className="video-recorder__assistant" role="status" aria-live="polite">
+          <div className="video-recorder__assistant-heading">
+            <strong>Помічник пози</strong>
+            <label className="video-recorder__voice">
+              <input
+                type="checkbox"
+                checked={voiceEnabled}
+                disabled={!speechSupported}
+                onChange={(event) => setVoiceEnabled(event.currentTarget.checked)}
+              />
+              <span>
+                {speechSupported ? 'Голосові підказки' : 'Голос недоступний у цьому браузері'}
+              </span>
+            </label>
+          </div>
+          {assistant.status === 'loading' && <p>Готуємо локальні підказки для камери…</p>}
+          {assistant.status === 'unavailable' && <p>{assistant.hints[0]}</p>}
+          {assistant.status === 'active' &&
+            (assistant.ready ? (
+              <p>{recording ? 'Позиція хороша.' : 'Позиція підходить — можна починати запис.'}</p>
+            ) : assistant.hints.length > 0 ? (
+              <ul>
+                {assistant.hints.map((hint) => (
+                  <li key={hint}>{hint}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Позиція виглядає добре. Перевіряємо її ще мить…</p>
+            ))}
+        </div>
+      )}
       {status === 'requesting' && (
         <p className="video-recorder__hint" role="status">
           Запитуємо доступ до камери…
@@ -200,6 +307,17 @@ export function VideoRecorder({
             ))}
           </div>
         </div>
+      )}
+      {status === 'ready' && (
+        <label className="video-recorder__auto-start">
+          <input
+            type="checkbox"
+            checked={autoStart}
+            disabled={disabled}
+            onChange={(event) => setAutoStart(event.currentTarget.checked)}
+          />
+          <span>Автоматично почати запис, коли камера буде налаштована</span>
+        </label>
       )}
       <div className="video-recorder__actions">
         {counting ? (

@@ -57,12 +57,6 @@ class TrainingSession(Base):
         nullable=True,
     )
 
-    video_sha256: Mapped[str | None] = mapped_column(
-        String(64),
-        nullable=True,
-        index=True,
-    )
-
     # The exercise version the video was scored against; empty for sessions without analysis.
     exercise_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("exercise_versions.id"),

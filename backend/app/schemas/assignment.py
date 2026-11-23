@@ -41,6 +41,7 @@ class PatientExerciseRead(BaseModel):
     name: str
     description: str | None = None
     reference_video_key: str | None = None
+    body_parts: list[str] = Field(default_factory=list)
 
 
 class PatientSessionRead(BaseModel):

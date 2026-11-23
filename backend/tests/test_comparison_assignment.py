@@ -69,7 +69,6 @@ def patient_key(user):
 def test_job_is_built_from_the_exercise(api, login, service, setup, patient_user):
     assignment, db_assignment = setup
     login(patient_user)
-    video_sha256 = "c" * 64
 
     r = api.post(
         PREFIX,
@@ -77,7 +76,6 @@ def test_job_is_built_from_the_exercise(api, login, service, setup, patient_user
             "assignment_id": str(assignment.id),
             "patient_key": patient_key(patient_user),
             "pain_score": 3,
-            "video_sha256": video_sha256,
         },
     )
 
@@ -91,24 +89,6 @@ def test_job_is_built_from_the_exercise(api, login, service, setup, patient_user
     # Unknown joints and out-of-range tolerances from the exercise are dropped.
     assert job.tolerances_deg == {"r_knee": 5.0}
     assert job.pain_score == 3
-    assert job.video_sha256 == video_sha256
-
-
-def test_invalid_video_hash_is_rejected(api, login, service, setup, patient_user):
-    assignment, _ = setup
-    login(patient_user)
-
-    response = api.post(
-        PREFIX,
-        json={
-            "assignment_id": str(assignment.id),
-            "patient_key": patient_key(patient_user),
-            "video_sha256": "not-a-sha256",
-        },
-    )
-
-    assert response.status_code == 422
-    assert service.jobs == []
 
 
 def test_request_cannot_override_the_exercise(api, login, service, setup, patient_user):
@@ -220,21 +200,17 @@ REPORT = {
 }
 
 
-def test_record_session_stores_score_deviations_and_video_hash(setup, db_session):
+def test_record_session_stores_score_and_deviations(setup, db_session):
     assignment, db_assignment = setup
 
     video = f"videos/u/{'d' * 32}.mp4"
-    video_sha256 = "e" * 64
     version = db_assignment.exercise_version_id
 
-    session_id = record_session(
-        str(assignment.id), "task-9", 4, REPORT, video, str(version), video_sha256
-    )
+    session_id = record_session(str(assignment.id), "task-9", 4, REPORT, video, str(version))
 
     saved = db_session.query(TrainingSession).one()
     assert session_id == str(saved.id)
     assert saved.video_key == video
-    assert saved.video_sha256 == video_sha256
     assert saved.exercise_version_id == version
     assert saved.has_video
     assert saved.assignment_id == assignment.id
