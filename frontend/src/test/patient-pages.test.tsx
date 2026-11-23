@@ -36,6 +36,7 @@ import {
   replyToHelpRequest,
 } from '../api/helpRequests'
 import { getMyHistory, getPatientHistory, type PatientHistory } from '../api/history'
+import { listMyMessages, replyToMessage, type TherapistMessage } from '../api/messages'
 import {
   createAssignment,
   getPatient,
@@ -108,6 +109,14 @@ vi.mock('../api/sessions', () => ({
 vi.mock('../api/uploads', () => ({
   uploadVideo: vi.fn(),
   getExerciseVideoUrl: vi.fn(),
+}))
+
+vi.mock('../api/messages', () => ({
+  listMyMessages: vi.fn(),
+  replyToMessage: vi.fn(),
+  listSentMessages: vi.fn(),
+  markReplySeen: vi.fn(),
+  sendMessage: vi.fn(),
 }))
 
 vi.mock('../api/helpRequests', () => ({
@@ -309,6 +318,7 @@ const currentPatient: UserProfile = {
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientSessions).mockResolvedValue([])
+  vi.mocked(listMyMessages).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
@@ -1337,6 +1347,56 @@ describe('Patient access and cabinet pages', () => {
 
     expect(await screen.findByRole('button', { name: 'Сховати відео' })).toBeInTheDocument()
     expect(getSessionVideoUrl).toHaveBeenCalledWith('session-1')
+  })
+
+  describe('messages from the therapist', () => {
+    const waiting: TherapistMessage = {
+      id: 'message-1',
+      patient_id: 'patient-1',
+      patient_name: 'Олена Коваль',
+      therapist_name: 'Лікар Іваненко',
+      message: 'Вчора ви не виконали Присідання. Чи все гаразд?',
+      created_at: '2026-03-01T10:00:00Z',
+      reply: null,
+      replied_at: null,
+      reply_seen: false,
+    }
+
+    it('shows nothing on the dashboard when there are no messages', async () => {
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      await screen.findByRole('heading', { name: 'Очікуйте запрошення від лікаря' })
+      expect(screen.queryByText(/Повідомлення від лікаря/)).not.toBeInTheDocument()
+    })
+
+    it('lets the patient answer a message once', async () => {
+      const user = userEvent.setup()
+      vi.mocked(listMyMessages).mockResolvedValue([waiting])
+      vi.mocked(replyToMessage).mockResolvedValue({ ...waiting, reply: 'Хворів, вибачте' })
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      expect(
+        await screen.findByRole('heading', {
+          name: /Повідомлення від лікаря \(чекають відповіді: 1\)/,
+        }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Лікар Іваненко')).toBeInTheDocument()
+
+      await user.type(screen.getByLabelText('Ваша відповідь лікарю'), '  Хворів, вибачте  ')
+      await user.click(screen.getByRole('button', { name: 'Відповісти' }))
+
+      expect(replyToMessage).toHaveBeenCalledWith('message-1', 'Хворів, вибачте')
+      expect(await screen.findByText(/Ваша відповідь:/)).toBeInTheDocument()
+      expect(screen.queryByLabelText('Ваша відповідь лікарю')).not.toBeInTheDocument()
+    })
+
+    it('shows an answered message without the form', async () => {
+      vi.mocked(listMyMessages).mockResolvedValue([{ ...waiting, reply: 'Хворів' }])
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      expect(await screen.findByText(/Ваша відповідь:/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Відповісти' })).not.toBeInTheDocument()
+    })
   })
 
   describe('what a patient may do today', () => {

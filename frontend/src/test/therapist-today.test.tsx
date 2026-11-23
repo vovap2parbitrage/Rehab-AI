@@ -1,10 +1,15 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { Today } from '../api/therapist'
 import type { CachedResource } from '../lib/useCachedResource'
 import { TherapistTodayPage } from '../pages/therapist/TherapistTodayPage'
 import type { TherapistWorkspaceResources } from '../pages/therapist/TherapistWorkspaceLayout'
+
+vi.mock('../api/messages', () => ({
+  sendMessage: vi.fn(),
+}))
 
 const today: Today = {
   date: '2026-11-26',
@@ -16,6 +21,7 @@ const today: Today = {
     not_finished: 2,
     missed_yesterday: 1,
     open_questions: 4,
+    new_replies: 2,
   },
   not_finished: [
     {
@@ -116,6 +122,29 @@ describe('The therapist Today page', () => {
       'href',
       '/therapist/patients/p2',
     )
+  })
+
+  it('lets the doctor write to a patient who has not finished, with the missing exercises in the text', async () => {
+    const user = userEvent.setup()
+    renderPage(today)
+
+    // Two patients have something left today and one missed yesterday.
+    const buttons = screen.getAllByRole('button', { name: 'Написати' })
+    expect(buttons).toHaveLength(3)
+
+    await user.click(buttons[0])
+
+    expect(screen.getByLabelText('Повідомлення пацієнту')).toHaveValue(
+      'Добрий день! Сьогодні у вас лишились вправи: Випади, Міст. Чи все гаразд?',
+    )
+  })
+
+  it('shows how many replies to the doctor’s messages are new', () => {
+    renderPage(today)
+
+    expect(
+      screen.getByText('нових відповідей на ваші повідомлення').previousSibling,
+    ).toHaveTextContent('2')
   })
 
   it('links the open questions counter to the questions page', () => {

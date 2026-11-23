@@ -148,3 +148,27 @@
 .help-request__session > :not(summary) {
   margin: 10px 12px;
 }
+
+.message-composer {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.message-composer__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.message-composer__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.message-composer__sent {
+  margin: 6px 0 0;
+  color: var(--success, #1b7f5a);
+  font-size: 0.85rem;
+  font-weight: 700;
+}

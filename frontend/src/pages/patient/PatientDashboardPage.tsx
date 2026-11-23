@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/useAuth'
 import { PatientHistorySection } from '../../components/history/PatientHistorySection'
 import { ActivityIcon, ArrowRightIcon, CheckIcon, UserIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
+import { PatientMessagesCard } from '../../components/PatientMessagesCard'
 import { PageHeading } from '../../components/PageHeading'
 import { getDisplayName } from '../../lib/profile'
 import { usePatientData } from '../../lib/usePatientWorkspace'
@@ -38,6 +39,7 @@ export function PatientDashboardPage() {
         invitationData.data &&
         assignmentData.data && (
           <>
+            <PatientMessagesCard />
             <section className="workspace-welcome card" aria-labelledby="welcome-title">
               <div className="workspace-welcome__copy">
                 <p className="eyebrow">Ваш наступний крок</p>
