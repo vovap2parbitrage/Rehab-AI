@@ -6,17 +6,20 @@ interface UploadTarget {
   fields: Record<string, string>
 }
 const MAX_BYTES = 100 * 1024 * 1024
-const ALLOWED_TYPES = ['video/mp4', 'video/quicktime']
+// WebM is what most browsers record inside the app; the server converts it for analysis.
+const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
 export async function uploadVideo(file: File): Promise<string> {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error('Дозволені тільки MP4 та MOV.')
+  // A recording may carry codecs ("video/mp4;codecs=avc1"); storage expects the plain type.
+  const contentType = file.type.split(';')[0].trim().toLowerCase()
+  if (!ALLOWED_TYPES.includes(contentType)) {
+    throw new Error('Дозволені тільки MP4, MOV та WebM.')
   }
   if (file.size > MAX_BYTES) {
     throw new Error('Максимальний розмір відео — 100 МБ.')
   }
   const target = await apiRequest<UploadTarget>('/api/v1/comparisons/uploads', {
     method: 'POST',
-    body: JSON.stringify({ content_type: file.type }),
+    body: JSON.stringify({ content_type: contentType }),
   })
   const formData = new FormData()
   Object.entries(target.fields).forEach(([key, value]) => {

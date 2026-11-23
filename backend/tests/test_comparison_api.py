@@ -8,6 +8,7 @@ from app.api.comparison_auth import require_user_id
 from app.api.deps import get_current_active_user
 from app.api.v1.endpoints.comparisons import get_comparison_service, get_storage
 from app.main import app
+from app.schemas.comparison import ComparisonRequest
 
 USER = "user1"
 KEY_B = f"videos/{USER}/{'b' * 32}.mov"
@@ -56,6 +57,7 @@ def anonymous_client():
         "http://169.254.169.254/latest/meta-data",
         "videos/../etc/passwd",
         f"videos/{USER}/{'a' * 32}.exe",
+        f"videos/{USER}/{'a' * 32}.mkv",
         "nope",
     ],
 )
@@ -82,10 +84,16 @@ def test_get_unknown_or_foreign_task_is_404(client):
     assert client.get(f"{PREFIX}/someone-elses").status_code == 404
 
 
-def test_upload_returns_presigned_target(client):
-    r = client.post(f"{PREFIX}/uploads", json={"content_type": "video/mp4"})
+@pytest.mark.parametrize("content_type", ["video/mp4", "video/quicktime", "video/webm"])
+def test_upload_returns_presigned_target(client, content_type):
+    r = client.post(f"{PREFIX}/uploads", json={"content_type": content_type})
     assert r.status_code == 200
     assert r.json()["key"].startswith(f"videos/{USER}/")
+
+
+def test_recorded_webm_key_is_accepted():
+    key = f"videos/{USER}/{'a' * 32}.webm"
+    assert ComparisonRequest(**{**VALID, "patient_key": key}).patient_key == key
 
 
 def test_upload_rejects_other_content_types(client):
