@@ -250,3 +250,24 @@
   color: var(--muted);
   font-weight: 500;
 }
+
+.therapist-form__tolerances {
+  display: grid;
+  gap: 8px;
+}
+
+.therapist-form__tolerances small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.therapist-form__tolerances label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.therapist-form__tolerances input {
+  max-width: 120px;
+}

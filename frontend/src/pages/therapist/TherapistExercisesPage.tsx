@@ -1,7 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { createExercise, deleteExercise, updateExercise, type Exercise } from '../../api/therapist'
+import {
+  createExercise,
+  deleteExercise,
+  hideExercise,
+  restoreExercise,
+  updateExercise,
+  type Exercise,
+} from '../../api/therapist'
 import { ErrorMessage } from '../../components/ErrorMessage'
 import { ArrowRightIcon } from '../../components/Icons'
 import { PageHeading } from '../../components/PageHeading'
@@ -11,6 +18,7 @@ import { useRefreshOnEntry } from '../../lib/useCachedResource'
 import { useVideoPreview } from '../../lib/useVideoPreview'
 import { ExerciseForm } from './ExerciseForm'
 import { ExerciseLibrary } from './ExerciseLibrary'
+import { HiddenExercises } from './HiddenExercises'
 import type { TherapistWorkspaceResources } from './TherapistWorkspaceLayout'
 
 function getVideoDuration(file: File): Promise<number> {
@@ -41,9 +49,20 @@ function describeEdit(before: Exercise | undefined, after: Exercise, applied: bo
 }
 
 export function TherapistExercisesPage() {
-  const { exercises: resource } = useOutletContext<TherapistWorkspaceResources>()
+  const {
+    exercises: resource,
+    hiddenExercises: hiddenResource,
+    scoringOptions: scoringResource,
+  } = useOutletContext<TherapistWorkspaceResources>()
   useRefreshOnEntry(resource)
+  useRefreshOnEntry(hiddenResource)
+  useRefreshOnEntry(scoringResource)
   const { data: exercises = [], loading, error: loadError, update: updateExercises } = resource
+  const { data: hiddenExercises = [] } = hiddenResource
+  const { data: scoringOptions } = scoringResource
+  const [showHidden, setShowHidden] = useState(false)
+  // What the doctor typed for each joint; an empty value means the default tolerance.
+  const [tolerances, setTolerances] = useState<Record<string, string>>({})
   const [form, setForm] = useState({ name: '', description: '' })
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
@@ -65,6 +84,11 @@ export function TherapistExercisesPage() {
       description: exercise.description || '',
     })
     setBodyParts(exercise.body_parts)
+    setTolerances(
+      Object.fromEntries(
+        Object.entries(exercise.joint_tolerances).map(([joint, value]) => [joint, String(value)]),
+      ),
+    )
     setApplyToActive(false)
     setVideoFile(null)
     if (videoInputRef.current) videoInputRef.current.value = ''
@@ -75,6 +99,7 @@ export function TherapistExercisesPage() {
   const cancelEditing = () => {
     setEditingId(null)
     setApplyToActive(false)
+    setTolerances({})
     setForm({ name: '', description: '' })
     setBodyParts([])
     setVideoFile(null)
@@ -97,6 +122,37 @@ export function TherapistExercisesPage() {
     }
   }
 
+  const handleHide = async (exercise: Exercise) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await hideExercise(exercise.id)
+      updateExercises((current) => current.filter((item) => item.id !== exercise.id))
+      hiddenResource.invalidate()
+      if (editingId === exercise.id) cancelEditing()
+      setNotice('Вправу приховано. Її можна повернути в розділі «Приховані вправи».')
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason, 'Не вдалося приховати вправу.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRestore = async (exercise: Exercise) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await restoreExercise(exercise.id)
+      hiddenResource.update((current) => current.filter((item) => item.id !== exercise.id))
+      resource.invalidate()
+      setNotice('Вправу повернуто до бібліотеки.')
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason, 'Не вдалося повернути вправу.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const toggleBodyPart = (part: string) => {
     if (bodyParts.includes(part)) {
       setBodyParts(bodyParts.filter((item) => item !== part))
@@ -111,6 +167,27 @@ export function TherapistExercisesPage() {
     setError(null)
   }
 
+  /** The typed tolerances of the joints that are still part of the exercise, as numbers. */
+  const collectTolerances = (): Record<string, number> | null => {
+    // Without the joint list nothing can be checked, so an edit keeps what is saved.
+    if (!scoringOptions) return editingExercise?.joint_tolerances ?? {}
+    const result: Record<string, number> = {}
+    const allowed = new Set(
+      bodyParts.flatMap((part) => scoringOptions?.joints_by_body_part[part] ?? []),
+    )
+    const max = scoringOptions?.max_tolerance_deg ?? 90
+    for (const [joint, typed] of Object.entries(tolerances)) {
+      if (!allowed.has(joint) || typed.trim() === '') continue
+      const value = Number(typed)
+      if (!Number.isFinite(value) || value < 1 || value > max) {
+        setError(`Допуск має бути числом від 1 до ${max}.`)
+        return null
+      }
+      result[joint] = value
+    }
+    return result
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
@@ -119,6 +196,8 @@ export function TherapistExercisesPage() {
       setError('Оберіть хоча б одну частину тіла.')
       return
     }
+    const jointTolerances = collectTolerances()
+    if (!jointTolerances) return
     if (!videoFile && videoRequired) {
       const message = 'Оберіть відео.'
       setVideoError(message)
@@ -146,7 +225,7 @@ export function TherapistExercisesPage() {
           name: form.name,
           description: form.description || null,
           reference_video_key: videoKey,
-          joint_tolerances: editingExercise?.joint_tolerances ?? {},
+          joint_tolerances: jointTolerances,
           body_parts: bodyParts,
           apply_to_active_assignments: applyToActive,
         })
@@ -165,7 +244,7 @@ export function TherapistExercisesPage() {
           name: form.name,
           description: form.description || null,
           reference_video_key: videoKey,
-          joint_tolerances: {},
+          joint_tolerances: jointTolerances,
           body_parts: bodyParts,
         })
         updateExercises((current) =>
@@ -220,6 +299,11 @@ export function TherapistExercisesPage() {
         <ExerciseForm
           values={form}
           bodyParts={bodyParts}
+          scoringOptions={scoringOptions}
+          tolerances={tolerances}
+          onToleranceChange={(joint, value) =>
+            setTolerances((current) => ({ ...current, [joint]: value }))
+          }
           videoInputRef={videoInputRef}
           videoError={videoError}
           videoRequired={videoRequired}
@@ -240,7 +324,20 @@ export function TherapistExercisesPage() {
           loadError={loadError}
           busy={busy}
           videoPreview={videoPreview}
+          hiddenCount={hiddenExercises.length}
+          showingHidden={showHidden}
+          hiddenView={
+            <HiddenExercises
+              exercises={hiddenExercises}
+              loading={hiddenResource.loading}
+              loadError={hiddenResource.error}
+              busy={busy}
+              onRestore={(exercise) => void handleRestore(exercise)}
+            />
+          }
+          onToggleHidden={() => setShowHidden((current) => !current)}
           onEdit={startEditing}
+          onHide={(exercise) => void handleHide(exercise)}
           onDelete={(exercise) => void handleDelete(exercise)}
         />
       </div>
