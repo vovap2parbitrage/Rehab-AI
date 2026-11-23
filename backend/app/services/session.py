@@ -13,7 +13,13 @@ from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.models.user import User
 from app.schemas.pagination import Page
-from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
+from app.schemas.session import (
+    PatientSessionCreate,
+    SessionCreate,
+    SessionRead,
+    VideoDuplicateCheck,
+    VideoDuplicateRead,
+)
 from app.services import storage
 from app.services.assignment import complete_finished_assignments
 from app.services.patient_access import require_patient_access
@@ -64,6 +70,29 @@ def list_sessions(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+def check_video_duplicate(
+    db: Session,
+    user: User,
+    payload: VideoDuplicateCheck,
+) -> VideoDuplicateRead:
+    previous = (
+        db.query(TrainingSession)
+        .join(TrainingSession.assignment)
+        .join(Assignment.patient)
+        .filter(
+            Patient.user_id == user.id,
+            TrainingSession.video_sha256 == payload.video_sha256,
+        )
+        .order_by(
+            func.coalesce(TrainingSession.completed_at, TrainingSession.created_at).desc()
+        )
+        .first()
+    )
+    return VideoDuplicateRead(
+        session_date=(previous.completed_at or previous.created_at) if previous else None
     )
 
 

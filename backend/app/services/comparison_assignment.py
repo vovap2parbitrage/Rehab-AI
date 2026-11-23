@@ -10,8 +10,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.assignment import Assignment
 from app.core.statuses import AssignmentStatus
+from app.models.assignment import Assignment
 from app.models.user import User
 from app.schemas.comparison import KNOWN_JOINTS, MAX_TOLERANCE_DEG, ComparisonRequest
 from app.services import storage
@@ -27,6 +27,7 @@ class PreparedComparison:
     tolerances_deg: dict[str, float]
     pain_score: int | None
     exercise_version_id: UUID
+    video_sha256: str | None
 
 
 def prepare_comparison(db: Session, req: ComparisonRequest, user: User) -> PreparedComparison:
@@ -67,4 +68,5 @@ def prepare_comparison(db: Session, req: ComparisonRequest, user: User) -> Prepa
         tolerances_deg=tolerances,
         pain_score=req.pain_score,
         exercise_version_id=assignment.exercise_version_id,
+        video_sha256=req.video_sha256,
     )

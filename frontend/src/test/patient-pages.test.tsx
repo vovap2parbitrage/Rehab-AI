@@ -54,7 +54,7 @@ import { refreshAccessToken } from '../auth/keycloak'
 import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
 import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
-import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
+import { checkVideoDuplicate, getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
 import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
@@ -62,6 +62,7 @@ import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
 import { TherapistWorkspaceLayout } from '../pages/therapist/TherapistWorkspaceLayout'
 import { MOCK_ASSIGNMENT, MOCK_EXERCISE, MOCK_PATIENT } from '../data/therapistMocks'
+import { sha256File } from '../lib/videoHash'
 
 vi.mock('../api/patient', () => ({
   completePatientAssignment: vi.fn(),
@@ -104,8 +105,13 @@ vi.mock('../api/comparisons', () => ({
 }))
 
 vi.mock('../api/sessions', () => ({
+  checkVideoDuplicate: vi.fn(),
   getSessionVideoUrl: vi.fn(),
   listPatientSessions: vi.fn(),
+}))
+
+vi.mock('../lib/videoHash', () => ({
+  sha256File: vi.fn(),
 }))
 
 vi.mock('../api/uploads', () => ({
@@ -329,6 +335,8 @@ function page<T>(items: T[], total = items.length, offset = 0): Page<T> {
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientSessions).mockResolvedValue(page([]))
+  vi.mocked(checkVideoDuplicate).mockResolvedValue({ session_date: null })
+  vi.mocked(sha256File).mockResolvedValue('a'.repeat(64))
   vi.mocked(listMyMessages).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
@@ -877,12 +885,17 @@ describe('Patient access and cabinet pages', () => {
   })
 
   describe('video analysis', () => {
-    const openExecution = async () => {
+    const openExecution = async (waitForReady = true) => {
       vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
       renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
       const user = userEvent.setup()
       const input = await screen.findByLabelText(/Відеофайл/)
       await user.upload(input, new File(['video'], 'squat.mp4', { type: 'video/mp4' }))
+      if (waitForReady) {
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeEnabled(),
+        )
+      }
       return user
     }
 
@@ -899,12 +912,82 @@ describe('Patient access and cabinet pages', () => {
         assignment_id: 'assignment-1',
         patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
         pain_score: 3,
+        video_sha256: 'a'.repeat(64),
       })
       expect(screen.getByText('8.5')).toBeInTheDocument()
       expect(screen.getByText('Праве коліно')).toBeInTheDocument()
       expect(screen.getByText(/Праве коліно: надто зігнуто/)).toBeInTheDocument()
       expect(completePatientAssignment).not.toHaveBeenCalled()
       await waitFor(() => expect(listPatientAssignments).toHaveBeenCalledTimes(2))
+    })
+
+    it('warns about a previously saved video and sends it only after confirmation', async () => {
+      const sessionDate = '2026-02-01T00:00:00Z'
+      vi.mocked(checkVideoDuplicate).mockResolvedValueOnce({ session_date: sessionDate })
+      const user = await openExecution(false)
+
+      const dialog = await screen.findByRole('alertdialog')
+      expect(dialog).toHaveTextContent(new Date(sessionDate).toLocaleDateString('uk-UA'))
+      expect(startComparison).not.toHaveBeenCalled()
+
+      await user.click(within(dialog).getByRole('button', { name: 'Надіслати все одно' }))
+
+      expect(await screen.findByRole('heading', { name: 'Виконання записано' })).toBeInTheDocument()
+      expect(startComparison).toHaveBeenCalledWith({
+        assignment_id: 'assignment-1',
+        patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
+        pain_score: null,
+        video_sha256: 'a'.repeat(64),
+      })
+      expect(checkVideoDuplicate).toHaveBeenCalledOnce()
+    })
+
+    it('clears the selected duplicate when choosing another video', async () => {
+      vi.mocked(checkVideoDuplicate).mockResolvedValueOnce({
+        session_date: '2026-02-01T00:00:00Z',
+      })
+      const user = await openExecution(false)
+      const dialog = await screen.findByRole('alertdialog')
+      const fileInput = screen.getByLabelText(/Відеофайл/)
+
+      await user.click(within(dialog).getByRole('button', { name: 'Вибрати інше відео' }))
+
+      expect(fileInput).toHaveValue('')
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeDisabled()
+      expect(startComparison).not.toHaveBeenCalled()
+    })
+
+    it('skips duplicate lookup when browser hashing is unavailable', async () => {
+      vi.mocked(sha256File).mockResolvedValueOnce(null)
+      const user = await openExecution()
+
+      expect(checkVideoDuplicate).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      await screen.findByRole('heading', { name: 'Виконання записано' })
+      expect(startComparison).toHaveBeenCalledWith({
+        assignment_id: 'assignment-1',
+        patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
+        pain_score: null,
+      })
+    })
+
+    it('reports a failed duplicate lookup and keeps the computed hash for analysis', async () => {
+      vi.mocked(checkVideoDuplicate).mockRejectedValueOnce(new Error('Lookup failed'))
+      const user = await openExecution()
+
+      expect(await screen.findByText('Lookup failed')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      await screen.findByRole('heading', { name: 'Виконання записано' })
+      expect(startComparison).toHaveBeenCalledWith({
+        assignment_id: 'assignment-1',
+        patient_key: 'videos/u/' + 'c'.repeat(32) + '.mp4',
+        pain_score: null,
+        video_sha256: 'a'.repeat(64),
+      })
     })
 
     it('lets the patient ask the doctor about the session created by the analysis', async () => {
@@ -1125,7 +1208,11 @@ describe('Patient access and cabinet pages', () => {
     const record = async (user: ReturnType<typeof userEvent.setup>) => {
       await user.click(screen.getByRole('button', { name: 'Почати запис' }))
       await user.click(await screen.findByRole('button', { name: 'Зупинити запис' }))
-      return screen.findByLabelText('Записане відео')
+      const preview = await screen.findByLabelText('Записане відео')
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeEnabled(),
+      )
+      return preview
     }
 
     it('offers the camera first and asks only for video, not the microphone', async () => {

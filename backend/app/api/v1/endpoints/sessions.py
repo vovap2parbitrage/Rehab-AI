@@ -8,13 +8,15 @@ from app.api.deps import get_current_active_user, require_roles
 from app.core.roles import Role
 from app.db.dependencies import get_db
 from app.models.user import User
+from app.schemas.pagination import Page
 from app.schemas.session import (
     PatientSessionCreate,
     SessionCreate,
     SessionRead,
     SessionVideoRead,
+    VideoDuplicateCheck,
+    VideoDuplicateRead,
 )
-from app.schemas.pagination import Page
 from app.services import session
 
 router = APIRouter()
@@ -46,6 +48,16 @@ def create_session(
     db: Session = Depends(get_db),
 ) -> SessionRead:
     return session.create_session(db, payload, user, claims)
+
+
+@router.post("/duplicate-video", response_model=VideoDuplicateRead)
+def check_video_duplicate(
+    payload: VideoDuplicateCheck,
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> VideoDuplicateRead:
+    return session.check_video_duplicate(db, user, payload)
 
 
 @router.post(
