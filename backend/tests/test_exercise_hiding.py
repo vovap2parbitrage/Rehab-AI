@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.models.exercise import Exercise
 
 EXERCISES = "/api/v1/exercises/"
@@ -81,7 +81,7 @@ def test_a_hidden_exercise_cannot_be_assigned_until_it_is_restored(
         "duration_weeks": 4,
         "weekdays": [0, 1, 2, 3, 4, 5, 6],
         "repetitions": 10,
-        "starts_on": today_in(None).isoformat(),
+        "starts_on": app_today().isoformat(),
     }
     api.post(f"{EXERCISES}{exercise['id']}/hide")
 
@@ -103,7 +103,7 @@ def test_hiding_does_not_touch_existing_assignments(
             "duration_weeks": 4,
             "weekdays": [0, 1, 2, 3, 4, 5, 6],
             "repetitions": 10,
-            "starts_on": today_in(None).isoformat(),
+            "starts_on": app_today().isoformat(),
         },
     )
     monkeypatch.setattr("app.services.storage.create_video_url", lambda key: f"https://v.test/{key}")
@@ -132,7 +132,7 @@ def test_the_read_model_counts_every_assignment_of_the_exercise(
                 "duration_weeks": 4,
                 "weekdays": [0, 1, 2, 3, 4, 5, 6],
                 "repetitions": 10,
-                "starts_on": today_in(None).isoformat(),
+                "starts_on": app_today().isoformat(),
             },
         )
         ids.append(response.json()["id"])

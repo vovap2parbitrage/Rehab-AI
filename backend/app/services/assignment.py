@@ -1,4 +1,3 @@
-from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -18,8 +17,15 @@ from app.schemas.assignment import (
     PatientAssignmentRead,
 )
 from app.core.statuses import AssignmentStatus
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.services.exercise import current_version
+from app.services.schedule import (
+    assignments_done_on,
+    last_day,
+    next_session_day,
+    is_session_day,
+    planned_session_count,
+)
 from app.services.patient_access import (
     get_patient_for_therapist,
     get_patient_for_user,
@@ -29,21 +35,10 @@ from app.services.patient_access import (
 )
 
 
-def planned_session_count(assignment: Assignment) -> int:
-    return sum(
-        day.weekday() in assignment.weekdays
-        for day in (
-            assignment.starts_on + timedelta(days=offset)
-            for offset in range(assignment.duration_weeks * 7)
-        )
-    )
-
-
 def complete_finished_assignments(db: Session, assignments: list[Assignment]) -> None:
-    today = date.today()
+    today = app_today()
     changed = False
     for item in assignments:
-        ends_on = item.starts_on + timedelta(days=item.duration_weeks * 7 - 1)
         completed_sessions = (
             db.query(func.count(TrainingSession.id))
             .filter(
@@ -53,7 +48,7 @@ def complete_finished_assignments(db: Session, assignments: list[Assignment]) ->
             .scalar()
         )
         if item.status == AssignmentStatus.ACTIVE.value and (
-            ends_on < today or completed_sessions >= planned_session_count(item)
+            last_day(item) < today or completed_sessions >= planned_session_count(item)
         ):
             item.status = AssignmentStatus.COMPLETED.value
             changed = True
@@ -74,7 +69,21 @@ def list_patient_assignments(db: Session, user: User) -> list[PatientAssignmentR
         .all()
     )
     complete_finished_assignments(db, assignments)
-    return assignments
+    today = app_today()
+    done_today = assignments_done_on(db, [item.id for item in assignments], today)
+    return [
+        PatientAssignmentRead.model_validate(item, from_attributes=True).model_copy(
+            update={
+                "scheduled_today": item.status == AssignmentStatus.ACTIVE.value
+                and is_session_day(item, today),
+                "done_today": item.id in done_today,
+                "next_session_on": next_session_day(item, today)
+                if item.status == AssignmentStatus.ACTIVE.value
+                else None,
+            }
+        )
+        for item in assignments
+    ]
 
 
 def list_assignments(
@@ -108,9 +117,9 @@ def list_assignments(
     return [AssignmentRead.model_validate(item, from_attributes=True) for item in assignments]
 
 
-def _check_start_date(payload: AssignmentCreate, user: User) -> None:
+def _check_start_date(payload: AssignmentCreate) -> None:
     """The plan starts on a real session day, and not in the past."""
-    today = today_in(user.timezone)
+    today = app_today()
     if payload.starts_on < today:
         raise HTTPException(
             status_code=422,
@@ -140,7 +149,7 @@ def create_assignment(
     if exercise.hidden_at is not None:
         raise HTTPException(status_code=409, detail="The exercise is hidden. Restore it first")
 
-    _check_start_date(payload, user)
+    _check_start_date(payload)
 
     assignment = Assignment(
         **payload.model_dump(),

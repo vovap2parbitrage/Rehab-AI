@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.models.exercise_version import ExerciseVersion
 from app.schemas.comparison import ComparisonRequest
@@ -55,7 +55,7 @@ def assign(api, therapist, patient_user, seed_patient, exercise):
                 "duration_weeks": 4,
                 "weekdays": ALL_DAYS,
                 "repetitions": 10,
-                "starts_on": today_in(None).isoformat(),
+                "starts_on": app_today().isoformat(),
             },
         )
         assert response.status_code == 201
