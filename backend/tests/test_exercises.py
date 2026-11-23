@@ -204,14 +204,19 @@ def test_patient_cannot_view_video_for_unassigned_exercise(
 
 
 def test_therapist_can_edit_exercise_with_unchanged_legacy_video_key(
-    api, login, therapist, db_session
+    api, login, therapist, db_session, monkeypatch
 ):
+    deleted = []
+    monkeypatch.setattr("app.services.storage.delete_video", deleted.append)
     login(therapist)
     created = api.post(
         "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
     ).json()
     exercise = db_session.get(Exercise, uuid.UUID(created["id"]))
+    # A legacy exercise keeps the same old file name in its first version (the migration
+    # copies it there), so renaming it changes nothing that is scored.
     exercise.reference_video_key = "legacy-video-name.mp4"
+    current_version(db_session, exercise).reference_video_key = "legacy-video-name.mp4"
     db_session.commit()
 
     payload = exercise_payload(
@@ -224,6 +229,8 @@ def test_therapist_can_edit_exercise_with_unchanged_legacy_video_key(
     assert response.status_code == 200
     assert response.json()["name"] == "Renamed exercise"
     assert response.json()["reference_video_key"] == "legacy-video-name.mp4"
+    assert response.json()["version"] == 1
+    assert deleted == []
 
 
 def test_therapist_must_keep_or_upload_video_when_updating(
