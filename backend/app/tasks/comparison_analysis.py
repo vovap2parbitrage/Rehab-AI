@@ -40,6 +40,7 @@ def analyze_video_task(
     pain_score: int | None = None,
     task_id: str | None = None,
     exercise_version_id: str | None = None,
+    video_sha256: str | None = None,
 ) -> dict:
     try:
         with tempfile.TemporaryDirectory(prefix="rehab_cmp_") as tmp:
@@ -66,7 +67,13 @@ def analyze_video_task(
     if report.get("status") == "done":
         try:
             session_id = record_session(
-                assignment_id, task_id, pain_score, report, patient_key, exercise_version_id
+                assignment_id,
+                task_id,
+                pain_score,
+                report,
+                patient_key,
+                exercise_version_id,
+                video_sha256,
             )
         except Exception:
             logger.exception("Could not save the session for comparison %s", task_id)

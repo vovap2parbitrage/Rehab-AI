@@ -44,7 +44,7 @@ export function useVideoAnalysis(assignmentId: string | undefined, onDone?: () =
   }, [])
 
   const start = useCallback(
-    async (file: File, painScore: number | null) => {
+    async (file: File, painScore: number | null, videoSha256?: string | null) => {
       if (!assignmentId) return
       run.current += 1
       const current = run.current
@@ -77,6 +77,7 @@ export function useVideoAnalysis(assignmentId: string | undefined, onDone?: () =
             assignment_id: assignmentId,
             patient_key: key,
             pain_score: painScore,
+            ...(videoSha256 ? { video_sha256: videoSha256 } : {}),
           })
         ).task_id
       } catch (reason: unknown) {

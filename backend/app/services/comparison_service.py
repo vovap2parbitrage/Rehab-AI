@@ -35,6 +35,7 @@ def submit_comparison(job: PreparedComparison, user_id: str) -> str:
             job.pain_score,
             task_id,
             str(job.exercise_version_id),
+            job.video_sha256,
         ],
         task_id=task_id,
     )

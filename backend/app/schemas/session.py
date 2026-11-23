@@ -23,5 +23,13 @@ class SessionVideoRead(BaseModel):
     url: str
 
 
+class VideoDuplicateCheck(BaseModel):
+    video_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class VideoDuplicateRead(BaseModel):
+    session_date: datetime | None = None
+
+
 class PatientSessionCreate(BaseModel):
     pain_score: int | None = Field(default=None, ge=0, le=10)
