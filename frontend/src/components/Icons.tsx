@@ -92,6 +92,16 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 6.2A9.8 9.8 0 0 1 12 6c5 0 8.5 4.2 9.5 6-.4.7-1.2 1.9-2.5 3.1M6.6 6.9C4.5 8.3 3.1 10.4 2.5 12c1 1.8 4.5 6 9.5 6 1.4 0 2.7-.3 3.8-.8" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </IconBase>
+  )
+}
+
 export function UserIcon(props: IconProps) {
   return (
     <IconBase {...props}>

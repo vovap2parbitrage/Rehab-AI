@@ -252,7 +252,7 @@ export function TherapistPatientPage() {
       {backLink}
       <PageHeading
         eyebrow="Профіль пацієнта"
-        title={`${patient.first_name} ${patient.last_name}`}
+        title={[patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Пацієнт'}
         lead={patient.notes || 'Персональний план реабілітації та активні призначення.'}
       >
         {patient.archived_at ? (

@@ -17,8 +17,6 @@ def _patient(db_session, *therapists) -> Patient:
     db_session.flush()
     patient = Patient(
         user_id=owner.id,
-        first_name="Ivan",
-        last_name="Petrenko",
         therapists=list(therapists),
     )
     db_session.add(patient)

@@ -193,7 +193,11 @@ def _claim_name(claims: dict[str, Any], claim: str) -> str:
         )
     return value.strip()
 
-
+def _optional_claim_name(claims: dict[str, Any], claim: str) -> str | None:
+    value = claims.get(claim)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
 def _provision_user(db: Session, claims: dict[str, Any]) -> User:
     sub = claims["sub"]
     email = _email_from_claims(claims)
@@ -221,6 +225,8 @@ def _provision_user(db: Session, claims: dict[str, Any]) -> User:
         user.keycloak_sub = sub
         user.is_verified = True
         user.role = user.role or _role_from_claims(claims)
+        user.first_name = user.first_name or _optional_claim_name(claims, "given_name")
+        user.last_name = user.last_name or _optional_claim_name(claims, "family_name")
 
     else:
         user = User(
@@ -229,10 +235,17 @@ def _provision_user(db: Session, claims: dict[str, Any]) -> User:
             role=_role_from_claims(claims),
             is_active=True,
             is_verified=email_verified,
+            first_name=_optional_claim_name(claims, "given_name"),
+            last_name=_optional_claim_name(claims, "family_name"),
+            
         )
         db.add(user)
 
     if user.role == Role.PATIENT.value:
+        if user.first_name is None:
+            user.first_name = _claim_name(claims, "given_name")
+        if user.last_name is None:
+            user.last_name = _claim_name(claims, "family_name")
         db.flush()
         patient = (
             db.query(Patient)
@@ -243,8 +256,7 @@ def _provision_user(db: Session, claims: dict[str, Any]) -> User:
             db.add(
                 Patient(
                     user_id=user.id,
-                    first_name=_claim_name(claims, "given_name"),
-                    last_name=_claim_name(claims, "family_name"),
+                     
                 )
             )
 

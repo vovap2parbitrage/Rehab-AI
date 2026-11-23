@@ -1,14 +1,13 @@
 import { Outlet } from 'react-router-dom'
-import type { Exercise, Patient } from '../../api/therapist'
+import { getScoringOptions, getToday, type ScoringOptions, type Today } from '../../api/therapist'
 import { getMyPlan, type TherapistPlan } from '../../api/plans'
 import { useAuth } from '../../auth/useAuth'
 import { useCachedResource, type CachedResource } from '../../lib/useCachedResource'
 
 export interface TherapistWorkspaceResources {
-  patients?: CachedResource<Patient[]>
-  archivedPatients?: CachedResource<Patient[]>
   plan: CachedResource<TherapistPlan>
-  exercises?: CachedResource<Exercise[]>
+  scoringOptions: CachedResource<ScoringOptions>
+  today: CachedResource<Today>
 }
 
 export function TherapistWorkspaceLayout() {
@@ -17,11 +16,17 @@ export function TherapistWorkspaceLayout() {
 }
 
 function TherapistWorkspace() {
+  const scoringOptions = useCachedResource(
+    getScoringOptions,
+    'Не вдалося завантажити параметри оцінювання.',
+  )
+  const today = useCachedResource(getToday, 'Не вдалося завантажити сторінку «Сьогодні».')
   const plan = useCachedResource(getMyPlan, 'Не вдалося завантажити тариф.')
+  const resources: TherapistWorkspaceResources = { plan, scoringOptions, today }
 
   return (
     <div className="therapist-workspace">
-      <Outlet context={{ plan } satisfies TherapistWorkspaceResources} />
+      <Outlet context={resources} />
     </div>
   )
 }

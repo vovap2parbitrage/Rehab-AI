@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -20,6 +20,7 @@ import { PatientExercisesPage } from '../pages/patient/PatientExercisesPage'
 import { PatientInvitationsPage } from '../pages/patient/PatientInvitationsPage'
 import { PatientTherapistsPage } from '../pages/patient/PatientTherapistsPage'
 import { PatientWorkspaceProvider } from '../lib/patientWorkspace'
+import { COUNTDOWN_STORAGE_KEY } from '../lib/useVideoRecorder'
 import { TherapistQuestionsProvider } from '../lib/TherapistQuestionsProvider'
 import {
   completePatientAssignment,
@@ -36,6 +37,7 @@ import {
   replyToHelpRequest,
 } from '../api/helpRequests'
 import { getMyHistory, getPatientHistory, type PatientHistory } from '../api/history'
+import { listMyMessages, replyToMessage, type TherapistMessage } from '../api/messages'
 import {
   createAssignment,
   getPatient,
@@ -79,10 +81,13 @@ vi.mock('../api/therapist', () => ({
   cancelAssignment: vi.fn(),
   createAssignment: vi.fn(),
   getPatient: vi.fn(),
+  getScoringOptions: vi.fn(),
+  getToday: vi.fn(),
   listArchivedPatients: vi.fn(),
   listAssignments: vi.fn(),
   listExercises: vi.fn(),
   listAllExercises: vi.fn(),
+  listHiddenExercises: vi.fn(),
   listPatients: vi.fn(),
   restorePatient: vi.fn(),
 }))
@@ -106,6 +111,14 @@ vi.mock('../api/sessions', () => ({
 vi.mock('../api/uploads', () => ({
   uploadVideo: vi.fn(),
   getExerciseVideoUrl: vi.fn(),
+}))
+
+vi.mock('../api/messages', () => ({
+  listMyMessages: vi.fn(),
+  replyToMessage: vi.fn(),
+  listSentMessages: vi.fn(),
+  markReplySeen: vi.fn(),
+  sendMessage: vi.fn(),
 }))
 
 vi.mock('../api/helpRequests', () => ({
@@ -251,6 +264,9 @@ const patientAssignment: PatientAssignment = {
     reference_video_key: null,
   },
   sessions: [],
+  scheduled_today: true,
+  done_today: false,
+  next_session_on: null,
 }
 
 const session: PatientSession = {
@@ -287,6 +303,9 @@ const helpRequest: HelpRequest = {
   patient_name: 'Олена',
   exercise_name: 'Розгинання коліна',
   pain_score: 4,
+  score: null,
+  has_video: false,
+  joint_deviations: {},
   message: 'Чи правильно я виконую вправу?',
   reply: null,
   replied_by_email: null,
@@ -310,6 +329,7 @@ function page<T>(items: T[], total = items.length, offset = 0): Page<T> {
 beforeEach(() => {
   vi.mocked(getMyHistory).mockResolvedValue(emptyHistory)
   vi.mocked(listPatientSessions).mockResolvedValue(page([]))
+  vi.mocked(listMyMessages).mockResolvedValue([])
   vi.mocked(listPatientInvitations).mockResolvedValue([])
   vi.mocked(listPatientAssignments).mockResolvedValue([])
   vi.mocked(listPatientTherapists).mockResolvedValue([])
@@ -942,6 +962,77 @@ describe('Patient access and cabinet pages', () => {
       expect(await screen.findByText(/не вдалося знайти повторень/)).toBeInTheDocument()
     })
 
+    it('says how much of the video showed the patient when it has to be recorded again', async () => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'rerecord',
+        score: null,
+        session_id: null,
+        quality: { reference_valid_frames_pct: 100, patient_valid_frames_pct: 61.6, ok: false },
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      const alert = await screen.findByRole('heading', { name: 'Відео записано недостатньо добре' })
+      expect(alert).toBeInTheDocument()
+      expect(screen.getByText(/лише на 62% відео/)).toBeInTheDocument()
+      expect(screen.getByText(/від голови до стоп/)).toBeInTheDocument()
+    })
+
+    it('says nobody was found when the patient is never in the frame', async () => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'rerecord',
+        score: null,
+        session_id: null,
+        quality: { reference_valid_frames_pct: 100, patient_valid_frames_pct: 0, ok: false },
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByText(/не вдалося розпізнати людину/)).toBeInTheDocument()
+      expect(screen.queryByText(/лише на 0%/)).not.toBeInTheDocument()
+    })
+
+    it('does not blame the patient when the reference video is the one that cannot be used', async () => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'rerecord',
+        score: null,
+        session_id: null,
+        quality: { reference_valid_frames_pct: 40, patient_valid_frames_pct: 97, ok: false },
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(
+        await screen.findByRole('heading', { name: 'Еталонне відео не підходить для порівняння' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Запишіть відео ще раз/)).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['The video cannot be read.', /Відео не вдалося прочитати/],
+      ['The video is longer than 120 seconds.', /максимальна тривалість — 120 с/],
+      ['The file is not a supported video (mp4, mov or webm).', /Формат відео не підтримується/],
+      ['Analysis failed.', /Не вдалося проаналізувати відео/],
+    ])('explains why the server could not analyse the video: %s', async (reason, text) => {
+      vi.mocked(getComparison).mockResolvedValue({
+        ...doneResult,
+        status: 'failed',
+        score: null,
+        session_id: null,
+        message: reason,
+      })
+      const user = await openExecution()
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(
+        await screen.findByRole('heading', { name: 'Відео не проаналізовано' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(text)).toBeInTheDocument()
+    })
+
     it('tells the patient to finish without a video when the exercise is not set up for analysis', async () => {
       vi.mocked(startComparison).mockRejectedValue(
         new ApiError('conflict', 'conflict', 409, 'The exercise has no reference video yet'),
@@ -960,6 +1051,283 @@ describe('Patient access and cabinet pages', () => {
 
       expect(await screen.findByText('Максимальний розмір відео — 100 МБ.')).toBeInTheDocument()
       expect(startComparison).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('recording inside the app', () => {
+    class FakeMediaRecorder {
+      static supportedTypes = ['video/mp4']
+      static isTypeSupported = (type: string) => FakeMediaRecorder.supportedTypes.includes(type)
+      static instances: FakeMediaRecorder[] = []
+      state: RecordingState = 'inactive'
+      mimeType: string
+      options: MediaRecorderOptions | undefined
+      ondataavailable: ((event: BlobEvent) => void) | null = null
+      onstop: (() => void) | null = null
+      onerror: (() => void) | null = null
+
+      constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+        this.options = options
+        this.mimeType = options?.mimeType ?? ''
+        FakeMediaRecorder.instances.push(this)
+      }
+
+      start() {
+        this.state = 'recording'
+      }
+
+      stop() {
+        if (this.state === 'inactive') return
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['frames'], { type: this.mimeType }) } as BlobEvent)
+        this.onstop?.()
+      }
+    }
+
+    const track = { stop: vi.fn() }
+    const stream = { getTracks: () => [track] } as unknown as MediaStream
+    const getUserMedia = vi.fn<(constraints: MediaStreamConstraints) => Promise<MediaStream>>()
+
+    beforeEach(() => {
+      FakeMediaRecorder.supportedTypes = ['video/mp4']
+      FakeMediaRecorder.instances = []
+      getUserMedia.mockResolvedValue(stream)
+      vi.stubGlobal('isSecureContext', true)
+      vi.stubGlobal('MediaRecorder', FakeMediaRecorder)
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia, enumerateDevices: vi.fn().mockResolvedValue([]) },
+      })
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:recording')
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+      // Most tests record at once; the countdown has its own tests below.
+      window.localStorage.setItem(COUNTDOWN_STORAGE_KEY, '0')
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+      Reflect.deleteProperty(navigator, 'mediaDevices')
+      window.localStorage.removeItem(COUNTDOWN_STORAGE_KEY)
+    })
+
+    const openRecorder = async () => {
+      const user = userEvent.setup()
+      vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+      await user.click(await screen.findByRole('button', { name: 'Увімкнути камеру' }))
+      await screen.findByRole('button', { name: 'Почати запис' })
+      return user
+    }
+
+    const record = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: 'Почати запис' }))
+      await user.click(await screen.findByRole('button', { name: 'Зупинити запис' }))
+      return screen.findByLabelText('Записане відео')
+    }
+
+    it('offers the camera first and asks only for video, not the microphone', async () => {
+      await openRecorder()
+
+      expect(screen.getByRole('button', { name: 'Записати камерою' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: false }))
+      expect(screen.getByLabelText('Зображення з камери')).toBeInTheDocument()
+    })
+
+    it('records the exercise, shows it for review and sends it for analysis', async () => {
+      const user = await openRecorder()
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeDisabled()
+
+      const review = await record(user)
+
+      expect(review).toHaveAttribute('src', 'blob:recording')
+      expect(track.stop).toHaveBeenCalled() // the camera is off while the patient reviews
+      expect(FakeMediaRecorder.instances[0].options?.mimeType).toBe('video/mp4')
+
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      expect(await screen.findByRole('heading', { name: 'Виконання записано' })).toBeInTheDocument()
+      const sent = vi.mocked(uploadVideo).mock.calls[0][0]
+      expect(sent.type).toBe('video/mp4')
+      expect(sent.name).toMatch(/\.mp4$/)
+    })
+
+    it('plays the recording in its own video element, not in the camera preview', async () => {
+      const user = await openRecorder()
+      const camera = screen.getByLabelText('Зображення з камери') as HTMLVideoElement
+      expect(camera.srcObject).toBe(stream)
+
+      const review = (await record(user)) as HTMLVideoElement
+
+      // A stopped camera left in srcObject would win over src and show a black frame.
+      expect(review).not.toBe(camera)
+      expect(review.srcObject ?? null).toBeNull()
+      expect(camera.srcObject).toBeNull()
+    })
+
+    it('records WebM when the browser cannot record MP4', async () => {
+      FakeMediaRecorder.supportedTypes = ['video/webm;codecs=vp9', 'video/webm']
+      const user = await openRecorder()
+
+      await record(user)
+      await user.click(screen.getByRole('button', { name: 'Надіслати на аналіз' }))
+
+      await screen.findByRole('heading', { name: 'Виконання записано' })
+      const sent = vi.mocked(uploadVideo).mock.calls[0][0]
+      expect(sent.type).toBe('video/webm')
+      expect(sent.name).toMatch(/\.webm$/)
+    })
+
+    it('stops the recording automatically after 120 seconds', async () => {
+      await openRecorder()
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Почати запис' }))
+      act(() => vi.advanceTimersByTime(60_000))
+      expect(screen.getByRole('timer')).toHaveTextContent('01:00 / 02:00')
+      act(() => vi.advanceTimersByTime(60_000))
+
+      expect(await screen.findByLabelText('Записане відео')).toBeInTheDocument()
+      expect(FakeMediaRecorder.instances[0].state).toBe('inactive')
+      expect(screen.getByText(/Запис зупинено автоматично/)).toBeInTheDocument()
+      expect(screen.getByText(/Запис 02:00/)).toBeInTheDocument()
+    })
+
+    it('throws the recording away and opens the camera again to record a new one', async () => {
+      const user = await openRecorder()
+      await record(user)
+
+      await user.click(screen.getByRole('button', { name: 'Записати ще раз' }))
+
+      expect(await screen.findByRole('button', { name: 'Почати запис' })).toBeEnabled()
+      expect(screen.queryByLabelText('Записане відео')).not.toBeInTheDocument()
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:recording')
+      expect(getUserMedia).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeDisabled()
+    })
+
+    it('counts down 5 seconds by default before recording, so the patient can step back', async () => {
+      window.localStorage.removeItem(COUNTDOWN_STORAGE_KEY)
+      await openRecorder()
+      expect(
+        within(screen.getByRole('group', { name: 'Відлік перед записом' })).getByRole('button', {
+          name: '5 с',
+        }),
+      ).toHaveAttribute('aria-pressed', 'true')
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Почати запис' }))
+
+      expect(screen.getByText(/запис почнеться через 5 с/)).toBeInTheDocument()
+      expect(FakeMediaRecorder.instances).toHaveLength(0)
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Завантажити файл' })).toBeDisabled()
+      act(() => vi.advanceTimersByTime(3_000))
+      expect(screen.getByText(/запис почнеться через 2 с/)).toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(2_000))
+
+      expect(await screen.findByRole('button', { name: 'Зупинити запис' })).toBeInTheDocument()
+      expect(FakeMediaRecorder.instances[0].state).toBe('recording')
+      // The two-minute limit starts after the countdown.
+      expect(screen.getByRole('timer')).toHaveTextContent('00:00 / 02:00')
+    })
+
+    it('remembers the countdown the patient chose', async () => {
+      window.localStorage.removeItem(COUNTDOWN_STORAGE_KEY)
+      const user = await openRecorder()
+
+      await user.click(screen.getByRole('button', { name: '10 с' }))
+
+      expect(screen.getByRole('button', { name: '10 с' })).toHaveAttribute('aria-pressed', 'true')
+      expect(window.localStorage.getItem(COUNTDOWN_STORAGE_KEY)).toBe('10')
+      cleanup()
+      await openRecorder()
+      expect(screen.getByRole('button', { name: '10 с' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('records at once when the patient turns the countdown off', async () => {
+      window.localStorage.removeItem(COUNTDOWN_STORAGE_KEY)
+      const user = await openRecorder()
+
+      await user.click(screen.getByRole('button', { name: 'Без' }))
+      await user.click(screen.getByRole('button', { name: 'Почати запис' }))
+
+      expect(screen.getByRole('button', { name: 'Зупинити запис' })).toBeInTheDocument()
+      expect(FakeMediaRecorder.instances).toHaveLength(1)
+    })
+
+    it('cancels the countdown and keeps the camera on', async () => {
+      window.localStorage.setItem(COUNTDOWN_STORAGE_KEY, '3')
+      await openRecorder()
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Почати запис' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Скасувати відлік' }))
+      act(() => vi.advanceTimersByTime(5_000))
+
+      expect(FakeMediaRecorder.instances).toHaveLength(0)
+      expect(screen.getByRole('button', { name: 'Почати запис' })).toBeEnabled()
+      expect(screen.getByLabelText('Зображення з камери')).toBeInTheDocument()
+      expect(track.stop).not.toHaveBeenCalled()
+    })
+
+    it('does not start recording when the patient leaves during the countdown', async () => {
+      window.localStorage.setItem(COUNTDOWN_STORAGE_KEY, '3')
+      await openRecorder()
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Почати запис' }))
+      cleanup()
+      act(() => vi.advanceTimersByTime(5_000))
+
+      expect(FakeMediaRecorder.instances).toHaveLength(0)
+    })
+
+    it('explains a denied camera and lets the patient upload a file instead', async () => {
+      getUserMedia.mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError'))
+      vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: 'Увімкнути камеру' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('Немає доступу до камери')
+      expect(alert).toHaveTextContent(/Доступ до камери заборонено/)
+
+      await user.click(screen.getByRole('button', { name: 'Завантажити файл замість запису' }))
+
+      const input = screen.getByLabelText(/Відеофайл/)
+      expect(screen.getByRole('button', { name: 'Завантажити файл' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      await user.upload(input, new File(['video'], 'squat.mp4', { type: 'video/mp4' }))
+      expect(screen.getByRole('button', { name: 'Надіслати на аналіз' })).toBeEnabled()
+    })
+
+    it('turns the camera off when the patient leaves the page', async () => {
+      await openRecorder()
+      track.stop.mockClear()
+
+      cleanup()
+
+      expect(track.stop).toHaveBeenCalled()
+    })
+
+    it('explains that recording needs HTTPS and keeps the file upload', async () => {
+      vi.stubGlobal('isSecureContext', false)
+      vi.mocked(listPatientAssignments).mockResolvedValue([patientAssignment])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+
+      expect(await screen.findByLabelText(/Відеофайл/)).toBeInTheDocument()
+      expect(screen.getByText(/лише через захищене з’єднання \(HTTPS\)/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Увімкнути камеру' })).not.toBeInTheDocument()
     })
   })
 
@@ -996,6 +1364,110 @@ describe('Patient access and cabinet pages', () => {
     expect(getSessionVideoUrl).toHaveBeenCalledWith('session-1')
   })
 
+  describe('messages from the therapist', () => {
+    const waiting: TherapistMessage = {
+      id: 'message-1',
+      patient_id: 'patient-1',
+      patient_name: 'Олена Коваль',
+      therapist_name: 'Лікар Іваненко',
+      message: 'Вчора ви не виконали Присідання. Чи все гаразд?',
+      created_at: '2026-03-01T10:00:00Z',
+      reply: null,
+      replied_at: null,
+      reply_seen: false,
+    }
+
+    it('shows nothing on the dashboard when there are no messages', async () => {
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      await screen.findByRole('heading', { name: 'Очікуйте запрошення від лікаря' })
+      expect(screen.queryByText(/Повідомлення від лікаря/)).not.toBeInTheDocument()
+    })
+
+    it('lets the patient answer a message once', async () => {
+      const user = userEvent.setup()
+      vi.mocked(listMyMessages).mockResolvedValue([waiting])
+      vi.mocked(replyToMessage).mockResolvedValue({ ...waiting, reply: 'Хворів, вибачте' })
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      expect(
+        await screen.findByRole('heading', {
+          name: /Повідомлення від лікаря \(чекають відповіді: 1\)/,
+        }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Лікар Іваненко')).toBeInTheDocument()
+
+      await user.type(screen.getByLabelText('Ваша відповідь лікарю'), '  Хворів, вибачте  ')
+      await user.click(screen.getByRole('button', { name: 'Відповісти' }))
+
+      expect(replyToMessage).toHaveBeenCalledWith('message-1', 'Хворів, вибачте')
+      expect(await screen.findByText(/Ваша відповідь:/)).toBeInTheDocument()
+      expect(screen.queryByLabelText('Ваша відповідь лікарю')).not.toBeInTheDocument()
+    })
+
+    it('shows an answered message without the form', async () => {
+      vi.mocked(listMyMessages).mockResolvedValue([{ ...waiting, reply: 'Хворів' }])
+      renderPatientPage('/patient', <PatientDashboardPage />)
+
+      expect(await screen.findByText(/Ваша відповідь:/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Відповісти' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('what a patient may do today', () => {
+    const due = {
+      ...patientAssignment,
+      id: 'due',
+      exercise: { ...patientAssignment.exercise, name: 'Присідання' },
+    }
+    const later = {
+      ...patientAssignment,
+      id: 'later',
+      exercise: { ...patientAssignment.exercise, name: 'Випади' },
+      scheduled_today: false,
+      next_session_on: '2026-11-26',
+    }
+    const finished = {
+      ...patientAssignment,
+      id: 'finished',
+      exercise: { ...patientAssignment.exercise, name: 'Міст' },
+      done_today: true,
+    }
+
+    it('offers to start only what is due today and not done yet', async () => {
+      const user = userEvent.setup()
+      vi.mocked(listPatientAssignments).mockResolvedValue([due, later, finished])
+      renderPatientPage('/patient/exercises', <PatientExercisesPage />)
+
+      await user.click(await screen.findByRole('tab', { name: 'Усі призначення' }))
+
+      expect(screen.getAllByRole('link', { name: /Виконати вправу/ })).toHaveLength(1)
+      expect(screen.getByText('Сьогодні виконано')).toBeInTheDocument()
+      expect(screen.getByText(/Наступне заняття: .*26 листопада/)).toBeInTheDocument()
+      expect(screen.getByText('Виконати можна лише в день заняття.')).toBeInTheDocument()
+    })
+
+    it('does not open the exercise on a day it is not due', async () => {
+      vi.mocked(listPatientAssignments).mockResolvedValue([{ ...later, id: 'assignment-1' }])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+
+      expect(
+        await screen.findByRole('heading', { name: 'Сьогодні цю вправу виконувати не потрібно' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Наступне заняття: .*26 листопада/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Надіслати на аналіз' })).not.toBeInTheDocument()
+    })
+
+    it('does not let the patient do the same exercise twice in a day', async () => {
+      vi.mocked(listPatientAssignments).mockResolvedValue([{ ...finished, id: 'assignment-1' }])
+      renderPatientPage('/patient/exercises/assignment-1/execute', <PatientExerciseExecutionPage />)
+
+      expect(
+        await screen.findByRole('heading', { name: 'Сьогодні цю вправу вже виконано' }),
+      ).toBeInTheDocument()
+    })
+  })
+
   it('shows a workspace error when loading cabinet data fails and retries the request', async () => {
     const user = userEvent.setup()
     vi.mocked(listPatientInvitations).mockRejectedValueOnce(
@@ -1021,21 +1493,26 @@ describe('Local assignment dates', () => {
     vi.useRealTimers()
   })
 
-  it('refreshes the patient’s schedule at local midnight', async () => {
-    vi.mocked(listPatientAssignments).mockResolvedValue([
-      { ...patientAssignment, starts_on: '2026-11-23', weekdays: [0] },
-    ])
+  it('asks the server again at local midnight what is due today', async () => {
+    vi.mocked(listPatientAssignments)
+      .mockResolvedValueOnce([
+        { ...patientAssignment, scheduled_today: false, next_session_on: '2026-11-23' },
+      ])
+      .mockResolvedValue([{ ...patientAssignment, scheduled_today: true }])
     await act(async () => {
       renderPatientPage('/patient/exercises', <PatientExercisesPage />)
     })
 
     expect(screen.getByText('На сьогодні вправ немає')).toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(1_000))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
 
     expect(
       screen.getByRole('heading', { name: patientAssignment.exercise.name }),
     ).toBeInTheDocument()
+    expect(listPatientAssignments).toHaveBeenCalledTimes(2)
   })
 
   it('moves the therapist’s default start to the next schedule day and keeps a manual date', async () => {

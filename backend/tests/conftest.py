@@ -28,6 +28,7 @@ settings.database_url = _test_database_url()
 
 from app.api.deps import get_current_active_user  # noqa: E402
 from app.core.auth import get_current_claims  # noqa: E402
+from app.core.timezones import app_today  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -122,7 +123,16 @@ def make_user(role: str) -> User:
         keycloak_sub=f"sub-{uuid.uuid4()}",
         is_active=True,
         is_verified=True,
+        first_name="Ivan" if role == "patient" else None,
+        last_name="Petrenko" if role == "patient" else None,
     )
+
+
+@pytest.fixture
+def new_user():
+    """The user factory for tests that need an extra user (importing `tests.conftest`
+    only works when the working directory is on sys.path, which plain `pytest` does not do)."""
+    return make_user
 
 
 @pytest.fixture
@@ -185,8 +195,6 @@ def seed_patient(db_session):
     def _seed(owner: User, therapist: User) -> PatientRead:
         db_patient = Patient(
             user_id=owner.id,
-            first_name="Ivan",
-            last_name="Petrenko",
             therapists=[therapist],
         )
         db_session.add(db_patient)
@@ -217,9 +225,10 @@ def seed_assignment(db_session):
             "patient_id": patient.id,
             "exercise_id": exercise.id,
             "duration_weeks": 4,
-            "weekdays": [0, 2, 4],
+            # Due every day from today, so a patient may do a session in a test.
+            "weekdays": [0, 1, 2, 3, 4, 5, 6],
             "repetitions": 10,
-            "starts_on": "2026-01-01",
+            "starts_on": app_today().isoformat(),
             "therapist_id": patient.therapist_ids[0],
         }
         assignment_data.update(overrides)

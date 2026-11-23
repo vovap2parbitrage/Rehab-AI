@@ -254,3 +254,45 @@ def test_patient_history_checks_access(
 
     login(patient_user)
     assert api.get(f"/api/v1/help-requests/?patient_id={patient.id}").status_code == 403
+
+
+def test_the_therapist_sees_how_the_session_of_a_question_was_scored(
+    api, login, db_session, therapist, patient_user, seed_patient, seed_assignment
+):
+    video = f"videos/{uuid.uuid4().hex[:8]}/{uuid.uuid4().hex}.mp4"
+    session = TrainingSession(
+        assignment_id=seed_assignment(seed_patient(patient_user, therapist)).id,
+        pain_score=4,
+        score=8.5,
+        video_key=video,
+        joint_deviations={"repetitions": 7, "joint_scores": {"r_knee": 8.1}, "errors": []},
+    )
+    db_session.add(session)
+    db_session.commit()
+    login(patient_user)
+    _ask(api, session)
+
+    login(therapist)
+    item = api.get("/api/v1/help-requests/needs-attention").json()["items"][0]
+
+    assert item["score"] == 8.5
+    assert item["has_video"] is True
+    assert item["joint_deviations"]["joint_scores"] == {"r_knee": 8.1}
+    assert video not in str(item)  # the storage key is never exposed
+
+
+def test_a_question_about_a_session_without_a_video_says_so(
+    api, login, db_session, therapist, patient_user, seed_patient, seed_assignment
+):
+    session = _completed_session(
+        db_session, seed_assignment(seed_patient(patient_user, therapist))
+    )
+    login(patient_user)
+    _ask(api, session)
+
+    login(therapist)
+    item = api.get("/api/v1/help-requests/needs-attention").json()["items"][0]
+
+    assert item["has_video"] is False
+    assert item["score"] is None
+    assert item["joint_deviations"] == {}

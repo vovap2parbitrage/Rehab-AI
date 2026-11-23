@@ -7,11 +7,11 @@ from app.services.comparison.angles import JOINT_TRIPLETS, TORSO_TILT
 
 KNOWN_JOINTS = {*JOINT_TRIPLETS, TORSO_TILT}
 MAX_TOLERANCE_DEG = 90.0
-VIDEO_KEY_PATTERN = r"^videos/[A-Za-z0-9_-]{1,64}/[0-9a-f]{32}\.(mp4|mov)$"
+VIDEO_KEY_PATTERN = r"^videos/[A-Za-z0-9_-]{1,64}/[0-9a-f]{32}\.(mp4|mov|webm)$"
 
 
 class UploadRequest(BaseModel):
-    content_type: Literal["video/mp4", "video/quicktime"]
+    content_type: Literal["video/mp4", "video/quicktime", "video/webm"]
 
 
 class UploadTarget(BaseModel):

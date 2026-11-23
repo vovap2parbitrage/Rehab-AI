@@ -5,9 +5,6 @@ def patient_payload(user_id, therapist_ids) -> dict:
     return {
         "user_id": str(user_id),
         "therapist_ids": [str(therapist_id) for therapist_id in therapist_ids],
-        "first_name": "Ivan",
-        "last_name": "Petrenko",
-        "date_of_birth": "1990-05-17",
         "notes": "left knee",
     }
 
@@ -193,8 +190,10 @@ def test_patient_requires_model_fields(api, login, therapist):
 
 def test_patient_schema_matches_model_columns():
     from app.models.patient import Patient
+    from app.models.user import User
     from app.schemas.patient import PatientRead
 
     columns = {column.name for column in Patient.__table__.columns}
+    columns |= {column.name for column in User.__table__.columns}
 
     assert set(PatientRead.model_fields) - {"therapist_ids", "archived_at"} <= columns

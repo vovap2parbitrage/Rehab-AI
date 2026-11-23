@@ -1,6 +1,6 @@
 import uuid
 
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.patient import Patient
@@ -14,7 +14,7 @@ def assignment_payload(patient_id, **overrides) -> dict:
         "duration_weeks": 4,
         "weekdays": [0, 1, 2, 3, 4, 5, 6],  # every day, so starting today is always valid
         "repetitions": 10,
-        "starts_on": today_in(None).isoformat(),
+        "starts_on": app_today().isoformat(),
     }
     payload.update(overrides)
     return payload

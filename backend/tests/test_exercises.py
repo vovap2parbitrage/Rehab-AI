@@ -22,7 +22,8 @@ def exercise_payload(owner_id: str | None = None, **overrides) -> dict:
         "reference_video_key": (
             f"videos/{owner_id or 'test-owner'}/{uuid.uuid4().hex}.mp4"
         ),
-        "joint_tolerances": {"knee": 5.0},
+        "body_parts": ["right_leg"],
+        "joint_tolerances": {"r_knee": 5.0},
     }
     payload.update(overrides)
     return payload
@@ -39,7 +40,7 @@ def test_therapist_creates_exercise_and_created_by_is_set(api, login, therapist)
     body = response.json()
     assert body["name"] == "Knee flexion"
     assert body["created_by"] == str(therapist.id)
-    assert body["joint_tolerances"] == {"knee": 5.0}
+    assert body["joint_tolerances"] == {"r_knee": 5.0}
 
 
 def test_created_by_cannot_be_set_by_client(api, login, therapist):
@@ -204,14 +205,19 @@ def test_patient_cannot_view_video_for_unassigned_exercise(
 
 
 def test_therapist_can_edit_exercise_with_unchanged_legacy_video_key(
-    api, login, therapist, db_session
+    api, login, therapist, db_session, monkeypatch
 ):
+    deleted = []
+    monkeypatch.setattr("app.services.storage.delete_video", deleted.append)
     login(therapist)
     created = api.post(
         "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
     ).json()
     exercise = db_session.get(Exercise, uuid.UUID(created["id"]))
+    # A legacy exercise keeps the same old file name in its first version (the migration
+    # copies it there), so renaming it changes nothing that is scored.
     exercise.reference_video_key = "legacy-video-name.mp4"
+    current_version(db_session, exercise).reference_video_key = "legacy-video-name.mp4"
     db_session.commit()
 
     payload = exercise_payload(
@@ -224,6 +230,8 @@ def test_therapist_can_edit_exercise_with_unchanged_legacy_video_key(
     assert response.status_code == 200
     assert response.json()["name"] == "Renamed exercise"
     assert response.json()["reference_video_key"] == "legacy-video-name.mp4"
+    assert response.json()["version"] == 1
+    assert deleted == []
 
 
 def test_therapist_must_keep_or_upload_video_when_updating(
@@ -517,8 +525,9 @@ def test_exercise_read_schema_matches_model_columns():
 
     columns = {column.name for column in Exercise.__table__.columns}
 
-    # version and active_assignments are worked out from other tables, not stored here.
-    assert set(ExerciseRead.model_fields) - {"version", "active_assignments"} <= columns
+    # These are worked out from other data, not stored in the exercise row itself.
+    derived = {"version", "active_assignments", "assignments_total", "hidden"}
+    assert set(ExerciseRead.model_fields) - derived <= columns
 
 
 def test_exercise_stores_body_parts(api, login, therapist):
@@ -538,9 +547,10 @@ def test_exercise_stores_body_parts(api, login, therapist):
 def test_exercise_body_parts_default_to_empty(api, login, therapist):
     login(therapist)
 
-    response = api.post(
-        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
-    )
+    payload = exercise_payload(str(therapist.id), joint_tolerances={})
+    del payload["body_parts"]
+
+    response = api.post("/api/v1/exercises/", json=payload)
 
     assert response.json()["body_parts"] == []
 

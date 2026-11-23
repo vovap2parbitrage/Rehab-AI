@@ -11,8 +11,9 @@ REF = "videos/u/" + "a" * 32 + ".mp4"
 PAT = "videos/u/" + "b" * 32 + ".mp4"
 
 
-def _fake_download(key: str, dest: Path) -> None:
+def _fake_download(key: str, dest: Path) -> Path:
     dest.write_bytes(b"video")
+    return dest
 
 
 def test_returns_compare_report(monkeypatch):
@@ -32,15 +33,27 @@ def test_returns_compare_report(monkeypatch):
 
 
 def test_downloads_both_keys_and_validates_them(monkeypatch):
-    keys, checked = [], []
+    keys, checked, compared = [], [], []
+
+    def fake_prepare(path):
+        checked.append(path)
+        return path.with_name(f"{path.name}.normalised.mp4")
+
     monkeypatch.setattr(comparison_analysis.storage, "download_video", lambda k, d: keys.append(k))
-    monkeypatch.setattr(comparison_analysis, "validate_video_file", lambda p: checked.append(p))
-    monkeypatch.setattr(comparison_analysis, "compare", lambda *a: {"status": "done"})
+    monkeypatch.setattr(comparison_analysis, "prepare_video", fake_prepare)
+    monkeypatch.setattr(
+        comparison_analysis, "compare", lambda ref, pat, *a: compared.append((ref, pat)) or {}
+    )
 
     analyze_video_task.run(REF, PAT, ["torso"], {})
 
     assert keys == [REF, PAT]
     assert len(checked) == 2
+    # The analysis reads the checked (possibly converted) files, not the raw downloads.
+    assert [Path(p).name for p in compared[0]] == [
+        "reference.normalised.mp4",
+        "patient.normalised.mp4",
+    ]
 
 
 def test_temp_files_are_deleted(monkeypatch):

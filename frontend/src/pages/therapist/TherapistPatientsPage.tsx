@@ -175,11 +175,11 @@ export function TherapistPatientsPage() {
                 key={patient.id}
               >
                 <span className="avatar avatar--md" aria-hidden="true">
-                  {patient.first_name.slice(0, 1).toUpperCase()}
+                  {(patient.first_name || 'П').slice(0, 1).toUpperCase()}
                 </span>
                 <span>
                   <strong>
-                    {patient.first_name} {patient.last_name}
+                    {[patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'Пацієнт'}
                   </strong>
                 </span>
               </Link>
@@ -205,11 +205,12 @@ export function TherapistPatientsPage() {
               {archivedPatients.map((patient) => (
                 <div className="patient-card patient-card--archived" key={patient.id}>
                   <span className="avatar avatar--md" aria-hidden="true">
-                    {patient.first_name.slice(0, 1).toUpperCase()}
+                    {(patient.first_name || 'П').slice(0, 1).toUpperCase()}
                   </span>
                   <Link to={`/therapist/patients/${patient.id}`}>
                     <strong>
-                      {patient.first_name} {patient.last_name}
+                      {[patient.first_name, patient.last_name].filter(Boolean).join(' ') ||
+                        'Пацієнт'}
                     </strong>
                     <small>Історія доступна для перегляду</small>
                   </Link>
@@ -218,7 +219,7 @@ export function TherapistPatientsPage() {
                     className="button button--ghost"
                     onClick={() => void handleRestore(patient)}
                     disabled={busy}
-                    aria-label={`Відновити ${patient.first_name} ${patient.last_name}`}
+                    aria-label={`Відновити ${[patient.first_name, patient.last_name].filter(Boolean).join(' ') || 'пацієнта'}`}
                   >
                     Відновити
                   </button>

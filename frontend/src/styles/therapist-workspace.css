@@ -263,3 +263,67 @@
   color: var(--muted);
   font-weight: 500;
 }
+
+.therapist-form__tolerances {
+  display: grid;
+  gap: 8px;
+}
+
+.therapist-form__tolerances small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.therapist-form__tolerances label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.therapist-form__tolerances input {
+  max-width: 120px;
+}
+
+.today-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.today-counter {
+  display: grid;
+  gap: 4px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.today-counter strong {
+  font-size: 1.8rem;
+}
+
+.today-counter span {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.today-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.today-row {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.today-row small {
+  color: var(--muted);
+}

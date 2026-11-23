@@ -6,8 +6,8 @@ export interface Patient {
   id: string
   user_id: string
   therapist_ids: string[]
-  first_name: string
-  last_name: string
+  first_name: string | null
+  last_name: string | null
   date_of_birth: string | null
   notes: string | null
   archived_at: string | null
@@ -25,6 +25,16 @@ export interface Exercise {
   version: number
   /** Active assignments of this exercise. */
   active_assignments: number
+  /** Every assignment ever made from it: while there is one, the exercise cannot be deleted. */
+  assignments_total: number
+  hidden: boolean
+}
+
+/** What the tolerance editor needs; comes from the scoring code on the server. */
+export interface ScoringOptions {
+  joints_by_body_part: Record<string, string[]>
+  default_tolerance_deg: number
+  max_tolerance_deg: number
 }
 
 export interface Assignment {
@@ -102,18 +112,42 @@ export function listExercises(options: PageRequestOptions = {}): Promise<Page<Ex
   return apiRequest<Page<Exercise>>(`/api/v1/exercises/?${pageQuery(options)}`, options)
 }
 
-export async function listAllExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+/** Every page of a library listing, for views that show the whole set. */
+async function listEveryExercise(hidden: boolean, options: RequestOptions): Promise<Exercise[]> {
   const items: Exercise[] = []
   let offset = 0
   let total = 0
   while (offset === 0 || offset < total) {
-    const page = await listExercises({ ...options, limit: 100, offset })
+    const query = `${pageQuery({ limit: 100, offset })}${hidden ? '&hidden=true' : ''}`
+    const page = await apiRequest<Page<Exercise>>(`/api/v1/exercises/?${query}`, options)
     items.push(...page.items)
     total = page.total
     if (page.items.length === 0) break
     offset += page.items.length
   }
   return items
+}
+
+export function listAllExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  return listEveryExercise(false, options)
+}
+
+export function listHiddenExercises(options: RequestOptions = {}): Promise<Exercise[]> {
+  return listEveryExercise(true, options)
+}
+
+export function getScoringOptions(options: RequestOptions = {}): Promise<ScoringOptions> {
+  return apiRequest<ScoringOptions>('/api/v1/exercises/scoring-options', options)
+}
+
+export function hideExercise(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/exercises/${encodeURIComponent(id)}/hide`, { method: 'POST' })
+}
+
+export function restoreExercise(id: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/exercises/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+  })
 }
 
 export function createExercise(payload: ExercisePayload): Promise<Exercise> {
@@ -174,4 +208,42 @@ export function updateAssignment(
     method: 'PATCH',
     body: JSON.stringify(payload),
   })
+}
+
+export interface TodayItem {
+  assignment_id: string
+  exercise_name: string
+  done: boolean
+}
+
+export interface TodayPatient {
+  patient_id: string
+  patient_name: string
+  items: TodayItem[]
+  last_completed_at: string | null
+}
+
+export interface TodayCounters {
+  active_patients: number
+  due_today: number
+  finished: number
+  not_finished: number
+  missed_yesterday: number
+  open_questions: number
+  /** Replies to the therapist's messages that have not been looked at yet. */
+  new_replies: number
+}
+
+/** The therapist's "Today" page: who did what is due, who did not, who missed yesterday. */
+export interface Today {
+  date: string
+  timezone: string
+  counters: TodayCounters
+  not_finished: TodayPatient[]
+  finished: TodayPatient[]
+  missed_yesterday: TodayPatient[]
+}
+
+export function getToday(options: RequestOptions = {}): Promise<Today> {
+  return apiRequest<Today>('/api/v1/therapists/me/today', options)
 }

@@ -71,6 +71,8 @@ const exercise: Exercise = {
   created_by: 'therapist-1',
   version: 1,
   active_assignments: 1,
+  assignments_total: 1,
+  hidden: false,
 }
 
 const assignment: Assignment = {

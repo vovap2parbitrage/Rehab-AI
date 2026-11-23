@@ -15,6 +15,7 @@ import { PatientWorkspaceLayout } from '../pages/patient/PatientWorkspaceLayout'
 import { RegisterPage } from '../pages/RegisterPage'
 import { RoleRoute } from '../auth/RoleRoute'
 import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
+import { TherapistTodayPage } from '../pages/therapist/TherapistTodayPage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { TherapistExercisesPage } from '../pages/therapist/TherapistExercisesPage'
 import { TherapistQuestionsPage } from '../pages/therapist/TherapistQuestionsPage'
@@ -84,7 +85,8 @@ export const router = createBrowserRouter([
           </RoleRoute>
         ),
         children: [
-          { index: true, element: <TherapistPatientsPage /> },
+          { index: true, element: <TherapistTodayPage /> },
+          { path: 'today', element: <TherapistTodayPage /> },
           { path: 'patients', element: <TherapistPatientsPage /> },
           { path: 'patients/:patientId', element: <TherapistPatientPage /> },
           { path: 'exercises', element: <TherapistExercisesPage /> },

@@ -28,9 +28,9 @@ def _to_read(patient: Patient, archived_at: datetime | None = None) -> PatientRe
         id=patient.id,
         user_id=patient.user_id,
         therapist_ids=[therapist.id for therapist in patient.therapists],
-        first_name=patient.first_name,
-        last_name=patient.last_name,
-        date_of_birth=patient.date_of_birth,
+        first_name=patient.user.first_name,
+        last_name=patient.user.last_name,
+        date_of_birth=patient.user.date_of_birth,
         notes=patient.notes,
         archived_at=archived_at,
     )
@@ -53,15 +53,15 @@ def list_patients(
     elif not is_admin:
         query = query.filter(treated_by(therapist_id))
 
+    # Names live on the user, so the search and the order both need the join.
+    query = query.join(Patient.user)
     terms = q.strip().split() if q else []
-    if terms:
-        query = query.join(Patient.user)
     for term in terms:
         pattern = f"%{term}%"
         query = query.filter(
             or_(
-                Patient.first_name.ilike(pattern),
-                Patient.last_name.ilike(pattern),
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
                 User.email.ilike(pattern),
             )
         )
@@ -69,8 +69,8 @@ def list_patients(
     total = query.count()
     patients = (
         query.order_by(
-            func.lower(Patient.first_name),
-            func.lower(Patient.last_name),
+            func.lower(User.first_name),
+            func.lower(User.last_name),
             Patient.id,
         )
         .offset(offset)
@@ -107,9 +107,6 @@ def create_patient(
 
     patient = Patient(
         user_id=payload.user_id,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        date_of_birth=payload.date_of_birth,
         notes=payload.notes,
     )
     therapist_ids = set(payload.therapist_ids)

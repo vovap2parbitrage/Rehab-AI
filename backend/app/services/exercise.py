@@ -1,4 +1,5 @@
 import copy
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -12,8 +13,11 @@ from app.models.exercise import Exercise
 from app.models.exercise_version import ExerciseVersion
 from app.models.session import TrainingSession
 from app.models.user import User
-from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
+from app.schemas.comparison import MAX_TOLERANCE_DEG
+from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate, ScoringOptions
 from app.schemas.pagination import Page
+from app.services.comparison.angles import BODY_PARTS
+from app.services.comparison.scoring import DEFAULT_TOLERANCE
 from app.services import storage
 from app.services.patient_access import get_patient_profile
 
@@ -22,7 +26,7 @@ SCORING_FIELDS = ("reference_video_key", "body_parts", "joint_tolerances")
 
 
 def _read_many(db: Session, exercises: list[Exercise]) -> list[ExerciseRead]:
-    """Exercises with their current version number and active assignment count."""
+    """Exercises with their current version, assignment counts and hidden flag."""
     ids = [exercise.id for exercise in exercises]
     versions = dict(
         db.query(ExerciseVersion.exercise_id, func.max(ExerciseVersion.version))
@@ -39,12 +43,19 @@ def _read_many(db: Session, exercises: list[Exercise]) -> list[ExerciseRead]:
         .group_by(Assignment.exercise_id)
         .all()
     )
+    totals = dict(
+        db.query(Assignment.exercise_id, func.count(Assignment.id))
+        .filter(Assignment.exercise_id.in_(ids))
+        .group_by(Assignment.exercise_id)
+        .all()
+    )
     return [
         ExerciseRead.model_validate(exercise, from_attributes=True).model_copy(
             update={
                 # An exercise nobody has used yet may not have a version row.
                 "version": versions.get(exercise.id, 1),
                 "active_assignments": active.get(exercise.id, 0),
+                "assignments_total": totals.get(exercise.id, 0),
             }
         )
         for exercise in exercises
@@ -153,12 +164,17 @@ def list_exercises(
     roles: set[str],
     *,
     q: str | None = None,
+    hidden: bool = False,
     limit: int = 20,
     offset: int = 0,
 ) -> Page[ExerciseRead]:
+    """The library, or with ``hidden=True`` the exercises the therapist has hidden."""
     query = db.query(Exercise)
     if Role.ADMIN.value not in roles:
         query = query.filter(Exercise.created_by == user.id)
+    query = query.filter(
+        Exercise.hidden_at.is_not(None) if hidden else Exercise.hidden_at.is_(None)
+    )
     if q and q.strip():
         query = query.filter(Exercise.name.ilike(f"%{q.strip()}%"))
     total = query.count()
@@ -247,6 +263,38 @@ def update_exercise(
         if key != exercise.reference_video_key:
             _delete_video_if_unreferenced(db, key)
     return _read_one(db, exercise)
+
+
+def _own_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> Exercise:
+    exercise = db.get(Exercise, exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+        raise HTTPException(status_code=403, detail="You can change only your exercises")
+    return exercise
+
+
+def hide_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> None:
+    """Take the exercise out of the library. Existing assignments keep working."""
+    exercise = _own_exercise(db, exercise_id, user, roles)
+    if exercise.hidden_at is None:
+        exercise.hidden_at = datetime.now(UTC)
+        db.commit()
+
+
+def restore_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> None:
+    exercise = _own_exercise(db, exercise_id, user, roles)
+    if exercise.hidden_at is not None:
+        exercise.hidden_at = None
+        db.commit()
+
+
+def scoring_options() -> ScoringOptions:
+    return ScoringOptions(
+        joints_by_body_part={part: list(joints) for part, joints in BODY_PARTS.items()},
+        default_tolerance_deg=DEFAULT_TOLERANCE,
+        max_tolerance_deg=MAX_TOLERANCE_DEG,
+    )
 
 
 def delete_exercise(

@@ -54,6 +54,11 @@ export function Header() {
             </>
           )}
           {authenticated && isTherapist && (
+            <NavLink to="/therapist/today" className={navLinkClass}>
+              Сьогодні
+            </NavLink>
+          )}
+          {authenticated && isTherapist && (
             <NavLink to="/therapist/patients" className={navLinkClass}>
               Пацієнти
             </NavLink>

@@ -21,6 +21,8 @@ export const MOCK_EXERCISE: Exercise = {
   created_by: 'mock-therapist-1',
   version: 1,
   active_assignments: 0,
+  assignments_total: 0,
+  hidden: false,
 }
 
 export const MOCK_ASSIGNMENT: Assignment = {

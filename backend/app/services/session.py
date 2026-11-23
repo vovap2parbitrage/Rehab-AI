@@ -17,6 +17,7 @@ from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
 from app.services import storage
 from app.services.assignment import complete_finished_assignments
 from app.services.patient_access import require_patient_access
+from app.services.schedule import require_session_today
 
 
 def _patient_id_of(session: TrainingSession) -> UUID:
@@ -76,6 +77,8 @@ def create_session(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
     require_patient_access(assignment.patient_id, user, extract_roles(claims), db)
+    if user.role == Role.PATIENT.value:
+        require_session_today(db, assignment)
     session = TrainingSession(**payload.model_dump())
     db.add(session)
     db.commit()
@@ -98,6 +101,7 @@ def complete_assignment_session(
         raise HTTPException(status_code=404, detail="Assignment not found")
     if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail="Assignment is not active")
+    require_session_today(db, assignment)
 
     session = TrainingSession(
         assignment_id=assignment.id,

@@ -10,6 +10,12 @@ export interface ErrorSegment {
   direction: string
 }
 
+export interface ComparisonQuality {
+  reference_valid_frames_pct: number
+  patient_valid_frames_pct: number
+  ok: boolean
+}
+
 export interface ComparisonResult {
   task_id: string
   status: ComparisonStatus
@@ -19,6 +25,7 @@ export interface ComparisonResult {
   repetition_scores: number[] | null
   joint_scores: Record<string, number> | null
   errors: ErrorSegment[] | null
+  quality?: ComparisonQuality | null
   message: string | null
   session_id: string | null
 }

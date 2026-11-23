@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.services import storage
 from app.services.comparison.pipeline import compare
-from app.services.comparison.video_checks import InvalidVideoError, validate_video_file
+from app.services.comparison.video_checks import InvalidVideoError, prepare_video
 from app.services.comparison_session import record_session
 from app.services.storage import StorageError
 from app.tasks.celery_app import celery_app
@@ -12,9 +12,10 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-def download_video(key: str, dest: Path) -> None:
+def download_video(key: str, dest: Path) -> Path:
+    """Download one video and return the checked file to analyse (maybe a converted copy)."""
     storage.download_video(key, dest)
-    validate_video_file(dest)
+    return prepare_video(dest)
 
 
 def _discard_video(key: str) -> None:
@@ -42,10 +43,9 @@ def analyze_video_task(
 ) -> dict:
     try:
         with tempfile.TemporaryDirectory(prefix="rehab_cmp_") as tmp:
-            reference_path = Path(tmp) / "reference.mp4"
-            patient_path = Path(tmp) / "patient.mp4"
-            download_video(reference_key, reference_path)
-            download_video(patient_key, patient_path)
+            # No extension: the real format is read from the content, not the key.
+            reference_path = download_video(reference_key, Path(tmp) / "reference")
+            patient_path = download_video(patient_key, Path(tmp) / "patient")
             report = compare(
                 str(reference_path), str(patient_path), body_parts, tolerances_deg
             )

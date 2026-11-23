@@ -1,7 +1,5 @@
 import type { PatientSession } from '../api/patient'
-import { parseAnalysis } from '../lib/analysis'
-import { AnalysisSummary } from './AnalysisSummary'
-import { SessionVideo } from './SessionVideo'
+import { SessionEvidence } from './SessionEvidence'
 
 function formatSessionDate(session: PatientSession): string {
   return new Date(session.completed_at ?? session.created_at).toLocaleString('uk-UA', {
@@ -12,8 +10,6 @@ function formatSessionDate(session: PatientSession): string {
 
 /** One saved session: pain, technique score, the analysis details and the recorded video. */
 export function SessionResult({ session, title }: { session: PatientSession; title: string }) {
-  const analysis = parseAnalysis(session.joint_deviations)
-
   return (
     <details className="assignment-session">
       <summary>
@@ -32,15 +28,12 @@ export function SessionResult({ session, title }: { session: PatientSession; tit
           <dd>{session.score === null ? 'Аналіз ще не доступний' : `${session.score} із 10`}</dd>
         </div>
       </dl>
-      {session.score !== null && (
-        <AnalysisSummary
-          score={null}
-          repetitions={analysis.repetitions}
-          jointScores={analysis.jointScores}
-          errors={analysis.errors}
-        />
-      )}
-      {session.has_video && <SessionVideo sessionId={session.id} />}
+      <SessionEvidence
+        sessionId={session.id}
+        score={session.score}
+        hasVideo={session.has_video}
+        deviations={session.joint_deviations}
+      />
     </details>
   )
 }

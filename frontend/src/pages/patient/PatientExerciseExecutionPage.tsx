@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AnalysisSummary } from '../../components/AnalysisSummary'
 import { EmptyState } from '../../components/EmptyState'
@@ -6,19 +6,16 @@ import { ErrorMessage } from '../../components/ErrorMessage'
 import { ArrowRightIcon, CheckIcon, ClockIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
-import { formatWeekdays } from '../../lib/assignmentSchedule'
+import { analysisNotice } from '../../lib/analysisNotice'
+import { formatDay, formatWeekdays } from '../../lib/assignmentSchedule'
 import { usePatientData, usePatientWorkspace } from '../../lib/usePatientWorkspace'
 import { useVideoAnalysis } from '../../lib/useVideoAnalysis'
+import { useVideoRecorder } from '../../lib/useVideoRecorder'
 import { AskForHelpForm } from './AskForHelpForm'
+import { VideoRecorder } from './VideoRecorder'
 import { WorkspaceError } from './WorkspaceError'
 
-const ANALYSIS_NOTICES: Record<string, string> = {
-  rerecord:
-    'Обрані частини тіла погано видно на відео. Запишіть відео ще раз так, щоб вас було видно повністю.',
-  no_repetitions:
-    'На відео не вдалося знайти повторень вправи. Запишіть ще раз і виконайте вправу кілька разів.',
-  failed: 'Не вдалося проаналізувати відео. Спробуйте ще раз.',
-}
+type VideoSource = 'record' | 'upload'
 
 export function PatientExerciseExecutionPage() {
   const { assignmentId } = useParams()
@@ -26,8 +23,12 @@ export function PatientExerciseExecutionPage() {
   const { data: assignments, loading, load: loadAssignments } = usePatientData('assignments')
   const [painScore, setPainScore] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [recordingFile, setRecordingFile] = useState<File | null>(null)
-  const recordingInputRef = useRef<HTMLInputElement>(null)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const recorder = useVideoRecorder()
+  const [source, setSource] = useState<VideoSource>(() =>
+    recorder.supported ? 'record' : 'upload',
+  )
   const analysis = useVideoAnalysis(
     assignmentId,
     () => void loadAssignments({ refresh: true, background: true }),
@@ -35,14 +36,24 @@ export function PatientExerciseExecutionPage() {
   const assignment = assignments?.find((item) => item.id === assignmentId)
   const saving = actionPending === assignmentId
   const analysing = analysis.phase === 'uploading' || analysis.phase === 'analyzing'
+  // The countdown counts too: the patient is already stepping back to record.
+  const recording = recorder.status === 'recording' || recorder.status === 'countdown'
+  const videoFile = source === 'record' ? recorder.file : uploadedFile
   const painValue = painScore === '' ? null : Number(painScore)
   const saved = analysis.result?.status === 'done' ? analysis.result : null
   const savedSessionId = sessionId ?? saved?.session_id ?? null
+  const notice = analysis.result ? analysisNotice(analysis.result) : null
+  const problem = analysis.error ?? notice?.message ?? null
+  const problemRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (problem) problemRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  }, [problem])
 
   const handleAnalyse = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!recordingFile) return
-    await analysis.start(recordingFile, painValue)
+    if (!videoFile) return
+    await analysis.start(videoFile, painValue)
   }
 
   const handleCompleteWithoutVideo = async () => {
@@ -51,10 +62,27 @@ export function PatientExerciseExecutionPage() {
     if (created) setSessionId(created.id)
   }
 
+  const clearUploadedFile = () => {
+    setUploadedFile(null)
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
+  }
+
   const handleTryAgain = () => {
     analysis.reset()
-    setRecordingFile(null)
-    if (recordingInputRef.current) recordingInputRef.current.value = ''
+    clearUploadedFile()
+    recorder.discard()
+  }
+
+  const resetFinishedAnalysis = () => {
+    if (analysis.phase !== 'idle') analysis.reset()
+  }
+
+  const changeSource = (next: VideoSource) => {
+    if (next === source) return
+    recorder.discard()
+    clearUploadedFile()
+    resetFinishedAnalysis()
+    setSource(next)
   }
 
   if (loading && !analysing && !saved) {
@@ -84,6 +112,34 @@ export function PatientExerciseExecutionPage() {
     )
   }
 
+  // A session can only be done on a day it is due, once that day. A result that was just
+  // saved stays on screen even though the assignment now counts as done today.
+  const canStartToday =
+    assignment.status === 'active' && assignment.scheduled_today && !assignment.done_today
+  if (!canStartToday && !savedSessionId && !analysing) {
+    return (
+      <div className="workspace-page">
+        <PageHeading title={assignment.exercise.name} />
+        <EmptyState
+          title={
+            assignment.done_today
+              ? 'Сьогодні цю вправу вже виконано'
+              : 'Сьогодні цю вправу виконувати не потрібно'
+          }
+          message={
+            assignment.done_today || !assignment.next_session_on
+              ? 'Виконати вправу можна один раз у день заняття.'
+              : `Наступне заняття: ${formatDay(assignment.next_session_on)}. Виконати вправу можна лише в день заняття.`
+          }
+        >
+          <Link to="/patient/exercises" className="button button--primary">
+            До призначень <ArrowRightIcon aria-hidden="true" />
+          </Link>
+        </EmptyState>
+      </div>
+    )
+  }
+
   return (
     <div className="workspace-page">
       <Link to="/patient/exercises" className="text-link exercise-execution__back">
@@ -92,7 +148,7 @@ export function PatientExerciseExecutionPage() {
       <PageHeading
         eyebrow="Виконання вправи"
         title={assignment.exercise.name}
-        lead="Завантажте відео виконання: система оцінить техніку й збереже сесію у вашому плані."
+        lead="Запишіть або завантажте відео виконання: система оцінить техніку й збереже сесію у вашому плані."
       />
       <WorkspaceError resource="assignments" />
 
@@ -146,14 +202,32 @@ export function PatientExerciseExecutionPage() {
               Відео порівнюється з еталоном лікаря. Результат і відео зберігаються у вашому плані.
             </p>
           </div>
-          {analysis.error && (
-            <ErrorMessage title="Не вдалося виконати аналіз" message={analysis.error} />
-          )}
-          {analysis.result && analysis.result.status !== 'done' && (
-            <ErrorMessage
-              title="Результат аналізу"
-              message={ANALYSIS_NOTICES[analysis.result.status] ?? ANALYSIS_NOTICES.failed}
-            />
+          {recorder.supported ? (
+            <div className="video-source" role="group" aria-label="Спосіб надіслати відео">
+              {(
+                [
+                  ['record', 'Записати камерою'],
+                  ['upload', 'Завантажити файл'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="video-source__option"
+                  aria-pressed={source === value}
+                  disabled={analysing || recording}
+                  onClick={() => changeSource(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="exercise-upload__notice">
+              {typeof window !== 'undefined' && window.isSecureContext === false
+                ? 'Запис камерою доступний лише через захищене з’єднання (HTTPS). Завантажте готовий файл.'
+                : 'Цей браузер не підтримує запис у застосунку. Завантажте готовий файл.'}
+            </p>
           )}
           {analysing && (
             <p className="analysis-progress" role="status">
@@ -162,19 +236,33 @@ export function PatientExerciseExecutionPage() {
                 : 'Аналізуємо відео. Це може тривати до хвилини…'}
             </p>
           )}
-          <label className="exercise-upload__field">
-            <span>Відеофайл (MP4 або MOV, максимум 100 МБ)</span>
-            <input
-              ref={recordingInputRef}
-              type="file"
-              accept="video/mp4,video/quicktime"
+          {source === 'record' ? (
+            <VideoRecorder
+              recorder={recorder}
               disabled={analysing}
-              onChange={(event) => {
-                setRecordingFile(event.target.files?.[0] || null)
-                if (analysis.phase !== 'idle') analysis.reset()
-              }}
+              onDiscard={resetFinishedAnalysis}
+              onUseFileInstead={() => changeSource('upload')}
             />
-          </label>
+          ) : (
+            <label className="exercise-upload__field">
+              <span>Відеофайл (MP4 або MOV, максимум 100 МБ)</span>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="video/mp4,video/quicktime"
+                disabled={analysing}
+                onChange={(event) => {
+                  setUploadedFile(event.target.files?.[0] || null)
+                  resetFinishedAnalysis()
+                }}
+              />
+            </label>
+          )}
+          {/* Next to the video, where the patient is looking, rather than at the top of the form. */}
+          <div ref={problemRef} className="exercise-upload__problem">
+            {analysis.error && <ErrorMessage title="Відео не надіслано" message={analysis.error} />}
+            {notice && <ErrorMessage title={notice.title} message={notice.message} />}
+          </div>
           <label className="exercise-upload__field">
             <span>Рівень болю після вправи (необов’язково)</span>
             <select
@@ -199,7 +287,7 @@ export function PatientExerciseExecutionPage() {
               <button
                 type="submit"
                 className="button button--primary"
-                disabled={!recordingFile || analysing}
+                disabled={!videoFile || analysing || recording}
               >
                 {analysing ? 'Аналізуємо…' : 'Надіслати на аналіз'}
               </button>
@@ -208,7 +296,7 @@ export function PatientExerciseExecutionPage() {
               type="button"
               className={analysis.notConfigured ? 'button button--primary' : 'button button--ghost'}
               onClick={() => void handleCompleteWithoutVideo()}
-              disabled={analysing || saving}
+              disabled={analysing || saving || recording}
             >
               {saving ? 'Зберігаємо…' : 'Завершити без відео'}
               <CheckIcon aria-hidden="true" />

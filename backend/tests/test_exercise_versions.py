@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.core.timezones import today_in
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.models.exercise_version import ExerciseVersion
 from app.schemas.comparison import ComparisonRequest
@@ -55,7 +55,7 @@ def assign(api, therapist, patient_user, seed_patient, exercise):
                 "duration_weeks": 4,
                 "weekdays": ALL_DAYS,
                 "repetitions": 10,
-                "starts_on": today_in(None).isoformat(),
+                "starts_on": app_today().isoformat(),
             },
         )
         assert response.status_code == 201
@@ -136,7 +136,7 @@ def test_an_assignment_stays_on_the_version_it_was_given(
 ):
     before = assign()
 
-    edit(api, exercise, body_parts=["torso"])
+    edit(api, exercise, body_parts=["right_leg", "torso"])
     after = assign()
 
     assert pinned_version(db_session, before) == 1
@@ -148,7 +148,7 @@ def test_the_comparison_uses_the_version_of_the_assignment(
 ):
     first = assign()
     new_video = video_key(therapist)
-    edit(api, exercise, body_parts=["torso"], reference_video_key=new_video)
+    edit(api, exercise, body_parts=["right_leg", "torso"], reference_video_key=new_video)
     request = ComparisonRequest(
         assignment_id=first,
         patient_key=f"videos/{patient_user.id}/{'b' * 32}.mp4",
@@ -168,7 +168,7 @@ def test_applying_an_edit_moves_only_the_active_assignments(
     cancelled = assign()
     assert api.post(f"/api/v1/assignments/{cancelled}/cancel").status_code == 204
 
-    edited = edit(api, exercise, body_parts=["torso"], apply_to_active_assignments=True)
+    edited = edit(api, exercise, body_parts=["right_leg", "torso"], apply_to_active_assignments=True)
 
     assert edited["version"] == 2
     assert pinned_version(db_session, active) == 2
@@ -179,7 +179,7 @@ def test_an_assignment_can_be_moved_to_the_newest_version_by_a_later_edit(
     api, exercise, assign, db_session
 ):
     assignment = assign()
-    exercise_v2 = edit(api, exercise, body_parts=["torso"])
+    exercise_v2 = edit(api, exercise, body_parts=["right_leg", "torso"])
     assert pinned_version(db_session, assignment) == 1
 
     edit(api, exercise_v2, name="Deep squat", apply_to_active_assignments=True)

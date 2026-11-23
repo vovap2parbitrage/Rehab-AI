@@ -50,8 +50,8 @@ def test_first_login_provisions_patient(db):
     assert user.is_verified is True
     assert db.query(User).count() == 1
     patient = db.query(Patient).filter(Patient.user_id == user.id).one()
-    assert patient.first_name == "Нова"
-    assert patient.last_name == "Пацієнтка"
+    assert user.first_name == "Нова"
+    assert user.last_name == "Пацієнтка"
 
 
 def test_existing_sub_is_reused(db):

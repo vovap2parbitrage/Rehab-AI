@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { HelpRequest } from '../../api/helpRequests'
 import { EmptyState } from '../../components/EmptyState'
@@ -8,7 +8,7 @@ import { ActivityIcon, ArrowRightIcon, ClockIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { ReferenceVideo } from '../../components/ReferenceVideo'
-import { formatWeekdays, isAssignmentScheduledToday } from '../../lib/assignmentSchedule'
+import { formatDay, formatWeekdays } from '../../lib/assignmentSchedule'
 import { useLocalToday } from '../../lib/useLocalToday'
 import { usePatientData } from '../../lib/usePatientWorkspace'
 import { useVideoPreview } from '../../lib/useVideoPreview'
@@ -25,14 +25,15 @@ export function PatientExercisesPage() {
   const [assignmentView, setAssignmentView] = useState<'today' | 'all'>('today')
   const activeAssignments = assignments.filter((assignment) => assignment.status === 'active')
   const completedAssignments = assignments.filter((assignment) => assignment.status === 'completed')
-  const todayAssignments = activeAssignments.filter((assignment) =>
-    isAssignmentScheduledToday(
-      assignment.starts_on,
-      assignment.duration_weeks,
-      assignment.weekdays,
-      today,
-    ),
-  )
+  // The server decides what is due today; when the day changes, ask it again.
+  const todayAssignments = activeAssignments.filter((assignment) => assignment.scheduled_today)
+  const { load: loadAssignments } = assignmentData
+  const shownDay = useRef(today)
+  useEffect(() => {
+    if (shownDay.current === today) return
+    shownDay.current = today
+    void loadAssignments({ refresh: true, background: true })
+  }, [today, loadAssignments])
 
   const renderAssignments = (items: typeof assignments) =>
     items.map((assignment) => (
@@ -74,14 +75,24 @@ export function PatientExercisesPage() {
             items={helpRequests.filter((item) => item.assignment_id === assignment.id)}
           />
         </div>
-        {assignment.status === 'active' && (
-          <Link
-            to={`/patient/exercises/${assignment.id}/execute`}
-            className="button button--primary exercise-card__action"
-          >
-            Виконати вправу <ArrowRightIcon aria-hidden="true" />
-          </Link>
-        )}
+        {assignment.status === 'active' &&
+          (assignment.scheduled_today && !assignment.done_today ? (
+            <Link
+              to={`/patient/exercises/${assignment.id}/execute`}
+              className="button button--primary exercise-card__action"
+            >
+              Виконати вправу <ArrowRightIcon aria-hidden="true" />
+            </Link>
+          ) : (
+            <p className="exercise-card__availability">
+              {assignment.done_today
+                ? 'Сьогодні виконано'
+                : assignment.next_session_on
+                  ? `Наступне заняття: ${formatDay(assignment.next_session_on)}`
+                  : 'Занять більше немає'}
+              {!assignment.done_today && <small>Виконати можна лише в день заняття.</small>}
+            </p>
+          ))}
       </article>
     ))
 

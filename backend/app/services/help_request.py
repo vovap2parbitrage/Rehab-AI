@@ -52,9 +52,16 @@ def _to_read(help_request: HelpRequest) -> HelpRequestRead:
         session_id=help_request.session_id,
         assignment_id=session.assignment_id,
         patient_id=help_request.patient_id,
-        patient_name=f"{patient.first_name} {patient.last_name}",
+        patient_name=" ".join(
+            name
+            for name in (patient.user.first_name, patient.user.last_name)
+            if name
+        ),
         exercise_name=session.assignment.exercise.name,
         pain_score=session.pain_score,
+        score=session.score,
+        has_video=session.has_video,
+        joint_deviations=session.joint_deviations,
         message=help_request.message,
         reply=help_request.reply,
         replied_by_email=help_request.replier.email if help_request.replier else None,
@@ -100,13 +107,13 @@ def list_patient_help_requests(db: Session, user: User) -> list[HelpRequestRead]
 
 def _search_questions(query: Query, q: str | None) -> Query:
     if q and q.strip():
-        query = query.join(HelpRequest.patient)
+        query = query.join(HelpRequest.patient).join(Patient.user)
     for term in q.strip().split() if q else []:
         pattern = f"%{term}%"
         query = query.filter(
             or_(
-                Patient.first_name.ilike(pattern),
-                Patient.last_name.ilike(pattern),
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
                 HelpRequest.message.ilike(pattern),
             )
         )

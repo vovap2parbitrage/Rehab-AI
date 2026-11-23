@@ -83,7 +83,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
         />
       ) : (
         <>
-          <HelpRequestList items={items.slice(0, PREVIEW_COUNT)} showExercise compact />
+          <HelpRequestList items={items.slice(0, PREVIEW_COUNT)} showExercise compact showSession />
           <div className="patient-questions__actions">
             <button
               type="button"
@@ -129,7 +129,7 @@ export function PatientQuestionsCard({ patientId }: { patientId: string }) {
           <Loading label="Завантажуємо запитання…" />
         ) : (
           <>
-            <HelpRequestList items={items} showExercise />
+            <HelpRequestList items={items} showExercise showSession />
             <ListPagination
               total={data?.total ?? 0}
               limit={PAGE_SIZE}
