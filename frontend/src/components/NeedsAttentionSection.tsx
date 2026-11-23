@@ -7,6 +7,9 @@ import { useTherapistQuestions } from '../lib/therapistQuestionsContext'
 import { ErrorMessage } from './ErrorMessage'
 import { AlertTriangleIcon } from './Icons'
 import { Loading } from './Loading'
+import { AnalysisSummary } from './AnalysisSummary'
+import { SessionVideo } from './SessionVideo'
+import { parseAnalysis } from '../lib/analysis'
 
 /** Therapist: unanswered questions about their assignments ("Needs attention"). */
 export function NeedsAttentionSection() {
@@ -59,6 +62,12 @@ export function NeedsAttentionSection() {
           {requests.map((item) => {
             const reply = replies[item.id] ?? ''
             const busy = busyId === item.id
+            const analysis = parseAnalysis(item.joint_deviations)
+            const hasAnalysis =
+              item.score !== null ||
+              analysis.repetitions !== null ||
+              analysis.jointScores !== null ||
+              analysis.errors !== null
             return (
               <article className="help-request" key={item.id}>
                 <div className="help-request__meta">
@@ -73,6 +82,17 @@ export function NeedsAttentionSection() {
                   </small>
                 </div>
                 <p>{item.message}</p>
+                {hasAnalysis ? (
+                  <AnalysisSummary
+                    score={item.score}
+                    repetitions={analysis.repetitions}
+                    jointScores={analysis.jointScores}
+                    errors={analysis.errors}
+                  />
+                ) : (
+                  <p>Аналіз ще не доступний.</p>
+                )}
+                {item.has_video && <SessionVideo sessionId={item.session_id} />}
                 <form className="therapist-form" onSubmit={(event) => handleReply(event, item.id)}>
                   <label className="therapist-form__field">
                     <span>Відповідь пацієнту</span>

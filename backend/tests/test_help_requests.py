@@ -33,9 +33,42 @@ def test_patient_asks_for_help_after_session(
     assert body["patient_name"] == "Ivan Petrenko"
     assert body["exercise_name"] == "Test exercise"
     assert body["pain_score"] == 6
+    assert body["score"] is None
+    assert body["joint_deviations"] == {}
+    assert body["has_video"] is False
     assert body["message"] == "My knee hurts after the exercise"
     assert body["assignment_id"] == str(session.assignment_id)
     assert body["reply"] is None
+
+
+def test_therapist_sees_session_analysis_and_video_availability(
+    api, login, db_session, therapist, patient_user, seed_patient, seed_assignment
+):
+    session = _completed_session(
+        db_session,
+        seed_assignment(seed_patient(patient_user, therapist)),
+        pain_score=5,
+    )
+    session.score = 8.5
+    session.joint_deviations = {
+        "repetitions": 3,
+        "errors": [{"joint": "left_knee", "name": "knee_valgus"}],
+    }
+    session.video_key = f"videos/{patient_user.id}/{uuid.uuid4().hex}.mp4"
+    db_session.commit()
+
+    login(patient_user)
+    assert _ask(api, session).status_code == 201
+
+    login(therapist)
+    response = api.get("/api/v1/help-requests/needs-attention")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["pain_score"] == 5
+    assert body["score"] == 8.5
+    assert body["joint_deviations"] == session.joint_deviations
+    assert body["has_video"] is True
 
 
 def test_message_is_required_and_bounded(

@@ -24,7 +24,7 @@ def _query(db: Session) -> Query:
             joinedload(HelpRequest.replier),
             joinedload(HelpRequest.session)
             .joinedload(TrainingSession.assignment)
-            .joinedload(Assignment.exercise),
+            .joinedload(Assignment.exercise),   
         )
     )
 
@@ -56,12 +56,15 @@ def _to_read(help_request: HelpRequest) -> HelpRequestRead:
             if name
         ),
         exercise_name=session.assignment.exercise.name,
-        pain_score=session.pain_score,
         message=help_request.message,
         reply=help_request.reply,
         replied_by_email=help_request.replier.email if help_request.replier else None,
         created_at=help_request.created_at,
         replied_at=help_request.replied_at,
+        pain_score=session.pain_score,
+        score=session.score,
+        joint_deviations=session.joint_deviations,
+        has_video=session.has_video,
     )
 
 

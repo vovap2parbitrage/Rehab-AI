@@ -281,6 +281,9 @@ const helpRequest: HelpRequest = {
   patient_name: 'Олена',
   exercise_name: 'Розгинання коліна',
   pain_score: 4,
+  score: null,
+  joint_deviations: {},
+  has_video: false,
   message: 'Чи правильно я виконую вправу?',
   reply: null,
   replied_by_email: null,
@@ -1754,6 +1757,11 @@ describe('Therapist questions', () => {
     )
 
     expect(await screen.findByText(helpRequest.message)).toBeInTheDocument()
+    expect(screen.getByText('Аналіз ще не доступний.')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Переглянути відео виконання' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByLabelText('1 нових запитань')).toBeInTheDocument()
     expect(listNeedsAttention).toHaveBeenCalledTimes(1)
 
@@ -1767,5 +1775,51 @@ describe('Therapist questions', () => {
     expect(screen.queryByLabelText('1 нових запитань')).not.toBeInTheDocument()
     expect(replyToHelpRequest).toHaveBeenCalledWith(helpRequest.id, 'Так, усе правильно.')
     expect(listNeedsAttention).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows technique analysis and plays a question video inline', async () => {
+    const user = userEvent.setup()
+    const requestWithAnalysis: HelpRequest = {
+      ...helpRequest,
+      score: 8.5,
+      joint_deviations: {
+        repetitions: 4,
+        joint_scores: { r_knee: 7 },
+        errors: [
+          {
+            joint: 'r_knee',
+            start_s: 1,
+            end_s: 1.5,
+            peak_deviation_deg: 18,
+            direction: 'too_bent',
+          },
+        ],
+      },
+      has_video: true,
+    }
+    vi.mocked(listNeedsAttention).mockResolvedValueOnce([requestWithAnalysis])
+    vi.mocked(getSessionVideoUrl).mockResolvedValueOnce('https://videos.test/session.mp4')
+
+    const { container } = renderWithAuth(
+      <TherapistQuestionsProvider>
+        <NeedsAttentionSection />
+      </TherapistQuestionsProvider>,
+      createAuth({ authenticated: true, role: 'therapist' }),
+      ['/therapist/questions'],
+    )
+
+    const score = await screen.findByText('8.5')
+    expect(score.parentElement?.textContent).toContain('із 10')
+    expect(screen.getByRole('heading', { name: 'Помилки техніки' })).toBeInTheDocument()
+    expect(screen.getByText(/надто зігнуто/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Переглянути відео виконання' }))
+
+    expect(await screen.findByRole('button', { name: 'Сховати відео' })).toBeInTheDocument()
+    expect(container.querySelector('video')).toHaveAttribute(
+      'src',
+      'https://videos.test/session.mp4',
+    )
+    expect(getSessionVideoUrl).toHaveBeenCalledWith(requestWithAnalysis.session_id)
   })
 })

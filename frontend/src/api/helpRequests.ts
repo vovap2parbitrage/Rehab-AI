@@ -8,6 +8,9 @@ export interface HelpRequest {
   patient_name: string
   exercise_name: string
   pain_score: number | null
+  score: number | null
+  joint_deviations: Record<string, unknown>
+  has_video: boolean
   message: string
   reply: string | null
   replied_by_email: string | null

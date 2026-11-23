@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated,Any
 from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, StringConstraints,Field
 
 HelpText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
@@ -29,3 +29,6 @@ class HelpRequestRead(BaseModel):
     replied_by_email: str | None = None
     created_at: datetime
     replied_at: datetime | None = None
+    score: float | None = None
+    joint_deviations: dict[str, Any] = Field(default_factory=dict)
+    has_video: bool = False
