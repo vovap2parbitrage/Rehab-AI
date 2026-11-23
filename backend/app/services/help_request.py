@@ -50,7 +50,11 @@ def _to_read(help_request: HelpRequest) -> HelpRequestRead:
         session_id=help_request.session_id,
         assignment_id=session.assignment_id,
         patient_id=help_request.patient_id,
-        patient_name=f"{patient.first_name} {patient.last_name}",
+        patient_name=" ".join(
+            name
+            for name in (patient.user.first_name, patient.user.last_name)
+            if name
+        ),
         exercise_name=session.assignment.exercise.name,
         pain_score=session.pain_score,
         message=help_request.message,

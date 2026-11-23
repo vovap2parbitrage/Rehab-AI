@@ -1,7 +1,6 @@
 from uuid import UUID
-
+from datetime import datetime,date
 from pydantic import BaseModel, ConfigDict, field_validator
-
 from app.core.roles import Role
 
 ASSIGNABLE_ROLES = {role.value for role in Role}
@@ -54,3 +53,6 @@ class UserRead(BaseModel):
     pending_role: str | None = None
     keycloak_sub: str | None = None
     is_active: bool
+    first_name: str | None = None
+    last_name: str | None = None
+    date_of_birth: date | None = None

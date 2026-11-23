@@ -1,8 +1,8 @@
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, func, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.timezones import DEFAULT_TIMEZONE
@@ -21,7 +21,16 @@ class User(Base):
             "pending_role IS NULL OR pending_role IN ('patient', 'therapist')",
             name="ck_users_pending_role",
         ),
+        CheckConstraint(
+            "first_name IS NULL OR length(trim(first_name)) >= 1",
+            name="ck_users_first_name_not_blank",
+        ),
+        CheckConstraint(
+            "last_name IS NULL OR length(trim(last_name)) >= 1",
+            name="ck_users_last_name_not_blank",
+        ),
     )
+
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
@@ -33,6 +42,19 @@ class User(Base):
         unique=True,
         index=True,
         nullable=False,
+    )
+    first_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    last_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    date_of_birth: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
     )
 
     keycloak_sub: Mapped[str | None] = mapped_column(
@@ -114,4 +136,4 @@ class User(Base):
         "Patient",
         secondary=patient_therapist_table,
         back_populates="therapists",
-    )
+    )   

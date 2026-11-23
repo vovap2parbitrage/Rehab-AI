@@ -50,8 +50,6 @@ def test_models_define_database_constraints():
         for constraint in Patient.__table__.constraints
         if constraint.name
     } >= {
-        "ck_patients_first_name_not_blank",
-        "ck_patients_last_name_not_blank",
         "ck_patients_notes_length",
     }
     assert {
@@ -121,8 +119,6 @@ def test_patient_can_have_multiple_therapists_and_invitation():
         )
         patient = Patient(
             user=patient_user,
-            first_name="Ivan",
-            last_name="Petrenko",
             therapists=[first_therapist, second_therapist],
         )
         invitation = TherapistInvitation(

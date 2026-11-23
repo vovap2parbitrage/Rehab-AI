@@ -174,7 +174,9 @@ describe('Editing an assignment', () => {
     await user.click(await screen.findByRole('button', { name: 'Змінити Присідання' }))
     await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
-    expect(await screen.findByText('Дію неможливо виконати через конфлікт даних.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Дію неможливо виконати через конфлікт даних.'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Змінити призначення' })).toBeInTheDocument()
   })
 
@@ -231,7 +233,9 @@ describe('Start date of a new assignment', () => {
   it('rejects a date that is not one of the chosen weekdays', async () => {
     renderPage()
 
-    fireEvent.change(await screen.findByLabelText(/Початок/), { target: { value: dayOffWeekdays() } })
+    fireEvent.change(await screen.findByLabelText(/Початок/), {
+      target: { value: dayOffWeekdays() },
+    })
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Перше заняття має припадати на один із обраних днів: Пн Ср Пт.',

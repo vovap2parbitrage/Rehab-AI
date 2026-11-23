@@ -29,8 +29,6 @@ def create_patient(db: Session, owner: User, therapist: User) -> Patient:
     db.flush()
     patient = Patient(
         user_id=owner.id,
-        first_name="Ivan",
-        last_name="Petrenko",
     )
     db.add(patient)
     db.flush()
@@ -43,8 +41,6 @@ def test_patient_lists_own_therapists(
     patient_features_db.add(patient_user)
     patient = Patient(
         user_id=patient_user.id,
-        first_name="Ivan",
-        last_name="Petrenko",
         therapists=[therapist, other_therapist],
     )
     patient_features_db.add(patient)

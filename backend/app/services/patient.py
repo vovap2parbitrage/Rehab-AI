@@ -27,9 +27,9 @@ def _to_read(patient: Patient, archived_at: datetime | None = None) -> PatientRe
         id=patient.id,
         user_id=patient.user_id,
         therapist_ids=[therapist.id for therapist in patient.therapists],
-        first_name=patient.first_name,
-        last_name=patient.last_name,
-        date_of_birth=patient.date_of_birth,
+        first_name=patient.user.first_name,
+        last_name=patient.user.last_name,
+        date_of_birth=patient.user.date_of_birth,
         notes=patient.notes,
         archived_at=archived_at,
     )
@@ -75,9 +75,6 @@ def create_patient(
 
     patient = Patient(
         user_id=payload.user_id,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        date_of_birth=payload.date_of_birth,
         notes=payload.notes,
     )
     therapist_ids = set(payload.therapist_ids)
