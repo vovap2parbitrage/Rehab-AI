@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
 from app.main import app
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.services.exercise import current_version
 from app.models.exercise import Exercise
@@ -216,8 +217,8 @@ def test_patient_completes_own_assignment_session(
         exercise_version_id=current_version(patient_features_db, exercise).id,
         repetitions=10,
         duration_weeks=4,
-        weekdays=[0, 2, 4],
-        starts_on=date(2026, 1, 1),
+        weekdays=[0, 1, 2, 3, 4, 5, 6],
+        starts_on=app_today(),
     )
     patient_features_db.add(assignment)
     patient_features_db.commit()

@@ -7,7 +7,7 @@ import { ArrowRightIcon, CheckIcon, ClockIcon } from '../../components/Icons'
 import { Loading } from '../../components/Loading'
 import { PageHeading } from '../../components/PageHeading'
 import { analysisNotice } from '../../lib/analysisNotice'
-import { formatWeekdays } from '../../lib/assignmentSchedule'
+import { formatDay, formatWeekdays } from '../../lib/assignmentSchedule'
 import { usePatientData, usePatientWorkspace } from '../../lib/usePatientWorkspace'
 import { useVideoAnalysis } from '../../lib/useVideoAnalysis'
 import { useVideoRecorder } from '../../lib/useVideoRecorder'
@@ -108,6 +108,34 @@ export function PatientExerciseExecutionPage() {
             </Link>
           </EmptyState>
         )}
+      </div>
+    )
+  }
+
+  // A session can only be done on a day it is due, once that day. A result that was just
+  // saved stays on screen even though the assignment now counts as done today.
+  const canStartToday =
+    assignment.status === 'active' && assignment.scheduled_today && !assignment.done_today
+  if (!canStartToday && !savedSessionId && !analysing) {
+    return (
+      <div className="workspace-page">
+        <PageHeading title={assignment.exercise.name} />
+        <EmptyState
+          title={
+            assignment.done_today
+              ? 'Сьогодні цю вправу вже виконано'
+              : 'Сьогодні цю вправу виконувати не потрібно'
+          }
+          message={
+            assignment.done_today || !assignment.next_session_on
+              ? 'Виконати вправу можна один раз у день заняття.'
+              : `Наступне заняття: ${formatDay(assignment.next_session_on)}. Виконати вправу можна лише в день заняття.`
+          }
+        >
+          <Link to="/patient/exercises" className="button button--primary">
+            До призначень <ArrowRightIcon aria-hidden="true" />
+          </Link>
+        </EmptyState>
       </div>
     )
   }

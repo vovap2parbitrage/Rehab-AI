@@ -15,6 +15,7 @@ from app.schemas.history import (
     HistoryPoint,
     PatientHistoryRead,
 )
+from app.services.schedule import is_session_day
 from app.services.patient_access import get_patient_profile, require_patient_access
 
 PERIOD_DAYS = {
@@ -54,19 +55,11 @@ def _period_start(
 
 
 def _planned_for_week(assignments: list[Assignment], week_start: date) -> int:
-    week_end = week_start + timedelta(days=6)
-    planned = 0
-    for item in assignments:
-        assignment_end = item.starts_on + timedelta(days=item.duration_weeks * 7 - 1)
-        first_day = max(item.starts_on, week_start)
-        last_day = min(assignment_end, week_end)
-        if first_day > last_day:
-            continue
-        planned += sum(
-            (first_day + timedelta(days=offset)).weekday() in item.weekdays
-            for offset in range((last_day - first_day).days + 1)
-        )
-    return planned
+    return sum(
+        is_session_day(item, week_start + timedelta(days=offset))
+        for item in assignments
+        for offset in range(7)
+    )
 
 
 def _adherence_weeks(

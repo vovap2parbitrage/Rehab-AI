@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.auth import extract_roles
+from app.core.roles import Role
 from app.core.statuses import AssignmentStatus
 from app.models.assignment import Assignment
 from app.models.session import TrainingSession
@@ -12,6 +13,7 @@ from app.models.user import User
 from app.schemas.session import PatientSessionCreate, SessionCreate, SessionRead
 from app.services import storage
 from app.services.patient_access import can_access_patient_id, require_patient_access
+from app.services.schedule import require_session_today
 from app.services.assignment import complete_finished_assignments
 
 
@@ -50,6 +52,8 @@ def create_session(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
     require_patient_access(assignment.patient_id, user, extract_roles(claims), db)
+    if user.role == Role.PATIENT.value:
+        require_session_today(db, assignment)
     session = TrainingSession(**payload.model_dump())
     db.add(session)
     db.commit()
@@ -72,6 +76,7 @@ def complete_assignment_session(
         raise HTTPException(status_code=404, detail="Assignment not found")
     if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail="Assignment is not active")
+    require_session_today(db, assignment)
 
     session = TrainingSession(
         assignment_id=assignment.id,

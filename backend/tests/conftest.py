@@ -28,6 +28,7 @@ settings.database_url = _test_database_url()
 
 from app.api.deps import get_current_active_user  # noqa: E402
 from app.core.auth import get_current_claims  # noqa: E402
+from app.core.timezones import app_today  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -217,9 +218,10 @@ def seed_assignment(db_session):
             "patient_id": patient.id,
             "exercise_id": exercise.id,
             "duration_weeks": 4,
-            "weekdays": [0, 2, 4],
+            # Due every day from today, so a patient may do a session in a test.
+            "weekdays": [0, 1, 2, 3, 4, 5, 6],
             "repetitions": 10,
-            "starts_on": "2026-01-01",
+            "starts_on": app_today().isoformat(),
             "therapist_id": patient.therapist_ids[0],
         }
         assignment_data.update(overrides)
