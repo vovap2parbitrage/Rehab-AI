@@ -6,7 +6,6 @@ import {
   type VideoRecorderState,
 } from '../../lib/useVideoRecorder'
 import { usePoseAssistant } from '../../lib/usePoseAssistant'
-import { getPoseSpeechMessage } from '../../lib/poseSpeech'
 
 interface VideoRecorderProps {
   recorder: VideoRecorderState
@@ -47,17 +46,11 @@ export function VideoRecorder({
   const [video, setVideo] = useState<HTMLVideoElement | null>(null)
   const [videoReadyStream, setVideoReadyStream] = useState<MediaStream | null>(null)
   const [autoStart, setAutoStart] = useState(false)
-  const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const lastSpokenMessage = useRef<string | null>(null)
   const { status, stream } = recorder
   const videoReady = stream !== null && videoReadyStream === stream
   const recording = status === 'recording'
   const counting = status === 'countdown'
   const monitoring = status === 'ready' || counting || recording
-  const speechSupported =
-    typeof window !== 'undefined' &&
-    typeof window.speechSynthesis !== 'undefined' &&
-    typeof SpeechSynthesisUtterance !== 'undefined'
   const startRecording = recorder.startRecording
   const setLiveVideo = useCallback((element: HTMLVideoElement | null) => {
     liveRef.current = element
@@ -70,41 +63,6 @@ export function VideoRecorder({
     active: monitoring,
     bodyParts,
   })
-  const speechMessage = getPoseSpeechMessage(
-    status,
-    recorder.countdownLeft,
-    assistant,
-    recorder.error,
-  )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!voiceEnabled) {
-      window.speechSynthesis?.cancel()
-      lastSpokenMessage.current = null
-      return
-    }
-    if (!speechSupported || !speechMessage || lastSpokenMessage.current === speechMessage) {
-      return
-    }
-
-    const timeout = window.setTimeout(() => {
-      if (lastSpokenMessage.current === speechMessage) return
-      const utterance = new SpeechSynthesisUtterance(speechMessage)
-      utterance.lang = 'uk-UA'
-      window.speechSynthesis.cancel()
-      window.speechSynthesis.speak(utterance)
-      lastSpokenMessage.current = speechMessage
-    }, 650)
-    return () => window.clearTimeout(timeout)
-  }, [speechMessage, speechSupported, voiceEnabled])
-
-  useEffect(
-    () => () => {
-      if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
-    },
-    [],
-  )
 
   useEffect(() => {
     const video = liveRef.current
@@ -249,17 +207,6 @@ export function VideoRecorder({
         <div className="video-recorder__assistant" role="status" aria-live="polite">
           <div className="video-recorder__assistant-heading">
             <strong>Помічник пози</strong>
-            <label className="video-recorder__voice">
-              <input
-                type="checkbox"
-                checked={voiceEnabled}
-                disabled={!speechSupported}
-                onChange={(event) => setVoiceEnabled(event.currentTarget.checked)}
-              />
-              <span>
-                {speechSupported ? 'Голосові підказки' : 'Голос недоступний у цьому браузері'}
-              </span>
-            </label>
           </div>
           {assistant.status === 'loading' && <p>Готуємо локальні підказки для камери…</p>}
           {assistant.status === 'unavailable' && <p>{assistant.hints[0]}</p>}

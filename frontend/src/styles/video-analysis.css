@@ -185,18 +185,6 @@
   gap: 12px;
 }
 
-.video-recorder__voice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-soft);
-  font-size: 0.8rem;
-}
-
-.video-recorder__voice input {
-  margin: 0;
-}
-
 .video-recorder__assistant p,
 .video-recorder__assistant ul {
   margin: 0;
