@@ -8,6 +8,34 @@ import {
   TORSO_VISIBILITY_PAIRS,
 } from './poseMapping'
 
+/** Every sentence the position check can show, by id. */
+const HINTS: Record<string, string> = {
+  'position.one_person': 'У кадрі має бути лише одна людина.',
+  'position.stand_in_front':
+    'Я вас не бачу. Станьте перед камерою так, щоб вас було видно повністю.',
+  ...Object.fromEntries(
+    Object.entries(BODY_PART_LABELS).map(([part, label]) => [
+      `position.show_${part}`,
+      `Покажіть камері ${label}.`,
+    ]),
+  ),
+  'position.turn_right_side': 'Поверніться трохи правим боком до камери.',
+  'position.turn_left_side': 'Поверніться трохи лівим боком до камери.',
+  'position.parts_together': 'Покажіть потрібні частини тіла одночасно.',
+  'position.whole_frame': 'Станьте в кадр повністю, залишивши трохи місця навколо себе.',
+  'position.step_left': 'Зробіть крок ліворуч.',
+  'position.step_right': 'Зробіть крок праворуч.',
+  'position.step_forward': 'Зробіть крок уперед.',
+  'position.step_back': 'Зробіть крок назад.',
+  'position.closer': 'Підійдіть трохи ближче до камери.',
+  'position.farther': 'Відійдіть трохи далі від камери.',
+  'position.light': 'Світла замало — увімкніть світло перед собою.',
+}
+
+function phrase(id: string): string {
+  return HINTS[id]
+}
+
 export interface PoseLandmark {
   x: number
   y: number
@@ -88,10 +116,105 @@ function percentage(samples: readonly PoseSample[], predicate: (sample: PoseSamp
   return (100 * samples.filter(predicate).length) / samples.length
 }
 
-function visiblePartHint(bodyPart: string): string {
-  const label =
-    BODY_PART_LABELS[bodyPart as keyof typeof BODY_PART_LABELS] ?? `частину тіла (${bodyPart})`
-  return `Покажіть камері ${label}.`
+const OPPOSITE_PART: Record<string, string> = {
+  left_arm: 'right_arm',
+  right_arm: 'left_arm',
+  left_leg: 'right_leg',
+  right_leg: 'left_leg',
+}
+
+function partVisiblePct(samples: readonly PoseSample[], bodyPart: string): number {
+  return percentage(
+    samples,
+    (sample) => sample.landmarks !== null && bodyPartVisible(sample.landmarks, bodyPart),
+  )
+}
+
+/**
+ * A side of the body the camera does not see, while it sees the other side, is turned away:
+ * the patient should turn that side towards the camera. Otherwise just ask to show the part.
+ */
+function hiddenPartHint(samples: readonly PoseSample[], bodyPart: string): string {
+  const opposite = OPPOSITE_PART[bodyPart]
+  if (opposite && partVisiblePct(samples, opposite) >= POSE_RULES.minValidPct) {
+    return phrase(
+      bodyPart.startsWith('right') ? 'position.turn_right_side' : 'position.turn_left_side',
+    )
+  }
+  return BODY_PART_LABELS[bodyPart as keyof typeof BODY_PART_LABELS]
+    ? phrase(`position.show_${bodyPart}`)
+    : phrase('position.parts_together')
+}
+
+/**
+ * Where to step when the body is cut by the left or right edge of the picture. The picture is
+ * what the camera sees, so its left is the patient's right when they face the camera; sideways,
+ * the edge they face is "forward".
+ */
+function stepHint(landmarks: readonly PoseLandmark[]): string | null {
+  const visible = BODY_FRAME_LANDMARKS.filter((index) => isLandmarkVisible(landmarks, index))
+  if (visible.length === 0) return null
+  const xs = visible.map((index) => landmarks[index].x)
+  const cutLeft = Math.min(...xs) < POSE_RULES.frameMargin
+  const cutRight = Math.max(...xs) > 1 - POSE_RULES.frameMargin
+  if (cutLeft === cutRight) return null // both sides cut: too close; none: it is the top or bottom
+  const towardsPictureRight = cutLeft
+
+  const leftShoulder = landmarks[11]
+  const rightShoulder = landmarks[12]
+  const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x)
+  const torso = Math.abs(
+    (leftShoulder.y + rightShoulder.y) / 2 - (landmarks[23].y + landmarks[24].y) / 2,
+  )
+  // Facing the camera both shoulders are apart; sideways one hides behind the other.
+  if (shoulderWidth > 0.25 * torso && shoulderWidth > 0.02) {
+    // Facing the camera, the patient's right shoulder is on the left of the picture.
+    const facingCamera = rightShoulder.x < leftShoulder.x
+    const stepToPatientsLeft = towardsPictureRight === facingCamera
+    return phrase(stepToPatientsLeft ? 'position.step_left' : 'position.step_right')
+  }
+  const facesPictureRight = landmarks[0].x > (leftShoulder.x + rightShoulder.x) / 2
+  return phrase(
+    facesPictureRight === towardsPictureRight ? 'position.step_forward' : 'position.step_back',
+  )
+}
+
+const CORE_LANDMARKS = [11, 12, 23, 24] // shoulders and hips
+/** A real person in the picture is at least this tall (a share of the picture height). */
+const MIN_PERSON_HEIGHT = 0.15
+
+function looksLikePerson(landmarks: readonly PoseLandmark[]): boolean {
+  if (CORE_LANDMARKS.filter((index) => isLandmarkVisible(landmarks, index)).length < 2) {
+    return false
+  }
+  return personSize(landmarks).height >= MIN_PERSON_HEIGHT
+}
+
+function personSize(landmarks: readonly PoseLandmark[]): { height: number; area: number } {
+  const seen = landmarks.filter((landmark) => landmark.visibility >= POSE_RULES.minVisibility)
+  if (seen.length === 0) return { height: 0, area: 0 }
+  const xs = seen.map((landmark) => landmark.x)
+  const ys = seen.map((landmark) => landmark.y)
+  const height = Math.max(...ys) - Math.min(...ys)
+  return { height, area: height * (Math.max(...xs) - Math.min(...xs)) }
+}
+
+/**
+ * The model now and then "finds" a second, ghost person for a frame (a shadow, a picture on the
+ * wall, a chair), mostly in poor light. A pose counts as a person only when its shoulders or
+ * hips are clearly seen and it is not tiny; the biggest one is the patient.
+ */
+export function pickPatientPose(poses: readonly (readonly PoseLandmark[])[]): {
+  poseCount: number
+  landmarks: readonly PoseLandmark[] | null
+} {
+  const people = poses.filter(looksLikePerson)
+  const patient = people.reduce<readonly PoseLandmark[] | null>(
+    (biggest, pose) =>
+      !biggest || personSize(pose).area > personSize(biggest).area ? pose : biggest,
+    null,
+  )
+  return { poseCount: people.length, landmarks: patient }
 }
 
 export function assessPoseWindow(
@@ -101,22 +224,19 @@ export function assessPoseWindow(
   const hints: string[] = []
   if (samples.length === 0) return { hints, ready: false }
 
-  if (samples.some((sample) => sample.poseCount !== 1)) {
-    hints.push(
-      samples.some((sample) => sample.poseCount > 1)
-        ? 'У кадрі має бути лише одна людина.'
-        : 'Станьте перед камерою, щоб помічник побачив вас.',
-    )
+  // Every check below needs the problem in more than a fifth of the last frames: one bad frame
+  // (a moment of a lost or a ghost pose, a flicker of light) must not make the agent speak.
+  if (percentage(samples, (sample) => sample.poseCount === 1) < POSE_RULES.minValidPct) {
+    const several = samples.filter((sample) => sample.poseCount > 1).length
+    const nobody = samples.filter((sample) => sample.poseCount === 0).length
+    hints.push(phrase(several > nobody ? 'position.one_person' : 'position.stand_in_front'))
     return { hints, ready: false }
   }
 
   for (const bodyPart of bodyParts) {
-    if (
-      percentage(samples, (sample) => {
-        return sample.landmarks !== null && bodyPartVisible(sample.landmarks, bodyPart)
-      }) < POSE_RULES.minValidPct
-    ) {
-      hints.push(visiblePartHint(bodyPart))
+    if (partVisiblePct(samples, bodyPart) < POSE_RULES.minValidPct) {
+      const hint = hiddenPartHint(samples, bodyPart)
+      if (!hints.includes(hint)) hints.push(hint)
     }
   }
 
@@ -126,7 +246,7 @@ export function assessPoseWindow(
       POSE_RULES.minValidPct &&
     hints.length === 0
   ) {
-    hints.push('Покажіть потрібні частини тіла одночасно.')
+    hints.push(phrase('position.parts_together'))
   }
 
   const clearFramePct = percentage(
@@ -134,7 +254,8 @@ export function assessPoseWindow(
     (sample) => sample.landmarks !== null && frameIsClear(sample.landmarks),
   )
   if (clearFramePct < POSE_RULES.minValidPct) {
-    hints.push('Станьте в кадр повністю, залишивши трохи місця навколо себе.')
+    const latest = [...samples].reverse().find((sample) => sample.landmarks !== null)
+    hints.push((latest?.landmarks && stepHint(latest.landmarks)) ?? phrase('position.whole_frame'))
   }
 
   const heights = samples
@@ -142,24 +263,25 @@ export function assessPoseWindow(
     .filter((height): height is number => height !== null)
   const averageHeight =
     heights.length > 0 ? heights.reduce((total, height) => total + height, 0) / heights.length : 0
-  if (
-    samples.some((sample) => {
-      if (!sample.landmarks) return true
-      const height = bodyHeight(sample.landmarks)
-      return (
-        height === null || height < POSE_RULES.minBodyHeight || height > POSE_RULES.maxBodyHeight
-      )
-    })
-  ) {
+  const goodDistancePct = percentage(samples, (sample) => {
+    const height = sample.landmarks ? bodyHeight(sample.landmarks) : null
+    return (
+      height !== null && height >= POSE_RULES.minBodyHeight && height <= POSE_RULES.maxBodyHeight
+    )
+  })
+  if (goodDistancePct < POSE_RULES.minValidPct) {
     hints.push(
       averageHeight < POSE_RULES.minBodyHeight
-        ? 'Підійдіть трохи ближче до камери.'
-        : 'Відійдіть трохи далі від камери.',
+        ? phrase('position.closer')
+        : phrase('position.farther'),
     )
   }
 
-  if (samples.some((sample) => sample.meanLuminance < POSE_RULES.minMeanLuminance)) {
-    hints.push('Світла замало — увімкніть світло перед собою.')
+  if (
+    percentage(samples, (sample) => sample.meanLuminance >= POSE_RULES.minMeanLuminance) <
+    POSE_RULES.minValidPct
+  ) {
+    hints.push(phrase('position.light'))
   }
 
   return {
