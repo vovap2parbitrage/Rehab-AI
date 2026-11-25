@@ -197,6 +197,16 @@
   margin: 0;
 }
 
+.video-recorder__assistant-status {
+  display: grid;
+  gap: 6px;
+}
+
+.video-recorder__reps {
+  color: var(--text);
+  font-size: 1rem;
+}
+
 .video-recorder__assistant p,
 .video-recorder__assistant ul {
   margin: 0;
@@ -206,18 +216,6 @@
   display: grid;
   gap: 4px;
   padding-left: 20px;
-}
-
-.video-recorder__auto-start {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  color: var(--text-soft);
-  font-size: 0.9rem;
-}
-
-.video-recorder__auto-start input {
-  margin-top: 3px;
 }
 
 .video-recorder__actions {

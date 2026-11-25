@@ -50,6 +50,10 @@ class ExerciseVersion(Base):
         nullable=False,
     )
 
+    # The reference's joint angles for the live recording assistant: worked out from the
+    # reference video the first time a patient needs them, then kept with the version.
+    live_reference: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

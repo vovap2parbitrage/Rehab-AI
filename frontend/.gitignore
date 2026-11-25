@@ -31,3 +31,6 @@ coverage
 
 # TypeScript
 *.tsbuildinfo
+
+# Python env for scripts/generate_voice.py
+.venv-voice

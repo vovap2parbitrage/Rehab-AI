@@ -25,11 +25,12 @@ export const BODY_PART_JOINTS = {
   torso: [TORSO_TILT],
 } as const satisfies Record<string, readonly string[]>
 
+// As said in "Покажіть камері …".
 export const BODY_PART_LABELS: Record<keyof typeof BODY_PART_JOINTS, string> = {
-  left_arm: 'ліва рука',
-  right_arm: 'права рука',
-  left_leg: 'ліва нога',
-  right_leg: 'права нога',
+  left_arm: 'ліву руку',
+  right_arm: 'праву руку',
+  left_leg: 'ліву ногу',
+  right_leg: 'праву ногу',
   torso: 'тулуб',
 }
 
@@ -44,6 +45,12 @@ export const POSE_RULES = {
   minMeanLuminance: 45,
   maxInferenceMs: 100,
   slowInferenceFrames: 5,
+  // Pace of the checks. The CPU is slower, so it looks at a frame less often.
+  cpuSampleIntervalMs: 200,
+  maxSampleIntervalMs: 500,
+  // A check this slow freezes the page, so the assistant stops instead of slowing the recording.
+  hopelessInferenceMs: 400,
+  hopelessInferenceFrames: 3,
 } as const
 
 export const BODY_FRAME_LANDMARKS = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28] as const

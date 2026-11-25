@@ -43,6 +43,29 @@ def _angle_table(seq: PoseSequence, joints: list[str]) -> np.ndarray:
     return np.column_stack([smooth(raw[:, c]) for c in range(raw.shape[1])])
 
 
+LIVE_REFERENCE_FPS = 10.0
+
+
+def live_reference(reference_path: str, body_parts: list[str]) -> dict | None:
+    """The reference's smoothed joint angles, thinned to ~10 fps for the live assistant.
+
+    Uses the very same pose extraction, angles and smoothing as `compare`, so the browser
+    judges a repetition against the same numbers the final analysis does. None when the
+    selected body parts are not clearly visible in the reference video.
+    """
+    joints = expand_body_parts(body_parts)
+    seq = extract_pose(reference_path)
+    if _quality_pct(seq, joints) < MIN_VALID_PCT:
+        return None
+    table = _angle_table(seq, joints)
+    step = max(1, round(seq.fps / LIVE_REFERENCE_FPS))
+    return {
+        "joints": joints,
+        "fps": round(seq.fps / step, 3),
+        "angles": [[round(float(v), 1) for v in row] for row in table[::step]],
+    }
+
+
 def compare(
     reference_path: str,
     patient_path: str,

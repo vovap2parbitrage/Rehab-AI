@@ -14,7 +14,8 @@ from app.schemas.assignment import (
     AssignmentUpdate,
     PatientAssignmentRead,
 )
-from app.services import assignment
+from app.schemas.live_reference import LiveReferenceRead
+from app.services import assignment, live_reference
 
 router = APIRouter()
 
@@ -26,6 +27,16 @@ def list_patient_assignments(
     db: Session = Depends(get_db),
 ) -> list[PatientAssignmentRead]:
     return assignment.list_patient_assignments(db, user)
+
+
+@router.get("/{assignment_id}/live-reference", response_model=LiveReferenceRead)
+def get_live_reference(
+    assignment_id: UUID,
+    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> LiveReferenceRead:
+    return live_reference.get_live_reference(db, assignment_id, user)
 
 
 @router.get("/", response_model=list[AssignmentRead])

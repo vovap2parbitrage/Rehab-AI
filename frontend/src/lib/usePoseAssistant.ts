@@ -1,20 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision'
-import { assessPoseWindow, type PoseAssessment, type PoseSample } from './poseHints'
+import {
+  assessPoseWindow,
+  pickPatientPose,
+  type PoseAssessment,
+  type PoseLandmark,
+  type PoseSample,
+} from './poseHints'
 import { POSE_RULES } from './poseMapping'
 
 const MEDIAPIPE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm'
-const POSE_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+// The full model finds a person far more reliably in poor light; the GPU runs it easily. The
+// CPU gets the lite one, which is about three times faster.
+const POSE_MODEL_URLS = {
+  GPU: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+  CPU: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+} as const
 
 export type PoseAssistantStatus = 'idle' | 'loading' | 'active' | 'unavailable'
+/** What the model really runs on: the GPU, or the CPU (chosen, or after the GPU failed). */
+export type PoseDelegate = 'GPU' | 'CPU'
+
+/** One frame the model has looked at, for the live repetition counter. */
+export interface PoseFrame {
+  poseCount: number
+  landmarks: readonly PoseLandmark[] | null
+  timeMs: number
+  width: number
+  height: number
+}
 
 export interface PoseAssistantState extends PoseAssessment {
   status: PoseAssistantStatus
+  delegate: PoseDelegate | null
 }
 
-const EMPTY_STATE: PoseAssistantState = { status: 'idle', hints: [], ready: false }
-const LOADING_STATE: PoseAssistantState = { status: 'loading', hints: [], ready: false }
+const EMPTY_STATE: PoseAssistantState = { status: 'idle', hints: [], ready: false, delegate: null }
+const LOADING_STATE: PoseAssistantState = {
+  status: 'loading',
+  hints: [],
+  ready: false,
+  delegate: null,
+}
 
 interface StoredPoseAssistant {
   stream: MediaStream | null
@@ -27,6 +54,8 @@ interface UsePoseAssistantOptions {
   videoReady: boolean
   active: boolean
   bodyParts: readonly string[]
+  /** Called with every frame that was checked. */
+  onFrame?: (frame: PoseFrame) => void
 }
 
 function meanLuminance(
@@ -45,11 +74,7 @@ function meanLuminance(
 }
 
 function toPoseSample(result: PoseLandmarkerResult, luminance: number): PoseSample {
-  return {
-    poseCount: result.landmarks.length,
-    landmarks: result.landmarks[0] ?? null,
-    meanLuminance: luminance,
-  }
+  return { ...pickPatientPose(result.landmarks), meanLuminance: luminance }
 }
 
 export function usePoseAssistant({
@@ -58,11 +83,20 @@ export function usePoseAssistant({
   videoReady,
   active,
   bodyParts,
+  onFrame,
 }: UsePoseAssistantOptions): PoseAssistantState {
   const [stored, setStored] = useState<StoredPoseAssistant>({
     stream: null,
     value: EMPTY_STATE,
   })
+  // A new array with the same parts must not restart the model, so compare by content.
+  const bodyPartsKey = bodyParts.join(',')
+  const parts = useMemo(() => (bodyPartsKey ? bodyPartsKey.split(',') : []), [bodyPartsKey])
+  // Read through a ref so a new callback does not restart the model.
+  const onFrameRef = useRef(onFrame)
+  useEffect(() => {
+    onFrameRef.current = onFrame
+  }, [onFrame])
 
   useEffect(() => {
     if (!active || !stream || !video) {
@@ -73,11 +107,16 @@ export function usePoseAssistant({
     let disposed = false
     let stopped = false
     let detector: PoseLandmarker | null = null
+    let create: ((kind: PoseDelegate) => Promise<PoseLandmarker>) | null = null
+    let delegate: PoseDelegate | null = null
+    let switching = false
     let animationFrame = 0
     let failureTimer = 0
     let lastSampleAt = -Infinity
     let lastTimestamp = 0
+    let interval: number = POSE_RULES.sampleIntervalMs
     let slowFrames = 0
+    let hopelessFrames = 0
     const samples: PoseSample[] = []
     const canvas = document.createElement('canvas')
     canvas.width = 32
@@ -92,8 +131,40 @@ export function usePoseAssistant({
       detector = null
       setStored({
         stream,
-        value: { status: 'unavailable', hints: [message], ready: false },
+        value: { status: 'unavailable', hints: [message], ready: false, delegate: null },
       })
+    }
+
+    const adopt = (next: PoseLandmarker, kind: PoseDelegate) => {
+      detector = next
+      delegate = kind
+      interval = kind === 'CPU' ? POSE_RULES.cpuSampleIntervalMs : POSE_RULES.sampleIntervalMs
+      slowFrames = 0
+      hopelessFrames = 0
+      samples.length = 0
+    }
+
+    // The GPU can pass the start-up and still fail on the first frames (a driver or a browser
+    // quirk): the assistant then carries on with the CPU instead of giving up.
+    const fallbackToCpu = async (reason: unknown) => {
+      console.error('Pose detection on the GPU failed, switching to the CPU.', reason)
+      switching = true
+      detector?.close()
+      detector = null
+      try {
+        if (!create) throw reason
+        const next = await create('CPU')
+        if (disposed) {
+          next.close()
+          return
+        }
+        adopt(next, 'CPU')
+        switching = false
+        animationFrame = window.requestAnimationFrame(detectFrames)
+      } catch (cpuReason: unknown) {
+        switching = false
+        fail('Підказки тимчасово недоступні. Запис можна почати вручну.', cpuReason)
+      }
     }
 
     if (!context) {
@@ -108,11 +179,11 @@ export function usePoseAssistant({
     }
 
     const detectFrames = () => {
-      if (disposed || stopped || !detector) return
+      if (disposed || stopped || switching || !detector) return
       const now = performance.now()
       if (
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        now - lastSampleAt >= POSE_RULES.sampleIntervalMs
+        now - lastSampleAt >= interval
       ) {
         lastSampleAt = now
         lastTimestamp = Math.max(Math.round(now), lastTimestamp + 1)
@@ -120,23 +191,42 @@ export function usePoseAssistant({
         try {
           const result = detector.detectForVideo(video, lastTimestamp)
           const inferenceMs = performance.now() - startedAt
-          slowFrames = inferenceMs > POSE_RULES.maxInferenceMs ? slowFrames + 1 : 0
-          if (slowFrames >= POSE_RULES.slowInferenceFrames) {
+          hopelessFrames = inferenceMs > POSE_RULES.hopelessInferenceMs ? hopelessFrames + 1 : 0
+          if (hopelessFrames >= POSE_RULES.hopelessInferenceFrames) {
             fail('Пристрій не встигає перевіряти кадри. Запис можна почати вручну.')
             return
           }
+          // A slow device is checked less often rather than switched off.
+          slowFrames = inferenceMs > POSE_RULES.maxInferenceMs ? slowFrames + 1 : 0
+          if (slowFrames >= POSE_RULES.slowInferenceFrames) {
+            interval = Math.min(interval * 2, POSE_RULES.maxSampleIntervalMs)
+            slowFrames = 0
+          }
           const luminance = meanLuminance(video, context, canvas.width, canvas.height)
-          samples.push(toPoseSample(result, luminance))
+          const sample = toPoseSample(result, luminance)
+          samples.push(sample)
+          onFrameRef.current?.({
+            poseCount: sample.poseCount,
+            landmarks: sample.landmarks,
+            timeMs: lastTimestamp,
+            width: video.videoWidth,
+            height: video.videoHeight,
+          })
           if (samples.length > POSE_RULES.historyFrames) samples.shift()
           setStored({
             stream,
             value: {
               status: 'active',
-              ...assessPoseWindow(samples, bodyParts),
+              delegate,
+              ...assessPoseWindow(samples, parts),
             },
           })
         } catch (reason: unknown) {
-          fail('Підказки тимчасово недоступні. Запис можна почати вручну.', reason)
+          if (delegate === 'GPU') {
+            void fallbackToCpu(reason)
+          } else {
+            fail('Підказки тимчасово недоступні. Запис можна почати вручну.', reason)
+          }
           return
         }
       }
@@ -149,21 +239,32 @@ export function usePoseAssistant({
           await import('@mediapipe/tasks-vision')
         const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL)
         if (disposed) return
-        detector = await PoseLandmarkerTask.createFromOptions(fileset, {
-          baseOptions: {
-            modelAssetPath: POSE_MODEL_URL,
-            delegate: 'GPU',
-          },
-          runningMode: 'VIDEO',
-          numPoses: 2,
-          outputSegmentationMasks: false,
-        })
-        if (disposed) {
-          detector.close()
-          detector = null
-          return
+        create = (kind) =>
+          PoseLandmarkerTask.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: POSE_MODEL_URLS[kind], delegate: kind },
+            runningMode: 'VIDEO',
+            numPoses: 2,
+            outputSegmentationMasks: false,
+          })
+        // The GPU is much faster; a device without a usable one gets the CPU.
+        const order: PoseDelegate[] = ['GPU', 'CPU']
+        let lastReason: unknown = null
+        for (const kind of order) {
+          try {
+            const next = await create(kind)
+            if (disposed) {
+              next.close()
+              return
+            }
+            adopt(next, kind)
+            animationFrame = window.requestAnimationFrame(detectFrames)
+            return
+          } catch (reason: unknown) {
+            if (disposed) return
+            lastReason = reason
+          }
         }
-        animationFrame = window.requestAnimationFrame(detectFrames)
+        throw lastReason
       } catch (reason: unknown) {
         fail('Підказки не вдалося завантажити. Запис можна почати вручну.', reason)
       }
@@ -177,7 +278,7 @@ export function usePoseAssistant({
       detector?.close()
       detector = null
     }
-  }, [active, bodyParts, stream, video, videoReady])
+  }, [active, parts, stream, video, videoReady])
 
   if (!active || !stream || !video) return EMPTY_STATE
   if (!videoReady || stored.stream !== stream) return LOADING_STATE
