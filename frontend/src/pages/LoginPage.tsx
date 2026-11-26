@@ -1,36 +1,35 @@
-import { useState } from 'react'
-import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
-import { useAuthRedirectBusy } from '../auth/useAuthRedirectBusy'
-import { describeAuthActionError, describeAuthErrorCode } from '../auth/errors'
+import { describeAuthError } from '../auth/messages'
 import { readReturnPath } from '../auth/returnPath'
 import { AuthLayout } from '../components/AuthLayout'
 import { ErrorMessage } from '../components/ErrorMessage'
-import { LockIcon, ShieldCheckIcon } from '../components/Icons'
+import { LockIcon } from '../components/Icons'
 
 export function LoginPage() {
-  const { initialized, authenticated, initError, login } = useAuth()
+  const { authenticated, initError, login } = useAuth()
   const location = useLocation()
-  const [searchParams] = useSearchParams()
-  const [busy, setBusy] = useAuthRedirectBusy()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const returnPath = readReturnPath(location.state)
-  const oauthCode = searchParams.get('error')
-  const oauthDescription = oauthCode ? describeAuthErrorCode(oauthCode) : null
 
   if (authenticated) {
     return <Navigate to={returnPath} replace />
   }
 
-  const handleLogin = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
     setBusy(true)
     setActionError(null)
 
     try {
-      await login(returnPath)
+      await login(email.trim(), password)
     } catch (error) {
-      setActionError(describeAuthActionError(error))
+      setActionError(describeAuthError(error, 'login'))
       setBusy(false)
     }
   }
@@ -42,8 +41,11 @@ export function LoginPage() {
       description="Увійдіть, щоб відкрити свій профіль, план реабілітації та результати занять."
       icon={<LockIcon />}
       asideTitle="Один захищений вхід до всіх даних"
-      asideText="Захищений сервіс перевіряє ваш пароль і керує сесією."
-      asidePoints={['Пароль вводиться лише на захищеній сторінці входу']}
+      asideText="Пароль зберігається лише у вигляді хешу, а сесія захищена короткоживучими токенами."
+      asidePoints={[
+        'Сесія завершується, коли ви виходите',
+        'Після кількох невдалих спроб вхід тимчасово блокується',
+      ]}
       footer={
         <>
           Ще не маєте облікового запису?{' '}
@@ -53,45 +55,55 @@ export function LoginPage() {
         </>
       }
     >
-      {oauthDescription && (
-        <ErrorMessage
-          title={oauthDescription.title}
-          message={oauthDescription.message}
-          code={oauthCode ?? undefined}
-        />
-      )}
-
       {initError && (
         <ErrorMessage
-          title="Сервіс авторизації недоступний"
+          title="Сервер недоступний"
           message={initError}
           onRetry={() => window.location.reload()}
           retryLabel="Перевірити знову"
         />
       )}
 
-      {actionError && <ErrorMessage title="Не вдалося розпочати вхід" message={actionError} />}
+      {actionError && <ErrorMessage title="Не вдалося увійти" message={actionError} />}
 
-      <button
-        type="button"
-        className="button button--primary button--lg button--block"
-        onClick={handleLogin}
-        disabled={busy || Boolean(initError)}
-      >
-        {busy ? (
-          <span className="spinner spinner--sm" aria-hidden="true" />
-        ) : (
-          <LockIcon aria-hidden="true" />
-        )}
-        {busy ? 'Переходимо до захищеного входу…' : 'Увійти'}
-      </button>
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <label className="form-field">
+          <span>Email</span>
+          <input
+            type="email"
+            name="email"
+            autoComplete="username"
+            value={email}
+            onChange={(event) => setEmail(event.currentTarget.value)}
+            required
+          />
+        </label>
 
-      <p className="auth-card__fineprint">
-        <ShieldCheckIcon aria-hidden="true" />
-        {initialized
-          ? 'Ви будете перенаправлені на захищену сторінку входу. Після входу повернетеся до профілю.'
-          : 'Перевіряємо наявну сесію…'}
-      </p>
+        <label className="form-field">
+          <span>Пароль</span>
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.currentTarget.value)}
+            required
+          />
+        </label>
+
+        <button
+          type="submit"
+          className="button button--primary button--lg button--block"
+          disabled={busy || Boolean(initError)}
+        >
+          {busy ? (
+            <span className="spinner spinner--sm" aria-hidden="true" />
+          ) : (
+            <LockIcon aria-hidden="true" />
+          )}
+          {busy ? 'Входимо…' : 'Увійти'}
+        </button>
+      </form>
     </AuthLayout>
   )
 }

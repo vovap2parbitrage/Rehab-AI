@@ -5,6 +5,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.roles import Role
+from app.core.statuses import AssignmentStatus
+from app.core.timezones import app_today
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.models.patient import Patient
@@ -16,22 +18,20 @@ from app.schemas.assignment import (
     AssignmentUpdate,
     PatientAssignmentRead,
 )
-from app.core.statuses import AssignmentStatus
-from app.core.timezones import app_today
 from app.services.exercise import current_version
-from app.services.schedule import (
-    assignments_done_on,
-    last_day,
-    next_session_day,
-    is_session_day,
-    planned_session_count,
-)
 from app.services.patient_access import (
     get_patient_for_therapist,
     get_patient_for_user,
     get_patient_profile,
     require_not_archived,
     treated_by,
+)
+from app.services.schedule import (
+    assignments_done_on,
+    is_session_day,
+    last_day,
+    next_session_day,
+    planned_session_count,
 )
 
 
@@ -105,8 +105,6 @@ def list_assignments(
     if patient_id is not None:
         get_patient_for_user(patient_id, user, db)
         assignments = db.query(Assignment).filter(Assignment.patient_id == patient_id).all()
-    elif user.role == Role.ADMIN.value:
-        assignments = db.query(Assignment).all()
     elif user.role == Role.THERAPIST.value:
         assignments = (
             db.query(Assignment)
@@ -148,11 +146,7 @@ def create_assignment(
     payload: AssignmentCreate,
     user: User,
 ) -> AssignmentRead:
-    if user.role == Role.ADMIN.value:
-        if db.get(Patient, payload.patient_id) is None:
-            raise HTTPException(status_code=404, detail="Patient not found")
-    else:
-        get_patient_for_therapist(payload.patient_id, user, db)
+    get_patient_for_therapist(payload.patient_id, user, db)
     require_not_archived(db, payload.patient_id, user)
     exercise = db.get(Exercise, payload.exercise_id)
     if exercise is None:
@@ -186,7 +180,7 @@ def cancel_assignment(db: Session, assignment_id: UUID, user: User) -> None:
 
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    if user.role != Role.ADMIN.value and assignment.therapist_id != user.id:
+    if assignment.therapist_id != user.id:
         raise HTTPException(status_code=403, detail="You can cancel only your assignments")
     if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status_code=403, detail="You can cancel only active assignments")
@@ -203,7 +197,7 @@ def update_assignment(
 
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    if user.role != Role.ADMIN.value and assignment.therapist_id != user.id:
+    if assignment.therapist_id != user.id:
         raise HTTPException(status_code=403, detail="You can edit only your assignments")
     if assignment.status != AssignmentStatus.ACTIVE.value:
         raise HTTPException(status_code=409, detail="Only active assignments can be edited")

@@ -50,18 +50,18 @@ import {
   restorePatient,
 } from '../api/therapist'
 import { ApiError, apiRequest } from '../api/client'
-import { refreshAccessToken } from '../auth/keycloak'
+import { refreshSession } from '../auth/session'
 import { getMyPlan, listPlans, purchasePlan, type Plan, type TherapistPlan } from '../api/plans'
 import { PricingPage } from '../pages/PricingPage'
 import { getComparison, startComparison, type ComparisonResult } from '../api/comparisons'
 import { getSessionVideoUrl, listPatientSessions } from '../api/sessions'
 import { getExerciseVideoUrl, uploadVideo } from '../api/uploads'
-import { chooseTherapistRole, fetchCurrentUser, type UserProfile } from '../api/auth'
+import { changePassword, fetchCurrentUser, type AuthSession, type UserProfile } from '../api/auth'
 import { ProfilePage } from '../pages/profile/ProfilePage'
 import { TherapistPatientPage } from '../pages/therapist/TherapistPatientPage'
 import { TherapistPatientsPage } from '../pages/therapist/TherapistPatientsPage'
 import { TherapistWorkspaceLayout } from '../pages/therapist/TherapistWorkspaceLayout'
-import { MOCK_ASSIGNMENT, MOCK_EXERCISE, MOCK_PATIENT } from '../data/therapistMocks'
+import { MOCK_ASSIGNMENT, MOCK_EXERCISE, MOCK_PATIENT } from './therapistMocks'
 
 vi.mock('../api/patient', () => ({
   completePatientAssignment: vi.fn(),
@@ -132,21 +132,18 @@ vi.mock('../api/helpRequests', () => ({
 vi.mock('../api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth')>()),
   fetchCurrentUser: vi.fn(),
-  chooseTherapistRole: vi.fn(),
+  changePassword: vi.fn(),
 }))
 
-vi.mock('../auth/keycloak', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../auth/keycloak')>()),
-  getKeycloak: () => ({ authenticated: true, tokenParsed: { sub: 'patient-1' } }),
-  initKeycloak: async () => true,
-  refreshAccessToken: vi.fn(),
+vi.mock('../auth/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../auth/session')>()),
+  refreshSession: vi.fn(),
 }))
 
 function createAuth(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     initialized: true,
     authenticated: false,
-    tokenParsed: { preferred_username: 'olena' },
     initError: null,
     role: null,
     user: null,
@@ -318,9 +315,14 @@ const currentPatient: UserProfile = {
   id: 'patient-1',
   email: 'olena@example.com',
   role: 'patient',
-  pending_role: null,
-  keycloak_sub: null,
   is_active: true,
+  first_name: 'Олена',
+  last_name: 'Коваль',
+  date_of_birth: null,
+}
+
+function sessionFor(user: UserProfile): AuthSession {
+  return { access_token: 'access-token', token_type: 'bearer', expires_in: 900, user }
 }
 
 function page<T>(items: T[], total = items.length, offset = 0): Page<T> {
@@ -348,77 +350,89 @@ beforeEach(() => {
   vi.mocked(startComparison).mockResolvedValue({ task_id: 'task-1' })
   vi.mocked(getComparison).mockResolvedValue(doneResult)
   vi.mocked(fetchCurrentUser).mockResolvedValue(currentPatient)
+  vi.mocked(refreshSession).mockResolvedValue(sessionFor(currentPatient))
 })
 
 afterEach(() => {
   vi.clearAllMocks()
 })
 
+async function fillLogin(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText('Email'), 'olena@example.com')
+  await user.type(screen.getByLabelText('Пароль'), 'correct-horse-battery')
+}
+
 describe('Login page', () => {
-  it('starts the protected login flow and links to registration', async () => {
+  it('signs in with the typed email and password and links to registration', async () => {
     const user = userEvent.setup()
     const auth = createAuth()
     renderWithAuth(<LoginPage />, auth)
 
+    await fillLogin(user)
     await user.click(screen.getByRole('button', { name: 'Увійти' }))
 
-    expect(auth.login).toHaveBeenCalledWith('/profile')
+    expect(auth.login).toHaveBeenCalledWith('olena@example.com', 'correct-horse-battery')
     expect(screen.getByRole('link', { name: 'Зареєструватися' })).toHaveAttribute(
       'href',
       '/register',
     )
   })
 
+  it('asks the browser to manage the password', () => {
+    renderWithAuth(<LoginPage />)
+
+    expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'username')
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute('autocomplete', 'current-password')
+  })
+
   it('shows a busy state while login is in progress', async () => {
     const user = userEvent.setup()
-    let finishLogin!: () => void
+    const auth = createAuth({ login: vi.fn(() => new Promise<void>(() => undefined)) })
+    renderWithAuth(<LoginPage />, auth)
+
+    await fillLogin(user)
+    await user.click(screen.getByRole('button', { name: 'Увійти' }))
+
+    expect(screen.getByRole('button', { name: 'Входимо…' })).toBeDisabled()
+  })
+
+  it('says the email or password is wrong without telling which', async () => {
+    const user = userEvent.setup()
     const auth = createAuth({
-      login: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            finishLogin = resolve
-          }),
-      ),
+      login: vi.fn().mockRejectedValue(new ApiError('Сесія завершилася.', 'unauthorized', 401)),
     })
     renderWithAuth(<LoginPage />, auth)
 
+    await fillLogin(user)
     await user.click(screen.getByRole('button', { name: 'Увійти' }))
-    expect(screen.getByRole('button', { name: 'Переходимо до захищеного входу…' })).toBeDisabled()
 
-    await act(async () => finishLogin())
-    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })))
-    expect(screen.getByRole('button', { name: 'Переходимо до захищеного входу…' })).toBeDisabled()
-
-    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Невірний email або пароль.')
     expect(screen.getByRole('button', { name: 'Увійти' })).toBeEnabled()
   })
 
-  it('shows a recoverable error when Keycloak rejects login', async () => {
+  it('shows the wait message when too many attempts were made', async () => {
     const user = userEvent.setup()
-    const auth = createAuth({ login: vi.fn().mockRejectedValue(new Error('offline')) })
+    const auth = createAuth({
+      login: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError('Забагато запитів. Спробуйте трохи пізніше.', 'unknown', 429),
+        ),
+    })
     renderWithAuth(<LoginPage />, auth)
 
+    await fillLogin(user)
     await user.click(screen.getByRole('button', { name: 'Увійти' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Не вдалося відкрити сторінку входу.',
-    )
-    expect(screen.getByRole('button', { name: 'Увійти' })).toBeEnabled()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Забагато запитів')
   })
 
-  it('explains an OAuth access-denied error', () => {
-    renderWithAuth(<LoginPage />, createAuth(), ['/login?error=access_denied'])
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Вхід скасовано')
-    expect(screen.getByRole('alert')).toHaveTextContent('Доступ до облікового запису не надано')
-    expect(screen.getByText('Код помилки:')).toBeInTheDocument()
-  })
-
-  it('disables login and offers retry when authorization initialization failed', () => {
-    renderWithAuth(<LoginPage />, createAuth({ initError: 'Keycloak тимчасово недоступний' }))
+  it('disables login and offers retry when the session could not be restored', () => {
+    renderWithAuth(<LoginPage />, createAuth({ initError: 'Сервер тимчасово недоступний' }))
 
     expect(screen.getByRole('button', { name: 'Увійти' })).toBeDisabled()
-    expect(screen.getByRole('alert')).toHaveTextContent('Keycloak тимчасово недоступний')
+    expect(screen.getByRole('alert')).toHaveTextContent('Сервер тимчасово недоступний')
     expect(screen.getByRole('button', { name: 'Перевірити знову' })).toBeEnabled()
   })
 
@@ -449,6 +463,13 @@ describe('Login page', () => {
   })
 })
 
+async function fillRegistration(user: ReturnType<typeof userEvent.setup>, password: string) {
+  await user.type(screen.getByLabelText('Ім’я'), ' Олена ')
+  await user.type(screen.getByLabelText('Прізвище'), 'Коваль')
+  await user.type(screen.getByLabelText('Email'), 'olena@example.com')
+  await user.type(screen.getByLabelText(/^Пароль/), password)
+}
+
 describe('Register page', () => {
   it('defaults to patient registration', () => {
     renderWithAuth(<RegisterPage />)
@@ -457,52 +478,55 @@ describe('Register page', () => {
     expect(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' })).toBeInTheDocument()
   })
 
-  it('stores the selected therapist role before starting registration', async () => {
+  it('sends the typed details and the chosen role in one request', async () => {
     const user = userEvent.setup()
     const auth = createAuth()
-    renderWithAuth(<RegisterPage />, auth, [{ pathname: '/register', state: { from: '/patient' } }])
+    renderWithAuth(<RegisterPage />, auth)
 
     await user.click(screen.getByRole('radio', { name: /Лікар/ }))
     expect(screen.getByText(/Доступ лікаря активний одразу/)).toBeInTheDocument()
-    expect(screen.queryByText(/підтвердження/)).not.toBeInTheDocument()
+    await fillRegistration(user, 'correct-horse-battery')
     await user.click(screen.getByRole('button', { name: 'Зареєструватися як лікар' }))
 
-    expect(window.sessionStorage.getItem('airehab.registration-role')).toBe('therapist')
-    expect(auth.register).toHaveBeenCalledWith('/patient')
-
-    act(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
-    expect(screen.getByRole('button', { name: 'Зареєструватися як лікар' })).toBeEnabled()
-    expect(window.sessionStorage.getItem('airehab.registration-role')).toBeNull()
+    expect(auth.register).toHaveBeenCalledWith({
+      email: 'olena@example.com',
+      password: 'correct-horse-battery',
+      first_name: 'Олена',
+      last_name: 'Коваль',
+      role: 'therapist',
+    })
   })
 
-  it('removes the saved role and shows an error when registration cannot start', async () => {
+  it('does not send a password that is too short', async () => {
     const user = userEvent.setup()
-    const auth = createAuth({ register: vi.fn().mockRejectedValue(new Error('offline')) })
+    const auth = createAuth()
     renderWithAuth(<RegisterPage />, auth)
 
+    await fillRegistration(user, 'short')
+    fireEvent.submit(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('щонайменше 12 символів')
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('tells the visitor when the email is already registered', async () => {
+    const user = userEvent.setup()
+    const auth = createAuth({
+      register: vi.fn().mockRejectedValue(new ApiError('Конфлікт.', 'conflict', 409)),
+    })
+    renderWithAuth(<RegisterPage />, auth)
+
+    await fillRegistration(user, 'correct-horse-battery')
     await user.click(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Не вдалося відкрити сторінку входу.',
-    )
-    expect(window.sessionStorage.getItem('airehab.registration-role')).toBeNull()
+    expect(await screen.findByRole('alert')).toHaveTextContent('уже зареєстрований')
     expect(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' })).toBeEnabled()
   })
 
-  it('shows OAuth errors returned from registration', () => {
-    renderWithAuth(<RegisterPage />, createAuth(), ['/register?error=temporarily_unavailable'])
+  it('asks the browser to offer a new password', () => {
+    renderWithAuth(<RegisterPage />)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Сервіс авторизації недоступний')
-  })
-
-  it('clears the saved role when the user returns from Keycloak without registering', () => {
-    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    renderWithAuth(<RegisterPage />, createAuth(), ['/register?error=access_denied'])
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Реєстрацію скасовано')
-    expect(screen.getByRole('alert')).toHaveTextContent('Код помилки: access_denied')
-    expect(screen.getByRole('button', { name: 'Зареєструватися як пацієнт' })).toBeEnabled()
-    expect(window.sessionStorage.getItem('airehab.registration-role')).toBeNull()
+    expect(screen.getByLabelText(/^Пароль/)).toHaveAttribute('autocomplete', 'new-password')
   })
 
   it('disables registration after an initialization failure', () => {
@@ -553,42 +577,6 @@ describe('Patient access and cabinet pages', () => {
     expect(await screen.findByTestId('location')).toHaveTextContent('/profile')
   })
 
-  it('shows a role error and restores the menu and protected route on retry', async () => {
-    const user = userEvent.setup()
-    vi.mocked(fetchCurrentUser)
-      .mockRejectedValueOnce(new ApiError('Сервер недоступний.', 'unavailable', 503))
-      .mockRejectedValueOnce(new Error('API unavailable'))
-
-    render(
-      <AuthProvider>
-        <MemoryRouter>
-          <TherapistQuestionsProvider>
-            <Header />
-            <RoleRoute allowedRoles={['patient']}>
-              <p>Кабінет пацієнта</p>
-            </RoleRoute>
-          </TherapistQuestionsProvider>
-        </MemoryRouter>
-      </AuthProvider>,
-    )
-
-    expect(
-      await screen.findByRole('heading', { name: 'Не вдалося перевірити доступ' }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Не вдалося завантажити дані облікового запису.')).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Не вдалося завантажити меню.')
-    expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
-
-    await user.click(
-      within(screen.getByRole('banner')).getByRole('button', { name: 'Спробувати ще раз' }),
-    )
-
-    expect(await screen.findByRole('link', { name: 'Мій цикл вправ' })).toBeInTheDocument()
-    expect(screen.getByText('Кабінет пацієнта')).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(fetchCurrentUser).toHaveBeenCalledTimes(3)
-  })
-
   it('shows patient name, pending invitation, and exercise totals on the dashboard', async () => {
     vi.mocked(listPatientInvitations).mockResolvedValue([pendingInvitation, acceptedInvitation])
     vi.mocked(listPatientAssignments).mockResolvedValue([
@@ -600,7 +588,7 @@ describe('Patient access and cabinet pages', () => {
       <PatientDashboardPage />,
       createAuth({
         authenticated: true,
-        tokenParsed: { given_name: 'Олена', family_name: 'Коваль' },
+        user: { ...currentPatient, first_name: 'Олена', last_name: 'Коваль' },
       }),
     )
 
@@ -1726,7 +1714,7 @@ describe('Patient limit', () => {
 })
 
 describe('Shared account data', () => {
-  it('loads the profile once and updates navigation when the profile is refreshed', async () => {
+  it('restores the session once and updates navigation when the profile is refreshed', async () => {
     const user = userEvent.setup()
     render(
       <AuthProvider>
@@ -1741,7 +1729,8 @@ describe('Shared account data', () => {
 
     expect(await screen.findByText(currentPatient.email)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Мій цикл вправ' })).toBeInTheDocument()
-    expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+    expect(fetchCurrentUser).not.toHaveBeenCalled()
 
     vi.mocked(fetchCurrentUser).mockResolvedValueOnce({
       ...currentPatient,
@@ -1753,57 +1742,112 @@ describe('Shared account data', () => {
     expect(await screen.findByText('doctor@example.com')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Пацієнти' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Мій цикл вправ' })).not.toBeInTheDocument()
-    expect(fetchCurrentUser).toHaveBeenCalledTimes(2)
-  })
-
-  it('grants the therapist role chosen at registration at once, without approval', async () => {
-    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    vi.mocked(chooseTherapistRole).mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
-    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
-    render(
-      <AuthProvider>
-        <ProfilePage />
-      </AuthProvider>,
-    )
-
-    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
-    expect(chooseTherapistRole).toHaveBeenCalledTimes(1)
-    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(/Запит на роль/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/очікує підтвердження/)).not.toBeInTheDocument()
   })
 
-  it('lets the new therapist retry when the role could not be activated', async () => {
+  it('keeps the profile on screen and retries when refreshing fails', async () => {
     const user = userEvent.setup()
-    window.sessionStorage.setItem('airehab.registration-role', 'therapist')
-    vi.mocked(chooseTherapistRole)
-      .mockRejectedValueOnce(new Error('Keycloak is down'))
-      .mockResolvedValueOnce({ ...currentPatient, role: 'therapist' })
-    vi.mocked(refreshAccessToken).mockResolvedValue(undefined)
+    vi.mocked(fetchCurrentUser)
+      .mockRejectedValueOnce(new ApiError('Сервер недоступний.', 'unavailable', 503))
+      .mockResolvedValueOnce({ ...currentPatient, email: 'new@example.com' })
     render(
       <AuthProvider>
-        <ProfilePage />
-      </AuthProvider>,
-    )
-
-    expect(await screen.findByText('Keycloak is down')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
-
-    expect(await screen.findByText(/Ви зареєстровані як лікар/)).toBeInTheDocument()
-    expect(chooseTherapistRole).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not offer a role request to a patient', async () => {
-    render(
-      <AuthProvider>
-        <ProfilePage />
+        <MemoryRouter>
+          <ProfilePage />
+        </MemoryRouter>
       </AuthProvider>,
     )
 
     expect(await screen.findByText(currentPatient.email)).toBeInTheDocument()
-    expect(screen.queryByText('Працюєте терапевтом?')).not.toBeInTheDocument()
-    expect(chooseTherapistRole).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Оновити дані' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сервер недоступний.')
+    expect(screen.getByText(currentPatient.email)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+
+    expect(await screen.findByText('new@example.com')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('treats a visitor without a refresh cookie as signed out', async () => {
+    vi.mocked(refreshSession).mockResolvedValue(null)
+    render(
+      <AuthProvider>
+        <MemoryRouter>
+          <TherapistQuestionsProvider>
+            <Header />
+          </TherapistQuestionsProvider>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByRole('link', { name: 'Увійти' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Мій профіль' })).not.toBeInTheDocument()
+  })
+
+  it('shows the sign-in problem instead of the buttons when the server is down', async () => {
+    vi.mocked(refreshSession).mockRejectedValue(new Error('offline'))
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    render(
+      <AuthProvider>
+        <MemoryRouter>
+          <TherapistQuestionsProvider>
+            <Header />
+          </TherapistQuestionsProvider>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByRole('link', { name: 'Проблема з входом' })).toBeInTheDocument()
+  })
+
+  it('changes the password and says the other devices are signed out', async () => {
+    const user = userEvent.setup()
+    vi.mocked(changePassword).mockResolvedValue(sessionFor(currentPatient))
+    render(
+      <AuthProvider>
+        <MemoryRouter>
+          <ProfilePage />
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    await user.type(await screen.findByLabelText('Поточний пароль'), 'correct-horse-battery')
+    await user.type(screen.getByLabelText(/^Новий пароль/), 'a-brand-new-passphrase')
+    await user.click(screen.getByRole('button', { name: 'Змінити пароль' }))
+
+    expect(changePassword).toHaveBeenCalledWith('correct-horse-battery', 'a-brand-new-passphrase')
+    expect(await screen.findByText(/Пароль змінено/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Поточний пароль')).toHaveValue('')
+  })
+
+  it('explains a wrong current password', async () => {
+    const user = userEvent.setup()
+    vi.mocked(changePassword).mockRejectedValue(new ApiError('Запит відхилено.', 'unknown', 400))
+    render(
+      <AuthProvider>
+        <MemoryRouter>
+          <ProfilePage />
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    await user.type(await screen.findByLabelText('Поточний пароль'), 'wrong-password')
+    await user.type(screen.getByLabelText(/^Новий пароль/), 'a-brand-new-passphrase')
+    await user.click(screen.getByRole('button', { name: 'Змінити пароль' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Поточний пароль неправильний.')
+  })
+
+  it('signs out through the profile page', async () => {
+    const user = userEvent.setup()
+    const auth = createAuth({ authenticated: true, user: currentPatient, role: 'patient' })
+    renderWithAuth(<ProfilePage />, auth)
+
+    await user.click(screen.getByRole('button', { name: 'Вийти' }))
+
+    expect(auth.logout).toHaveBeenCalledTimes(1)
   })
 })
 

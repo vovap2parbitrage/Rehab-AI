@@ -10,7 +10,7 @@ export async function getSessionVideoUrl(sessionId: string): Promise<string> {
   return response.url
 }
 
-/** All sessions of one patient (for the patient's therapists and admins). */
+/** All sessions of one patient (visible to that patient and their therapists). */
 export function listPatientSessions(
   patientId: string,
   options: PageRequestOptions = {},

@@ -214,18 +214,6 @@ def test_therapist_list_without_patient_id_returns_only_own_patients(
     assert [item["id"] for item in response.json()] == [str(own_assignment.id)]
 
 
-def test_admin_list_returns_everything(
-    api, login, admin, therapist, other_therapist, patient_user, other_patient_user,
-    seed_patient, seed_assignment,
-):
-    seed_assignment(seed_patient(patient_user, therapist))
-    seed_assignment(seed_patient(other_patient_user, other_therapist))
-    login(admin)
-
-    response = api.get("/api/v1/assignments/")
-
-    assert len(response.json()) == 2
-
 
 def test_get_assignment_checks_patient_access(
     api, login, therapist, patient_user, other_patient_user, seed_patient, seed_assignment

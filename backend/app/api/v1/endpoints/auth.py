@@ -1,197 +1,192 @@
-from uuid import UUID
+import hashlib
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_active_user, require_roles
-from app.core.roles import Role
+from app.api.deps import client_ip, get_current_active_user, require_trusted_origin
+from app.core.config import settings
+from app.core.rate_limit import RateLimiter, get_rate_limiter, too_many_requests
 from app.db.dependencies import get_db
-from app.models.patient import Patient
 from app.models.user import User
-from app.schemas.auth import RoleAssignment, RoleChoice, RoleRequest, UserRead
-from app.services import keycloak_admin
-from app.services.keycloak_admin import KeycloakAdminError
+from app.schemas.auth import (
+    AuthSession,
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    UserRead,
+)
+from app.services import auth as auth_service
 
 router = APIRouter()
 
 
-def _keycloak_failure(exc: KeycloakAdminError) -> HTTPException:
-    if exc.status_code is None:
-        return HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Role assignment service is unavailable",
-        )
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()[:32]
 
-    if exc.status_code == status.HTTP_404_NOT_FOUND:
-        return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Keycloak user or role not found",
-        )
 
-    return HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail="Keycloak role assignment failed",
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        settings.refresh_cookie_name,
+        token,
+        max_age=settings.refresh_token_max_days * 86400,
+        path=settings.refresh_cookie_path,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
     )
 
 
-@router.get("/me", response_model=UserRead)
-def read_current_user(
-    user: User = Depends(get_current_active_user),
-) -> User:
-    return user
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        settings.refresh_cookie_name,
+        path=settings.refresh_cookie_path,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
 
 
-@router.post("/me/role", response_model=UserRead)
-def choose_role(
-    payload: RoleChoice,
-    user: User = Depends(get_current_active_user),
+def _no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
+def _require_free(limiter: RateLimiter, key: str, limit: int) -> None:
+    retry_after = limiter.retry_after(key, limit)
+    if retry_after is not None:
+        raise too_many_requests(retry_after)
+
+
+@router.post("/register", response_model=AuthSession, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
-) -> User:
-    """A new account registers as a therapist: the role is granted at once, no approval.
-
-    Every account starts as a patient, so this only works while the account has no patient
-    data yet; the empty patient profile is dropped together with the role change.
-    """
-    user = db.get(User, user.id)
-    if user.role == Role.THERAPIST.value:
-        return user
-    if user.role != Role.PATIENT.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only a new patient account can become a therapist",
-        )
-    if not user.keycloak_sub:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User is not linked to a Keycloak account",
-        )
-
-    profile = db.query(Patient).filter(Patient.user_id == user.id).first()
-    if profile is not None and (
-        profile.therapists or profile.assignments or profile.therapist_invitations
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> AuthSession:
+    if (
+        limiter.hit(f"register:ip:{client_ip(request)}", settings.register_window_seconds)
+        > settings.register_max_per_ip
     ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Account already has patient data",
-        )
+        raise too_many_requests(settings.register_window_seconds)
+
+    user = auth_service.register_user(db, payload)
+    session, refresh_token = auth_service.start_session(db, user)
+    _set_refresh_cookie(response, refresh_token)
+    _no_store(response)
+    return session
+
+
+@router.post("/login", response_model=AuthSession)
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> AuthSession:
+    ip = client_ip(request)
+    window = settings.login_window_seconds
+    if limiter.hit(f"login:ip:{ip}", window) > settings.login_max_attempts_per_ip:
+        raise too_many_requests(window)
+
+    email = _digest(payload.email)
+    pair_key = f"login:fail:{ip}:{email}"
+    email_key = f"login:fail:{email}"
+    _require_free(limiter, pair_key, settings.login_max_failures)
+    _require_free(limiter, email_key, settings.login_max_failures_per_email)
 
     try:
-        keycloak_admin.replace_app_role(user.keycloak_sub, Role.THERAPIST)
-    except KeycloakAdminError as exc:
-        raise _keycloak_failure(exc) from exc
+        user = auth_service.authenticate(db, payload.email, payload.password)
+    except auth_service.InvalidCredentials:
+        limiter.hit(pair_key, window)
+        limiter.hit(email_key, window)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        ) from None
 
-    if profile is not None:
-        db.delete(profile)
-    user.role = Role.THERAPIST.value
-    user.pending_role = None
-    db.commit()
-    db.refresh(user)
-
-    return user
+    limiter.reset(pair_key)
+    session, refresh_token = auth_service.start_session(db, user)
+    _set_refresh_cookie(response, refresh_token)
+    _no_store(response)
+    return session
 
 
 @router.post(
-    "/role-requests",
-    response_model=UserRead,
-    status_code=status.HTTP_202_ACCEPTED,
+    "/refresh",
+    response_model=AuthSession,
+    dependencies=[Depends(require_trusted_origin)],
 )
-def request_role(
-    payload: RoleRequest,
+def refresh(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> AuthSession | JSONResponse:
+    if (
+        limiter.hit(f"refresh:ip:{client_ip(request)}", settings.refresh_window_seconds)
+        > settings.refresh_max_per_ip
+    ):
+        raise too_many_requests(settings.refresh_window_seconds)
+
+    raw_token = request.cookies.get(settings.refresh_cookie_name)
+    try:
+        if not raw_token:
+            raise auth_service.invalid_refresh()
+        session, new_token = auth_service.refresh_session(db, raw_token)
+    except HTTPException as exc:
+        failure = JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        _clear_refresh_cookie(failure)
+        _no_store(failure)
+        return failure
+
+    if new_token is not None:
+        _set_refresh_cookie(response, new_token)
+    _no_store(response)
+    return session
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_trusted_origin)],
+)
+def logout(request: Request, db: Session = Depends(get_db)) -> Response:
+    auth_service.end_session(db, request.cookies.get(settings.refresh_cookie_name))
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _clear_refresh_cookie(response)
+    return response
+
+
+@router.post("/change-password", response_model=AuthSession)
+def change_password(
+    payload: ChangePasswordRequest,
+    response: Response,
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-) -> User:
-    if user.role == Role.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Administrators cannot request another role",
-        )
-
-    if user.role == payload.role:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Role is already assigned",
-        )
-
-    user.pending_role = payload.role
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return user
-
-
-@router.get("/role-requests", response_model=list[UserRead])
-def list_role_requests(
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_roles(Role.ADMIN)),
-) -> list[User]:
-    return (
-        db.query(User)
-        .filter(User.pending_role.is_not(None))
-        .order_by(User.created_at)
-        .all()
-    )
-
-
-@router.delete(
-    "/role-requests/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def reject_role_request(
-    user_id: UUID,
-    db: Session = Depends(get_db),
-    _admin: dict = Depends(require_roles(Role.ADMIN)),
-) -> Response:
-    user = db.get(User, user_id)
-    if user is None or user.pending_role is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pending role request not found",
-        )
-
-    user.pending_role = None
-    db.add(user)
-    db.commit()
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.put("/users/{user_id}/role", response_model=UserRead)
-def assign_user_role(
-    user_id: UUID,
-    payload: RoleAssignment,
-    db: Session = Depends(get_db),
-    admin: User = Depends(get_current_active_user),
-    _admin_claims: dict = Depends(require_roles(Role.ADMIN)),
-) -> User:
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    if user.id == admin.id and user.role != payload.role:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Administrators cannot change their own role",
-        )
-
-    if not user.keycloak_sub:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User is not linked to a Keycloak account",
-        )
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> AuthSession:
+    key = f"password:fail:{user.id}"
+    _require_free(limiter, key, settings.login_max_failures)
 
     try:
-        keycloak_admin.replace_app_role(user.keycloak_sub, Role(payload.role))
-    except KeycloakAdminError as exc:
-        raise _keycloak_failure(exc) from exc
+        session, refresh_token = auth_service.change_password(
+            db, user, payload.current_password, payload.new_password
+        )
+    except auth_service.InvalidCredentials:
+        limiter.hit(key, settings.login_window_seconds)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        ) from None
 
-    user.role = payload.role
-    user.pending_role = None
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    _set_refresh_cookie(response, refresh_token)
+    _no_store(response)
+    return session
 
+
+@router.get("/me", response_model=UserRead)
+def read_current_user(user: User = Depends(get_current_active_user)) -> User:
     return user

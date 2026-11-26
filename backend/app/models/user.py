@@ -7,7 +7,6 @@ from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Str
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
 from app.models.patient_therapist import patient_therapist_table
 
 if TYPE_CHECKING:  # only for the type checker: the relationships below name these as strings
@@ -19,12 +18,8 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('patient', 'therapist', 'admin')",
+            "role IN ('patient', 'therapist')",
             name="ck_users_role",
-        ),
-        CheckConstraint(
-            "pending_role IS NULL OR pending_role IN ('patient', 'therapist')",
-            name="ck_users_pending_role",
         ),
         CheckConstraint(
             "first_name IS NULL OR length(trim(first_name)) >= 1",
@@ -62,10 +57,14 @@ class User(Base):
         nullable=True,
     )
 
-    keycloak_sub: Mapped[str | None] = mapped_column(
+    password_hash: Mapped[str] = mapped_column(
         String(255),
-        unique=True,
-        index=True,
+        nullable=False,
+    )
+
+    # Access tokens issued before this moment are rejected (set on a password change).
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 
@@ -73,12 +72,6 @@ class User(Base):
         String(20),
         nullable=False,
         default="patient",
-    )
-
-    # Role requested from the mobile app that still awaits an admin decision.
-    pending_role: Mapped[str | None] = mapped_column(
-        String(20),
-        nullable=True,
     )
 
     # Subscription plan; only limits therapists (how many active patients they may have).
@@ -93,12 +86,6 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
-        nullable=False,
-    )
-
-    is_verified: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
         nullable=False,
     )
 

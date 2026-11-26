@@ -4,6 +4,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-0123456789abcdef
 
 import uuid  # noqa: E402
 
+import fakeredis  # noqa: E402
 import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -27,7 +28,8 @@ def _test_database_url() -> str:
 settings.database_url = _test_database_url()
 
 from app.api.deps import get_current_active_user  # noqa: E402
-from app.core.auth import get_current_claims  # noqa: E402
+from app.core.rate_limit import RateLimiter, get_rate_limiter  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.core.timezones import app_today  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
@@ -50,7 +52,7 @@ NO_DATABASE_MODULES = {
     "test_comparison_task",
     "test_dtw",
     "test_health",
-    "test_jwt",
+    "test_security",
     "test_pose",
     "test_pose_mapping",
     "test_repetitions",
@@ -60,6 +62,12 @@ NO_DATABASE_MODULES = {
     "test_video_checks",
     "test_auth",
 }
+
+TEST_PASSWORD = "correct-horse-battery-staple"
+TEST_PASSWORD_HASH = hash_password(TEST_PASSWORD)
+
+# The test client talks plain HTTP, where a Secure cookie would never be sent back.
+settings.cookie_secure = False
 
 _database_ready = False
 
@@ -111,6 +119,8 @@ def clean_database(request: pytest.FixtureRequest):
 
 @pytest.fixture
 def api():
+    limiter = RateLimiter(fakeredis.FakeRedis())
+    app.dependency_overrides[get_rate_limiter] = lambda: limiter
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -121,9 +131,8 @@ def make_user(role: str) -> User:
         id=uuid.uuid4(),
         email=f"{role}-{uuid.uuid4().hex[:6]}@example.com",
         role=role,
-        keycloak_sub=f"sub-{uuid.uuid4()}",
+        password_hash=TEST_PASSWORD_HASH,
         is_active=True,
-        is_verified=True,
         first_name="Ivan" if role == "patient" else None,
         last_name="Petrenko" if role == "patient" else None,
     )
@@ -138,25 +147,13 @@ def new_user():
 
 @pytest.fixture
 def login():
-    """Authenticate requests as the given user (claims carry only that user's role)."""
+    """Authenticate requests as the given user."""
 
     def _login(user: User) -> User:
         app.dependency_overrides[get_current_active_user] = lambda: user
-        app.dependency_overrides[get_current_claims] = lambda: {
-            "sub": user.keycloak_sub,
-            "realm_access": {"roles": [user.role]},
-        }
         return user
 
     return _login
-
-
-@pytest.fixture
-def admin(db_session):
-    user = make_user("admin")
-    db_session.add(user)
-    db_session.commit()
-    return user
 
 
 @pytest.fixture

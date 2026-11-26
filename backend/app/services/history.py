@@ -15,8 +15,8 @@ from app.schemas.history import (
     HistoryPoint,
     PatientHistoryRead,
 )
-from app.services.schedule import is_session_day
 from app.services.patient_access import get_patient_profile, require_patient_access
+from app.services.schedule import is_session_day
 
 PERIOD_DAYS = {
     HistoryPeriod.last_30_days: 30,
@@ -189,10 +189,9 @@ def get_patient_history(
     db: Session,
     patient_id: UUID,
     user: User,
-    roles: set[str],
     period: HistoryPeriod,
 ) -> PatientHistoryRead:
-    require_patient_access(patient_id, user, roles, db)
+    require_patient_access(patient_id, user, db)
     return build_patient_history(db, patient_id, period)
 
 

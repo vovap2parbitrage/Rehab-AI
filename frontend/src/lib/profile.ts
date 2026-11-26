@@ -1,41 +1,23 @@
-import type { KeycloakTokenParsed } from 'keycloak-js'
+import type { UserProfile } from '../api/auth'
 
-type TokenClaims = KeycloakTokenParsed | null | undefined
+type NamedUser = Pick<UserProfile, 'first_name' | 'last_name' | 'email'> | null | undefined
 
-function claim(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
+export function getFirstName(user: NamedUser): string {
+  return user?.first_name?.trim() ?? ''
 }
 
-export function getFirstName(tokenParsed: TokenClaims): string {
-  return claim(tokenParsed?.given_name)
+export function getLastName(user: NamedUser): string {
+  return user?.last_name?.trim() ?? ''
 }
 
-export function getLastName(tokenParsed: TokenClaims): string {
-  return claim(tokenParsed?.family_name)
-}
-
-export function getUsername(tokenParsed: TokenClaims): string {
-  return claim(tokenParsed?.preferred_username)
-}
-
-export function getDisplayName(tokenParsed: TokenClaims): string {
-  const fullName = [getFirstName(tokenParsed), getLastName(tokenParsed)].filter(Boolean).join(' ')
+export function getDisplayName(user: NamedUser): string {
+  const fullName = [getFirstName(user), getLastName(user)].filter(Boolean).join(' ')
 
   if (fullName) {
     return fullName
   }
 
-  const name = claim(tokenParsed?.name)
-  if (name) {
-    return name
-  }
-
-  const username = getUsername(tokenParsed)
-  if (username) {
-    return username
-  }
-
-  const email = claim(tokenParsed?.email)
+  const email = user?.email.trim()
   if (email) {
     return email.split('@')[0] ?? email
   }
@@ -65,8 +47,6 @@ export function getRoleLabel(role: string): string {
       return 'Пацієнт'
     case 'therapist':
       return 'Лікар'
-    case 'admin':
-      return 'Адміністратор'
     default:
       return role || 'Невідома роль'
   }
@@ -78,8 +58,6 @@ export function getRoleDescription(role: string): string {
       return 'Доступ до власного плану реабілітації, вправ та історії занять.'
     case 'therapist':
       return 'Робота з пацієнтами, призначення вправ і контроль прогресу.'
-    case 'admin':
-      return 'Керування користувачами, ролями та доступом до платформи.'
     default:
       return 'Роль визначена сервером AIRehab.'
   }

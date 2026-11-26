@@ -2,7 +2,6 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings
 from app.main import app
 
 client = TestClient(app)
@@ -30,8 +29,3 @@ def test_create_patient_requires_authentication() -> None:
         headers={"X-Test-Auth": "bypass"},
     )
     assert response.status_code == 401
-
-
-def test_default_environment_is_production(monkeypatch) -> None:
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
-    assert Settings(_env_file=None, secret_key="x" * 32).environment == "production"

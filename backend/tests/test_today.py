@@ -7,7 +7,6 @@ import pytest
 from app.core.timezones import app_today, day_bounds
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
-from app.models.patient import Patient
 from app.models.session import TrainingSession
 from app.services.exercise import current_version
 

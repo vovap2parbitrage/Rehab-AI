@@ -1,4 +1,3 @@
-import uuid
 
 import pytest
 from conftest import make_user
@@ -148,20 +147,12 @@ def test_the_last_free_slot_can_still_be_accepted(api, login, therapist, db_sess
 
 
 def test_accepting_is_refused_when_the_plan_no_longer_has_room(
-    api, login, admin, therapist, db_session
+    api, login, therapist, db_session
 ):
     newcomer = _patient(db_session)
     _fill(db_session, therapist, 15)
     db_session.add(TherapistInvitation(patient_id=newcomer.id, therapist_id=therapist.id))
-    therapist.plan_code = "standard"
     db_session.commit()
-    login(admin)
-    assert (
-        api.put(
-            f"/api/v1/therapists/{therapist.id}/plan", json={"plan_code": "free"}
-        ).status_code
-        == 200
-    )
     invitation_id = db_session.query(TherapistInvitation).one().id
 
     login(newcomer.user)
@@ -249,50 +240,6 @@ def test_another_therapists_limit_is_independent(
 
     assert _invite(api, newcomer).status_code == 201
     assert _my_plan(api)["active"] == 0
-
-
-def test_admin_changes_the_plan_and_the_limit_follows(
-    api, login, admin, therapist, db_session
-):
-    _fill(db_session, therapist, 5)
-    newcomer = _patient(db_session)
-    login(therapist)
-    assert _invite(api, newcomer).status_code == 409
-
-    login(admin)
-    changed = api.put(f"/api/v1/therapists/{therapist.id}/plan", json={"plan_code": "pro"})
-    assert changed.status_code == 200
-    assert (changed.json()["plan"], changed.json()["limit"], changed.json()["free"]) == (
-        "pro",
-        30,
-        25,
-    )
-
-    login(therapist)
-    assert _invite(api, newcomer).status_code == 201
-
-
-def test_only_an_admin_can_assign_a_plan(api, login, therapist, other_therapist):
-    login(therapist)
-
-    response = api.put(
-        f"/api/v1/therapists/{other_therapist.id}/plan", json={"plan_code": "pro"}
-    )
-
-    assert response.status_code == 403
-
-
-def test_assigning_an_unknown_plan_or_user_returns_404(api, login, admin, therapist):
-    login(admin)
-
-    assert (
-        api.put(f"/api/v1/therapists/{therapist.id}/plan", json={"plan_code": "gold"}).status_code
-        == 404
-    )
-    assert (
-        api.put(f"/api/v1/therapists/{uuid.uuid4()}/plan", json={"plan_code": "pro"}).status_code
-        == 404
-    )
 
 
 def test_buying_a_plan_takes_a_mock_payment_and_applies_it_at_once(

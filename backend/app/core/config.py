@@ -1,9 +1,10 @@
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+PLACEHOLDER_SECRET_PREFIXES = ("dev-secret-key", "replace-this", "change-me")
 
 
 class Settings(BaseSettings):
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     secret_key: str = Field(min_length=32)
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 15
 
     database_url: str = "postgresql+psycopg://rehab:rehab@localhost:5432/rehab_ai"
     redis_url: str = "redis://localhost:6379/0"
@@ -39,49 +40,42 @@ class Settings(BaseSettings):
         "http://localhost:4173,http://127.0.0.1:4173"
     )
 
-    keycloak_enabled: bool = True
-    # Internal URL used by the backend to reach Keycloak (JWKS, Admin API).
-    keycloak_server_url: str = "http://localhost:8080"
-    # Public URL used as the token issuer. Defaults to keycloak_server_url, which is
-    # correct for local development. In Docker the backend reaches Keycloak over the
-    # compose network while browsers use a different host/port, so set this explicitly.
-    keycloak_issuer_url: str | None = None
-    keycloak_realm: str = "rehab-ai"
-    keycloak_client_id: str = "rehab-ai-backend"
-    keycloak_audience: str | None = None
-    keycloak_verify_audience: bool = True
-    keycloak_jwks_cache_ttl_seconds: int = 300
+    jwt_issuer: str = "rehab-ai"
+    jwt_audience: str = "rehab-ai-api"
+    refresh_token_expire_days: int = 14
+    # A session can be renewed only until this many days after login.
+    refresh_token_max_days: int = 30
+    # A refresh token that was just rotated may still arrive from a parallel request
+    # (two tabs, a double fetch). Within this window it is not treated as theft.
+    refresh_reuse_grace_seconds: int = 10
+    refresh_cookie_name: str = "rehab_refresh"
+    # The refresh cookie is Secure by default; plain-HTTP local runs turn this off.
+    cookie_secure: bool = True
 
-    # Confidential service-account client used only for Keycloak Admin API calls.
-    keycloak_admin_client_id: str = "rehab-ai-admin"
-    keycloak_admin_client_secret: str | None = None
-    keycloak_admin_timeout_seconds: float = 10.0
-
-    @property
-    def keycloak_issuer(self) -> str:
-        base_url = self.keycloak_issuer_url or self.keycloak_server_url
-        return f"{base_url.rstrip('/')}/realms/{self.keycloak_realm}"
+    login_max_failures: int = 5
+    login_max_failures_per_email: int = 20
+    login_max_attempts_per_ip: int = 60
+    login_window_seconds: int = 900
+    register_max_per_ip: int = 10
+    register_window_seconds: int = 3600
+    refresh_max_per_ip: int = 120
+    refresh_window_seconds: int = 900
 
     @property
-    def keycloak_jwks_url(self) -> str:
-        return (
-            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
-            "/protocol/openid-connect/certs"
-        )
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
-    def keycloak_token_url(self) -> str:
-        return (
-            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
-            "/protocol/openid-connect/token"
-        )
+    def refresh_cookie_path(self) -> str:
+        return f"{self.api_v1_prefix}/auth"
 
-    @property
-    def keycloak_auth_url(self) -> str:
-        return (
-            f"{self.keycloak_server_url.rstrip('/')}/realms/{self.keycloak_realm}"
-            "/protocol/openid-connect/auth"
-        )
+    @model_validator(mode="after")
+    def reject_placeholder_secret_in_production(self) -> "Settings":
+        if self.environment == "production" and self.secret_key.startswith(
+            PLACEHOLDER_SECRET_PREFIXES
+        ):
+            raise ValueError("SECRET_KEY is a placeholder; set a random secret for production")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

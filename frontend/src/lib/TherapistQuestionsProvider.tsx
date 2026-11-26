@@ -10,9 +10,9 @@ function loadQuestionCount({ signal }: { signal: AbortSignal }) {
 }
 
 export function TherapistQuestionsProvider({ children }: { children: ReactNode }) {
-  const { authenticated, role, tokenParsed } = useAuth()
-  const enabled = authenticated && (role === 'therapist' || role === 'admin')
-  const sessionKey = authenticated ? `session:${tokenParsed?.sub ?? ''}` : 'anonymous'
+  const { authenticated, role, user } = useAuth()
+  const enabled = authenticated && role === 'therapist'
+  const sessionKey = authenticated ? `session:${user?.id ?? ''}` : 'anonymous'
 
   return (
     <TherapistQuestionsCache key={sessionKey} enabled={enabled}>

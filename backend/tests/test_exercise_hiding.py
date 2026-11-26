@@ -5,7 +5,6 @@ import uuid
 import pytest
 
 from app.core.timezones import app_today
-from app.models.exercise import Exercise
 
 EXERCISES = "/api/v1/exercises/"
 

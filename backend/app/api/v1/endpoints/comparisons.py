@@ -1,4 +1,3 @@
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -43,7 +42,7 @@ def create_upload(
 @router.delete("/uploads", status_code=status.HTTP_204_NO_CONTENT)
 def delete_unreferenced_upload(
     key: str,
-    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
+    _user: User = Depends(require_roles(Role.THERAPIST)),
     user_id: str = Depends(require_user_id),
     db: Session = Depends(get_db),
     store=Depends(get_storage),

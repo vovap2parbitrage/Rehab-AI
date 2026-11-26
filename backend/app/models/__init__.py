@@ -5,6 +5,7 @@ from .help_request import HelpRequest
 from .invitation import TherapistInvitation
 from .patient import Patient
 from .plan import Plan, PlanPayment
+from .refresh_token import RefreshToken
 from .session import TrainingSession
 from .therapist_message import TherapistMessage
 from .user import User
@@ -14,10 +15,11 @@ __all__ = [
     'Exercise',
     'ExerciseVersion',
     'HelpRequest',
-    'TherapistInvitation',
     'Patient',
     'Plan',
     'PlanPayment',
+    'RefreshToken',
+    'TherapistInvitation',
     'TherapistMessage',
     'TrainingSession',
     'User',

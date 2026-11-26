@@ -11,12 +11,12 @@ from app.models.assignment import Assignment
 from app.models.patient import Patient
 from app.models.patient_therapist import patient_therapist_table
 from app.models.user import User
-from app.schemas.patient import PatientCreate, PatientRead
 from app.schemas.pagination import Page
+from app.schemas.patient import PatientCreate, PatientRead
 from app.services.patient_access import (
     archived_at_for,
     archived_by,
-    is_patient_therapist,
+    get_patient_for_therapist,
     require_patient_access,
     treated_by,
 )
@@ -39,8 +39,7 @@ def _to_read(patient: Patient, archived_at: datetime | None = None) -> PatientRe
 def list_patients(
     db: Session,
     *,
-    is_admin: bool,
-    therapist_id: UUID | None,
+    therapist_id: UUID,
     archived: bool = False,
     q: str | None = None,
     limit: int = 20,
@@ -48,10 +47,7 @@ def list_patients(
 ) -> Page[PatientRead]:
     """Active patients, or with ``archived`` the ones this therapist has archived."""
     query = db.query(Patient)
-    if archived:
-        query = query.filter(archived_by(therapist_id))
-    elif not is_admin:
-        query = query.filter(treated_by(therapist_id))
+    query = query.filter(archived_by(therapist_id) if archived else treated_by(therapist_id))
 
     # Names live on the user, so the search and the order both need the join.
     query = query.join(Patient.user)
@@ -91,8 +87,6 @@ def create_patient(
     db: Session,
     payload: PatientCreate,
     actor: User,
-    *,
-    is_admin: bool,
 ) -> PatientRead:
     patient_user = db.get(User, payload.user_id)
     if patient_user is None:
@@ -109,26 +103,14 @@ def create_patient(
         user_id=payload.user_id,
         notes=payload.notes,
     )
-    therapist_ids = set(payload.therapist_ids)
-    if not is_admin:
-        # A therapist may only create a profile for themselves, never for other therapists.
-        if therapist_ids - {actor.id}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Therapists can only assign themselves to a patient",
-            )
-        therapist_ids = {actor.id}
-    if therapist_ids:
-        therapists = (
-            db.query(User)
-            .filter(User.id.in_(therapist_ids), User.role == Role.THERAPIST.value)
-            .all()
+    # A therapist may only create a profile for themselves, never for other therapists.
+    if set(payload.therapist_ids) - {actor.id}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Therapists can only assign themselves to a patient",
         )
-        if len(therapists) != len(therapist_ids):
-            raise HTTPException(status_code=404, detail="Therapist not found")
-        for therapist in therapists:
-            require_free_slot(db, therapist.id)
-        patient.therapists = therapists
+    require_free_slot(db, actor.id)
+    patient.therapists = [db.get(User, actor.id)]
 
     db.add(patient)
     db.commit()
@@ -140,31 +122,20 @@ def get_patient(
     db: Session,
     patient_id: UUID,
     user: User,
-    roles: set[str],
 ) -> PatientRead:
-    return require_patient_access(patient_id, user, roles, db)
+    return require_patient_access(patient_id, user, db)
 
 
 def list_patient_therapists(
     db: Session,
     patient_id: UUID,
     user: User,
-    roles: set[str],
 ) -> list[dict[str, str]]:
-    patient = require_patient_access(patient_id, user, roles, db)
+    patient = require_patient_access(patient_id, user, db)
     return [
         {"id": str(therapist_id), "role": Role.THERAPIST.value}
         for therapist_id in patient.therapist_ids
     ]
-
-
-def _own_patient(db: Session, patient_id: UUID, user: User) -> Patient:
-    patient = db.get(Patient, patient_id)
-    if patient is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    if not is_patient_therapist(patient, user):
-        raise HTTPException(status_code=403, detail="Patient is not assigned to you")
-    return patient
 
 
 def _link(patient_id: UUID, therapist_id: UUID):
@@ -179,7 +150,7 @@ def archive_patient(db: Session, patient_id: UUID, user: User) -> None:
 
     Only this therapist's link and assignments change; other therapists are unaffected.
     """
-    _own_patient(db, patient_id, user)
+    get_patient_for_therapist(patient_id, user, db)
     db.execute(
         update(patient_therapist_table)
         .where(_link(patient_id, user.id), patient_therapist_table.c.archived_at.is_(None))
@@ -199,7 +170,7 @@ def archive_patient(db: Session, patient_id: UUID, user: User) -> None:
 
 def restore_patient(db: Session, patient_id: UUID, user: User) -> None:
     """Return an archived patient to this therapist's active list."""
-    _own_patient(db, patient_id, user)
+    get_patient_for_therapist(patient_id, user, db)
     if archived_at_for(db, patient_id, user.id) is None:
         return
     require_free_slot(db, user.id)

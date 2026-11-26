@@ -1,43 +1,29 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type Keycloak from 'keycloak-js'
-import { fetchCurrentUser, isSessionError, type UserProfile } from '../api/auth'
-import { ApiError } from '../api/client'
-import { AuthContext, type AuthContextValue, type AuthState } from './AuthContext'
-import { describeKeycloakInitError } from './errors'
 import {
-  getKeycloak,
-  initKeycloak,
-  loginWithKeycloak,
-  logoutFromKeycloak,
-  registerWithKeycloak,
-} from './keycloak'
+  fetchCurrentUser,
+  login as loginRequest,
+  logout as logoutRequest,
+  register as registerRequest,
+  type RegisterInput,
+  type UserProfile,
+} from '../api/auth'
+import { ApiError } from '../api/client'
+import { AuthContext, type AuthContextValue } from './AuthContext'
+import { describeInitError } from './messages'
+import { onSessionEnded, refreshSession } from './session'
 
 const INIT_TIMEOUT_MS = 15_000
-const USER_RETRY_DELAY_MS = 400
 
-interface UserResult {
-  session: string
+interface SessionState {
+  initialized: boolean
   user: UserProfile | null
-  error: ApiError | null
-}
-
-interface UserRequest {
-  attempt: number
-  result?: UserResult
-  settled: boolean
-}
-
-const INITIAL_STATE: AuthState = {
-  initialized: false,
-  authenticated: false,
-  tokenParsed: null,
-  initError: null,
+  initError: string | null
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
-      reject(new Error('KEYCLOAK_INIT_TIMEOUT'))
+      reject(new Error('SESSION_INIT_TIMEOUT'))
     }, timeoutMs)
 
     promise.then(
@@ -53,191 +39,74 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   })
 }
 
-function authStateFrom(keycloak: Keycloak): AuthState {
-  return {
-    initialized: true,
-    authenticated: Boolean(keycloak.authenticated),
-    tokenParsed: keycloak.tokenParsed ?? null,
-    initError: null,
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(INITIAL_STATE)
-  const [userRequest, setUserRequest] = useState<UserRequest>({ attempt: 0, settled: false })
-  const { attempt, result } = userRequest
-  const session = state.authenticated
-    ? JSON.stringify([state.tokenParsed?.sub, state.tokenParsed?.session_state])
-    : null
-  const currentUser = session !== null && result?.session === session ? result : undefined
-  const userLoading = session !== null && (!userRequest.settled || currentUser === undefined)
-  const userError = userLoading ? null : (currentUser?.error ?? null)
+  const [state, setState] = useState<SessionState>({
+    initialized: false,
+    user: null,
+    initError: null,
+  })
+  const [userLoading, setUserLoading] = useState(false)
+  const [userError, setUserError] = useState<ApiError | null>(null)
 
   useEffect(() => {
     let active = true
-    const keycloak = getKeycloak()
 
-    const sync = () => {
-      if (active) {
-        const nextState = authStateFrom(keycloak)
-        if (!nextState.authenticated) {
-          setUserRequest((current) => ({ attempt: current.attempt + 1, settled: false }))
-        }
-        setState(nextState)
-      }
-    }
+    const unsubscribe = onSessionEnded(() => {
+      if (active) setState((current) => ({ ...current, user: null }))
+    })
 
-    const clearSession = () => {
-      void keycloak
-        .clearToken()
-        .catch(() => undefined)
-        .then(sync)
-    }
-
-    keycloak.onAuthSuccess = sync
-    keycloak.onAuthRefreshSuccess = sync
-    keycloak.onAuthLogout = sync
-    keycloak.onAuthRefreshError = clearSession
-    keycloak.onTokenExpired = () => {
-      keycloak.updateToken(30).then(sync).catch(clearSession)
-    }
-
-    withTimeout(initKeycloak(), INIT_TIMEOUT_MS)
-      .then(sync)
+    withTimeout(refreshSession(), INIT_TIMEOUT_MS)
+      .then((session) => {
+        if (active) setState({ initialized: true, user: session?.user ?? null, initError: null })
+      })
       .catch((error: unknown) => {
         if (active) {
-          setState({
-            initialized: true,
-            authenticated: false,
-            tokenParsed: null,
-            initError: describeKeycloakInitError(error),
-          })
+          setState({ initialized: true, user: null, initError: describeInitError(error) })
         }
       })
 
     return () => {
       active = false
+      unsubscribe()
     }
   }, [])
 
-  useEffect(() => {
-    if (session === null || !userLoading) return
-
-    const controller = new AbortController()
-    const { signal } = controller
-    let retryTimer: number | undefined
-
-    const loadUser = async (canRetry: boolean) => {
-      try {
-        const user = await fetchCurrentUser({ signal })
-        if (!signal.aborted) {
-          setUserRequest((current) =>
-            current.attempt === attempt
-              ? { attempt, settled: true, result: { session, user, error: null } }
-              : current,
-          )
-        }
-      } catch (caught: unknown) {
-        if (signal.aborted) return
-
-        const error =
-          caught instanceof ApiError
-            ? caught
-            : new ApiError('Не вдалося завантажити дані облікового запису.', 'unknown')
-
-        if (
-          canRetry &&
-          (error.kind === 'network' ||
-            error.kind === 'session' ||
-            error.kind === 'unauthorized' ||
-            error.kind === 'unavailable' ||
-            error.kind === 'server' ||
-            error.status >= 500)
-        ) {
-          retryTimer = window.setTimeout(() => void loadUser(false), USER_RETRY_DELAY_MS)
-          return
-        }
-
-        setUserRequest((current) => {
-          if (current.attempt !== attempt) return current
-          const retainUser =
-            current.result?.session === session &&
-            !isSessionError(error) &&
-            error.kind !== 'forbidden'
-          return {
-            attempt,
-            settled: true,
-            result: { session, user: retainUser ? (current.result?.user ?? null) : null, error },
-          }
-        })
-      }
-    }
-
-    void loadUser(true)
-    return () => {
-      controller.abort()
-      window.clearTimeout(retryTimer)
-    }
-  }, [session, userLoading, attempt])
+  const updateUser = useCallback((user: UserProfile) => {
+    setState((current) => (current.user?.id === user.id ? { ...current, user } : current))
+  }, [])
 
   const refreshUser = useCallback(() => {
-    setUserRequest((current) => ({ ...current, attempt: current.attempt + 1, settled: false }))
-  }, [])
+    setUserLoading(true)
+    setUserError(null)
 
-  const updateUser = useCallback(
-    (user: UserProfile) => {
-      setUserRequest((current) => {
-        if (
-          session === null ||
-          current.result?.session !== session ||
-          current.result.user?.id !== user.id
-        ) {
-          return current
-        }
-
-        return {
-          attempt: current.attempt + 1,
-          settled: true,
-          result: { session, user, error: null },
-        }
+    fetchCurrentUser()
+      .then(updateUser)
+      .catch((caught: unknown) => {
+        // An ended session is reported through onSessionEnded; the rest stays on screen.
+        if (caught instanceof ApiError && caught.kind !== 'session') setUserError(caught)
       })
-    },
-    [session],
-  )
+      .finally(() => setUserLoading(false))
+  }, [updateUser])
 
-  const login = useCallback(async (redirectPath?: string) => {
-    await loginWithKeycloak(redirectPath)
+  const login = useCallback(async (email: string, password: string) => {
+    const session = await loginRequest(email, password)
+    setState({ initialized: true, user: session.user, initError: null })
   }, [])
 
-  const register = useCallback(async (redirectPath?: string) => {
-    await registerWithKeycloak(redirectPath)
+  const register = useCallback(async (input: RegisterInput) => {
+    const session = await registerRequest(input)
+    setState({ initialized: true, user: session.user, initError: null })
   }, [])
 
-  const logout = useCallback(async () => {
-    try {
-      await logoutFromKeycloak()
-    } finally {
-      try {
-        await getKeycloak().clearToken()
-      } catch {
-        // Nothing else can be done locally if Keycloak does not respond.
-      }
-
-      setUserRequest((current) => ({ attempt: current.attempt + 1, settled: false }))
-      setState({
-        initialized: true,
-        authenticated: false,
-        tokenParsed: null,
-        initError: null,
-      })
-    }
-  }, [])
+  const logout = useCallback(() => logoutRequest(), [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      ...state,
-      role: currentUser?.user?.role ?? null,
-      user: currentUser?.user ?? null,
+      initialized: state.initialized,
+      authenticated: state.user !== null,
+      initError: state.initError,
+      role: state.user?.role ?? null,
+      user: state.user,
       userLoading,
       userError,
       refreshUser,
@@ -246,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
     }),
-    [state, currentUser, userLoading, userError, refreshUser, updateUser, login, register, logout],
+    [state, userLoading, userError, refreshUser, updateUser, login, register, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

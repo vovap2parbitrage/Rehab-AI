@@ -432,12 +432,6 @@
   background: var(--teal-soft);
 }
 
-.role-badge--admin {
-  border-color: #dcd4fb;
-  color: #5b3fba;
-  background: #ede9fe;
-}
-
 .role-badge--unknown {
   border-color: var(--border);
   color: var(--text-soft);

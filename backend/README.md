@@ -20,13 +20,13 @@ FastAPI backend платформи Rehab AI: кабінети лікаря та 
 
 - **FastAPI + Pydantic** — REST API та валідація.
 - **PostgreSQL + SQLAlchemy 2 + Alembic** — основна БД і міграції.
-- **Keycloak (OpenID Connect)** — автентифікація: backend перевіряє JWT, ролі беруться з токена.
-  Керування ролями йде через Keycloak Admin API.
+- **Власна автентифікація** — Argon2id для паролів, короткоживучі access JWT і refresh-токен
+  в HttpOnly cookie; роль і статус беруться з БД на кожен запит.
 - **Redis + Celery** — черга аналізу відео; HTTP-запит не чекає завершення аналізу.
 - **MediaPipe + OpenCV + SciPy** — розпізнавання пози та порівняння рухів.
 - **S3-сумісне сховище** (boto3) — відео пацієнтів і еталонні відео.
 - **pytest + Ruff** — тести й лінтер.
-- **Docker Compose** — PostgreSQL, Redis, Keycloak, S3, backend, Celery і frontend.
+- **Docker Compose** — PostgreSQL, Redis, S3, backend, Celery і frontend.
 
 ## Структура
 
@@ -59,10 +59,10 @@ tests/
 2. Створіть `.env` із шаблону (`cp .env.example .env`, у Windows `copy .env.example .env`).
 3. Підніміть залежні сервіси з **кореня репозиторію** (`compose.yaml` лежить там):
    ```bash
-   docker compose up -d db redis keycloak s3 s3-init keycloak-init
+   docker compose up -d db redis s3 s3-init
    ```
-   Порти хоста відрізняються від типових (PostgreSQL `5433`, Redis `6380`, Keycloak `8081`),
-   тому підправте `DATABASE_URL`, `REDIS_URL` і `KEYCLOAK_SERVER_URL` у `.env`.
+   Порти хоста відрізняються від типових (PostgreSQL `5433`, Redis `6380`),
+   тому підправте `DATABASE_URL` і `REDIS_URL` у `.env`.
 4. Застосуйте міграції:
    ```bash
    alembic upgrade head
@@ -84,54 +84,68 @@ tests/
 | `DATABASE_URL`, `REDIS_URL` | PostgreSQL і Redis |
 | `SECRET_KEY` | Секрет застосунку, щонайменше 32 символи |
 | `CORS_ORIGINS` | Дозволені адреси фронтенду, через кому |
-| `KEYCLOAK_*` | Адреса, realm, клієнт і audience Keycloak; `KEYCLOAK_ADMIN_CLIENT_*` — сервісний акаунт для зміни ролей |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` | Тривалість access JWT (15 хв) і refresh-сесії (14 днів) |
+| `COOKIE_SECURE` | `false` для HTTP на localhost, `true` за HTTPS |
+| `JWT_ISSUER`, `JWT_AUDIENCE` | Значення `iss` і `aud` access-токенів |
 | `S3_*`, `MAX_VIDEO_MB`, `MAX_VIDEO_SECONDS` | Сховище відео та його обмеження |
 | `PAYMENT_PROVIDER` | Провайдер оплати тарифів; зараз лише `mock` |
 
 ## Автентифікація та ролі
 
-Клієнт передає `Authorization: Bearer <access token>` від Keycloak. Backend перевіряє підпис,
-issuer і audience, а при першому запиті створює користувача в БД. Ролі: `patient`,
-`therapist`, `admin`. **Джерелом ролей є токен Keycloak**: збережена в БД роль
-перезаписується роллю з токена, тому зміна ролі в Keycloak потребує нового токена.
+Авторизація повністю реалізована в застосунку. Пароль зберігається тільки як Argon2id-хеш
+(`password_hash`), refresh-токен — тільки як SHA-256-хеш у таблиці `refresh_tokens`.
 
-Ролі змінюються так:
+- `POST /api/v1/auth/register` створює користувача з роллю `patient` або `therapist`,
+  обраною під час реєстрації, і одразу відкриває сесію. Адміністраторів і запитів на роль немає.
+- `POST /api/v1/auth/login` перевіряє пароль і повертає access JWT на 15 хвилин. Refresh-токен
+  встановлюється cookie `HttpOnly; Secure; SameSite=Strict` на шляху `/api/v1/auth`.
+- Access JWT надсилається як `Authorization: Bearer <token>`. Користувач і його роль
+  завантажуються з БД на кожен запит, тому роль і `is_active` діють одразу, без оновлення токена.
+- `POST /api/v1/auth/refresh` обертає cookie і повертає нову сесію. Старий токен стає
+  недійсним; його повторне використання завершує всю родину сесій. Запити з cookie
+  вимагають коректного заголовка `Origin` (захист від CSRF).
+- `POST /api/v1/auth/change-password` вимагає поточний пароль, перевіряє новий за тією самою
+  політикою, оновлює хеш і завершує всі інші сесії користувача.
+- `POST /api/v1/auth/logout` видаляє поточний refresh-токен і очищує cookie.
+- `GET /api/v1/auth/me` повертає профіль. Пароль ніколи не потрапляє у відповідь.
 
-- **Реєстрація лікаря.** Користувач, що обрав «Лікар», викликає `POST /api/v1/auth/me/role`
-  із `{"role": "therapist"}`. Backend одразу призначає роль у Keycloak, ставить її в БД і
-  видаляє порожній профіль пацієнта. Працює лише для акаунта без даних пацієнта (зв'язків із
-  лікарями, призначень, запрошень), інакше відповідь `409`. Після цього клієнт має оновити
-  токен.
-- **Запит ролі з мобільного застосунку.** `POST /api/v1/auth/role-requests` лише записує
-  `pending_role`; адміністратор розглядає запити через `GET`/`DELETE /auth/role-requests`
-  і призначає роль через `PUT /api/v1/auth/users/{id}/role`.
+Пароль має бути щонайменше 12 символів після нормалізації, не надто довгим і не зі списку
+поширених; збіг з email заборонений. Невдалий вхід не розкриває, чи існує email: і невідома
+адреса, і хибний пароль дають однакову `401`. Частота спроб обмежена Redis за IP, парою
+IP+email і email окремо; реєстрація та оновлення сесії теж мають ліміти.
+
+Ролі описані в `app/core/roles.py`: `patient` і `therapist`. Захищені ендпоінти
+використовують `require_roles(...)` з `app/api/deps.py`.
+
+**Важливо:** міграція `0014` видаляє всі старі облікові записи й залежні дані. Вони жили у
+зовнішньому сервісі авторизації й не мають паролів у цій БД, тому відновити їх неможливо.
 
 ## API
 
 Повний опис і схеми запитів: Swagger UI на `/docs`. Усі шляхи мають префікс `/api/v1`. Якщо
-не вказано інше, ендпоінт потребує входу; у колонці «Ролі» — хто має доступ (A — адмін,
-T — лікар, P — пацієнт).
+не вказано інше, ендпоінт потребує входу; у колонці «Ролі» — хто має доступ
+(T — лікар, P — пацієнт).
 
-### Користувач і ролі — `/auth`
+### Автентифікація — `/auth`
 
 | Метод і шлях | Ролі | Опис |
 | --- | --- | --- |
+| `POST /auth/register` | публічний | Реєстрація з роллю `patient` або `therapist`, повертає сесію |
+| `POST /auth/login` | публічний | Вхід за email і паролем, повертає сесію |
+| `POST /auth/refresh` | cookie + `Origin` | Оновити access-токен, обертає refresh-cookie |
+| `POST /auth/logout` | cookie + `Origin` | Завершити поточну сесію, `204` |
+| `POST /auth/change-password` | будь-який | Змінити пароль і завершити інші сесії |
 | `GET /auth/me` | будь-який | Профіль поточного користувача |
-| `POST /auth/me/role` | будь-який | Нова роль лікаря при реєстрації, без підтвердження |
-| `POST /auth/role-requests` | будь-який | Запит ролі, чекає на адміністратора (мобільний застосунок) |
-| `GET /auth/role-requests` | A | Список запитів |
-| `DELETE /auth/role-requests/{user_id}` | A | Відхилити запит |
-| `PUT /auth/users/{user_id}/role` | A | Призначити роль у Keycloak |
 
 ### Пацієнти — `/patients`
 
 | Метод і шлях | Ролі | Опис |
 | --- | --- | --- |
-| `GET /patients/` | A, T | Пацієнти лікаря; `?archived=true` — архів. `q`, `limit` (20, максимум 100), `offset` |
-| `POST /patients/` | A, T | Створити профіль пацієнта (перевіряє ліміт тарифу) |
-| `GET /patients/{id}` | A, T, P | Профіль; містить `archived_at` для лікаря |
-| `GET /patients/{id}/therapists` | A, T, P | Лікарі пацієнта |
-| `GET /patients/{id}/history`, `GET /patients/me/history` | A, T, P / P | Історія виконання за період (`?period=`) |
+| `GET /patients/` | T | Пацієнти лікаря; `?archived=true` — архів. `q`, `limit` (20, максимум 100), `offset` |
+| `POST /patients/` | T | Створити профіль пацієнта (перевіряє ліміт тарифу) |
+| `GET /patients/{id}` | T, P | Профіль; містить `archived_at` для лікаря |
+| `GET /patients/{id}/therapists` | T, P | Лікарі пацієнта |
+| `GET /patients/{id}/history`, `GET /patients/me/history` | T, P / P | Історія виконання за період (`?period=`) |
 | `POST /patients/{id}/archive` | T | Архівувати пацієнта |
 | `POST /patients/{id}/restore` | T | Повернути з архіву (перевіряє ліміт тарифу) |
 
@@ -147,19 +161,19 @@ T — лікар, P — пацієнт).
 
 | Метод і шлях | Ролі | Опис |
 | --- | --- | --- |
-| `GET /exercises/` | A, T | Бібліотека вправ; `q`, `limit` (20, максимум 100), `offset` |
-| `POST /exercises/`; `GET`, `PUT`, `DELETE /exercises/{id}` | A, T | Керування вправами |
-| `GET /exercises/{id}/video` | A, T, P | Посилання на еталонне відео |
-| `GET /assignments/` | A, T, P | Призначення; `?patient_id=` фільтрує за пацієнтом |
+| `GET /exercises/` | T | Бібліотека вправ; `q`, `limit` (20, максимум 100), `offset` |
+| `POST /exercises/`; `GET`, `PUT`, `DELETE /exercises/{id}` | T | Керування вправами |
+| `GET /exercises/{id}/video` | T, P | Посилання на еталонне відео |
+| `GET /assignments/` | T, P | Призначення; `?patient_id=` фільтрує за пацієнтом |
 | `GET /assignments/mine` | P | Власні призначення без скасованих |
-| `POST /assignments/` | A, T | Призначити вправу (409 для архівованого пацієнта) |
-| `GET /assignments/{id}` | A, T, P | Одне призначення |
-| `POST /assignments/{id}/cancel` | A, T | Скасувати активне призначення |
-| `GET /sessions/` | A, T, P | Сесії виконання; `patient_id`, `limit` (20, максимум 100), `offset` |
-| `GET /sessions/{id}` | A, T, P | Одна сесія |
-| `POST /sessions/` | A, T, P | Створити сесію |
+| `POST /assignments/` | T | Призначити вправу (409 для архівованого пацієнта) |
+| `GET /assignments/{id}` | T, P | Одне призначення |
+| `POST /assignments/{id}/cancel` | T | Скасувати активне призначення |
+| `GET /sessions/` | T, P | Сесії виконання; `patient_id`, `limit` (20, максимум 100), `offset` |
+| `GET /sessions/{id}` | T, P | Одна сесія |
+| `POST /sessions/` | T, P | Створити сесію |
 | `POST /sessions/assignments/{assignment_id}` | P | Завершити призначення без відео |
-| `GET /sessions/{id}/video` | A, T, P | Посилання на відео сесії |
+| `GET /sessions/{id}/video` | T, P | Посилання на відео сесії |
 
 ### Запитання пацієнтів — `/help-requests`
 
@@ -167,9 +181,9 @@ T — лікар, P — пацієнт).
 | --- | --- | --- |
 | `POST /help-requests/` | P | Поставити запитання після сесії |
 | `GET /help-requests/mine` | P | Власні запитання |
-| `GET /help-requests/needs-attention` | A, T | Запитання без відповіді; `q`, `limit` (20, максимум 100), `offset` |
-| `GET /help-requests/?patient_id=` | A, T | Історія запитань пацієнта; `q`, `limit` (20, максимум 100), `offset` |
-| `PATCH /help-requests/{id}/reply` | A, T | Відповісти |
+| `GET /help-requests/needs-attention` | T | Запитання без відповіді; `q`, `limit` (20, максимум 100), `offset` |
+| `GET /help-requests/?patient_id=` | T | Історія запитань пацієнта; `q`, `limit` (20, максимум 100), `offset` |
+| `PATCH /help-requests/{id}/reply` | T | Відповісти |
 
 Пагіновані `GET /patients/`, `/exercises/`, `/sessions/`, `/help-requests/needs-attention`
 та `/help-requests/?patient_id=` повертають `{items, total, limit, offset}`.
@@ -181,7 +195,6 @@ T — лікар, P — пацієнт).
 | `GET /plans/` | **публічний** | Тарифи для сторінки цін |
 | `GET /therapists/me/plan` | T | Тариф, ліміт і використання |
 | `POST /therapists/me/plan/purchase` | T | Купити або змінити тариф |
-| `PUT /therapists/{user_id}/plan` | A | Призначити тариф вручну |
 
 Порівняння відео (`/comparisons`) описане [нижче](#api-1) у розділі Video-comparison service. `GET /health` — перевірка живості.
 
@@ -217,7 +230,7 @@ T — лікар, P — пацієнт).
   коли його архівують.
 - Паралельні запити не обходять ліміт: рядок лікаря блокується на час перевірки
   (`SELECT ... FOR UPDATE`).
-- Якщо адмін знижує тариф нижче поточної кількості пацієнтів, нікого не архівується: лише нові
+- Якщо тариф знижено нижче поточної кількості пацієнтів, нікого не архівується: лише нові
   запрошення блокуються.
 
 ### Покупка тарифу й оплата
@@ -299,7 +312,7 @@ pytest -q                                   # усі тести
 pytest -q tests/test_patient_archive.py     # один файл
 ```
 
-Модулі без БД (кути, DTW, оцінка, відео, JWT) працюють і без PostgreSQL.
+Модулі без БД (кути, DTW, оцінка, відео, безпека й JWT) працюють і без PostgreSQL.
 
 Тести створюють схему з моделей (`tests/conftest.py`), щоб працювати швидко. Тому окремий
 крок у CI (`.github/workflows/backend-ci.yml`) на чистій PostgreSQL виконує

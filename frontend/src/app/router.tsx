@@ -80,7 +80,7 @@ export const router = createBrowserRouter([
       {
         path: 'therapist',
         element: (
-          <RoleRoute allowedRoles={['therapist', 'admin']}>
+          <RoleRoute allowedRoles={['therapist']}>
             <TherapistWorkspaceLayout />
           </RoleRoute>
         ),
@@ -92,10 +92,6 @@ export const router = createBrowserRouter([
           { path: 'exercises', element: <TherapistExercisesPage /> },
           { path: 'questions', element: <TherapistQuestionsPage /> },
         ],
-      },
-      {
-        path: 'error',
-        element: <ErrorPage />,
       },
       {
         path: '*',

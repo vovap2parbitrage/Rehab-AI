@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -104,11 +104,11 @@ def test_patient_session_list_paginates_newest_first(
     assignment = seed_assignment(seed_patient(patient_user, therapist))
     old_session = TrainingSession(
         assignment_id=assignment.id,
-        completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     new_session = TrainingSession(
         assignment_id=assignment.id,
-        completed_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 2, 1, tzinfo=UTC),
     )
     db_session.add_all([old_session, new_session])
     db_session.commit()
@@ -154,18 +154,6 @@ def test_therapist_list_excludes_foreign_patients(
 
     assert [item["id"] for item in response.json()["items"]] == [str(own.id)]
 
-
-def test_admin_list_returns_everything(
-    api, login, admin, therapist, other_therapist, patient_user, other_patient_user,
-    seed_patient, seed_assignment, seed_session,
-):
-    seed_session(seed_assignment(seed_patient(patient_user, therapist)))
-    seed_session(seed_assignment(seed_patient(other_patient_user, other_therapist)))
-    login(admin)
-
-    response = api.get("/api/v1/sessions/")
-
-    assert response.json()["total"] == 2
 
 
 def test_session_schemas_match_model_columns():

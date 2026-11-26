@@ -17,20 +17,15 @@ FROM deps AS build
 COPY . .
 
 ARG VITE_API_BASE_URL=http://localhost:8001
-ARG VITE_KEYCLOAK_URL=http://localhost:8081
-ARG VITE_KEYCLOAK_REALM=rehab-ai
-ARG VITE_KEYCLOAK_CLIENT_ID=rehab-ai-web
 
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
-    VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
-    VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
-    VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build
 
 FROM nginx:1.29-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
