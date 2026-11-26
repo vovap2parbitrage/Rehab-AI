@@ -7,14 +7,13 @@ from app.core.errors import CodedHTTPException, coded_http_exception_handler
 
 app = FastAPI(title=settings.app_name)
 
-# The browser frontend is served from a different origin than the API.
-# Authentication uses the Authorization header (no cookies), so credentials stay disabled.
+# The browser frontend is served from a different origin than the API. Requests carry the
+# access token in the Authorization header; credentials are allowed only so the refresh
+# cookie reaches /auth, and only for the listed origins (never "*").
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()
-    ],
-    allow_credentials=False,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )

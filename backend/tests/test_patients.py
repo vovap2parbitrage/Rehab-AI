@@ -1,5 +1,7 @@
 import uuid
 
+from app.models.patient import Patient
+
 
 def patient_payload(user_id, therapist_ids) -> dict:
     return {
@@ -122,29 +124,27 @@ def test_therapist_cannot_read_patient_of_another_therapist(
 
 
 def test_multiple_therapists_can_read_the_same_patient(
-    api, login, admin, therapist, other_therapist, patient_user
+    api, login, db_session, therapist, other_therapist, patient_user
 ):
-    login(admin)
-    created = api.post(
-        "/api/v1/patients/",
-        json=patient_payload(patient_user.id, [therapist.id, other_therapist.id]),
-    )
-    assert created.status_code == 201
+    patient = Patient(user_id=patient_user.id, therapists=[therapist, other_therapist])
+    db_session.add(patient)
+    db_session.commit()
 
     login(other_therapist)
-    response = api.get(f"/api/v1/patients/{created.json()['id']}")
+    response = api.get(f"/api/v1/patients/{patient.id}")
 
     assert response.status_code == 200
 
 
 def test_therapist_patient_list_is_limited_to_assigned_patients(
-    api, login, admin, therapist, other_therapist, patient_user, other_patient_user
+    api, login, therapist, other_therapist, patient_user, other_patient_user
 ):
-    login(admin)
+    login(therapist)
     own = api.post(
         "/api/v1/patients/",
         json=patient_payload(patient_user.id, [therapist.id]),
     )
+    login(other_therapist)
     foreign = api.post(
         "/api/v1/patients/",
         json=patient_payload(other_patient_user.id, [other_therapist.id]),
@@ -160,17 +160,9 @@ def test_therapist_patient_list_is_limited_to_assigned_patients(
     assert [item["id"] for item in response.json()["items"]] == [own.json()["id"]]
 
 
-def test_admin_reads_any_patient(api, login, admin, therapist, patient_user, seed_patient):
-    patient = seed_patient(patient_user, therapist)
-    login(admin)
 
-    response = api.get(f"/api/v1/patients/{patient.id}")
-
-    assert response.status_code == 200
-
-
-def test_unknown_patient_returns_404(api, login, admin):
-    login(admin)
+def test_unknown_patient_returns_404(api, login, therapist):
+    login(therapist)
 
     response = api.get(f"/api/v1/patients/{uuid.uuid4()}")
 

@@ -31,7 +31,7 @@ def test_models_define_database_constraints():
         constraint.name
         for constraint in User.__table__.constraints
         if constraint.name
-    } >= {"ck_users_role", "ck_users_pending_role"}
+    } >= {"ck_users_role"}
     assert {
         constraint.name
         for constraint in Assignment.__table__.constraints
@@ -103,19 +103,19 @@ def test_patient_can_have_multiple_therapists_and_invitation():
             email="patient@example.com",
             role="patient",
             is_active=True,
-            is_verified=True,
+            password_hash="x",
         )
         first_therapist = User(
             email="first@example.com",
             role="therapist",
             is_active=True,
-            is_verified=True,
+            password_hash="x",
         )
         second_therapist = User(
             email="second@example.com",
             role="therapist",
             is_active=True,
-            is_verified=True,
+            password_hash="x",
         )
         patient = Patient(
             user=patient_user,

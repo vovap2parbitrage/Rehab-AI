@@ -56,16 +56,6 @@ export function ActivityIcon(props: IconProps) {
   )
 }
 
-export function SparklesIcon(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="m12 3 1.2 3.5L17 8l-3.8 1.5L12 13l-1.2-3.5L7 8l3.8-1.5L12 3Z" />
-      <path d="m18.5 14 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" />
-      <path d="m5.5 14 .6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6.6-1.6Z" />
-    </IconBase>
-  )
-}
-
 export function CheckIcon(props: IconProps) {
   return (
     <IconBase {...props}>

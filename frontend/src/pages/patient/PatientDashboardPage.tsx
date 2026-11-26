@@ -10,12 +10,12 @@ import { usePatientData } from '../../lib/usePatientWorkspace'
 import { WorkspaceError } from './WorkspaceError'
 
 export function PatientDashboardPage() {
-  const { tokenParsed } = useAuth()
+  const { user } = useAuth()
   const invitationData = usePatientData('invitations')
   const assignmentData = usePatientData('assignments')
   const invitations = invitationData.data ?? []
   const assignments = assignmentData.data ?? []
-  const displayName = getDisplayName(tokenParsed)
+  const displayName = getDisplayName(user)
   const pendingInvitation = invitations.find((invitation) => invitation.status === 'pending')
   const acceptedInvitations = invitations.filter((invitation) => invitation.status === 'accepted')
   const completedSessions = assignments.reduce(

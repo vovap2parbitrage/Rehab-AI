@@ -6,7 +6,6 @@ import { getInitials, getRoleDescription } from '../../lib/profile'
 interface ProfileSidebarProps {
   profile: UserProfile
   displayName: string
-  username: string
   isLoggingOut: boolean
   logoutError: string | null
   onLogout: () => void
@@ -15,7 +14,6 @@ interface ProfileSidebarProps {
 export function ProfileSidebar({
   profile,
   displayName,
-  username,
   isLoggingOut,
   logoutError,
   onLogout,
@@ -30,7 +28,6 @@ export function ProfileSidebar({
         </span>
 
         <h2 id="identity-name">{displayName}</h2>
-        {username && <p className="profile-identity__username">@{username}</p>}
 
         <RoleBadge role={profile.role} />
 
@@ -53,7 +50,7 @@ export function ProfileSidebar({
           <ShieldCheckIcon />
         </span>
         <h2 id="session-title">Захищена сесія</h2>
-        <p>Ви увійшли через захищений сервіс.</p>
+        <p>Сесія завершиться, коли ви вийдете, або через 14 днів без активності.</p>
 
         {logoutError && <p className="form-error">{logoutError}</p>}
 

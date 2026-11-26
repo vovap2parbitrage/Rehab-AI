@@ -175,14 +175,10 @@ def test_archive_unknown_patient_returns_404(api, login, therapist):
     assert api.post(f"/api/v1/patients/{uuid.uuid4()}/archive").status_code == 404
 
 
-def test_patient_and_admin_cannot_archive(
-    api, login, admin, therapist, patient_user, seed_patient
-):
+def test_patient_cannot_archive(api, login, therapist, patient_user, seed_patient):
     patient = seed_patient(patient_user, therapist)
 
     login(patient_user)
-    assert _archive(api, patient).status_code == 403
-    login(admin)
     assert _archive(api, patient).status_code == 403
 
 

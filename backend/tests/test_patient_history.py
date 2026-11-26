@@ -4,10 +4,10 @@ from datetime import UTC, date, datetime
 import pytest
 
 from app.models.assignment import Assignment
-from app.services.exercise import current_version
 from app.models.exercise import Exercise
 from app.models.session import TrainingSession
 from app.schemas.history import HistoryPeriod
+from app.services.exercise import current_version
 from app.services.history import build_patient_history
 
 TODAY = date(2026, 3, 18)
@@ -198,14 +198,6 @@ def test_patient_reads_own_history_by_id(api, login, patient_user, history_data)
 
     assert response.status_code == 200
 
-
-def test_admin_reads_patient_history(api, login, admin, history_data):
-    patient, _main, _short = history_data
-    login(admin)
-
-    response = api.get(f"/api/v1/patients/{patient.id}/history")
-
-    assert response.status_code == 200
 
 
 def test_other_therapist_cannot_read_history(api, login, other_therapist, history_data):

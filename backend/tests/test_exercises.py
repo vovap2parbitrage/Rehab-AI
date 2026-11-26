@@ -1,8 +1,6 @@
 import uuid
 from datetime import date
 
-from app.core.auth import get_current_claims
-from app.main import app
 from app.models.assignment import Assignment
 from app.models.exercise import Exercise
 from app.schemas.exercise import ExerciseRead
@@ -407,31 +405,18 @@ def test_list_exercises_returns_403_for_patient(api, login, patient_user):
     assert response.status_code == 403
 
 
-def test_therapist_cannot_get_other_therapist_exercise(api, login, admin, therapist):
-    login(admin)
+def test_therapist_cannot_get_other_therapist_exercise(api, login, other_therapist, therapist):
+    login(other_therapist)
     created = api.post(
-        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
+        "/api/v1/exercises/", json=exercise_payload(str(other_therapist.id))
     ).json()
-    
+
     login(therapist)
 
     response = api.get(f"/api/v1/exercises/{created['id']}")
 
     assert response.status_code == 403
 
-
-def test_admin_can_get_any_exercise(api, login, admin, therapist):
-    login(therapist)
-    created = api.post(
-        "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
-    ).json()
-
-    login(admin)
-
-    response = api.get(f"/api/v1/exercises/{created['id']}")
-
-    assert response.status_code == 200
-    assert response.json()["id"] == created["id"]
 
 
 def test_reference_video_key_limit_matches_model(api, login, therapist):
@@ -566,18 +551,13 @@ def test_exercise_rejects_unknown_or_repeated_body_parts(api, login, therapist):
         assert response.status_code == 422
 
 
-def test_therapist_with_the_default_patient_role_can_view_own_exercise_video(
+def test_therapist_can_view_own_exercise_video(
     api, login, therapist, monkeypatch
 ):
     login(therapist)
     created = api.post(
         "/api/v1/exercises/", json=exercise_payload(str(therapist.id))
     ).json()
-    # Keycloak gives every account the "patient" role, so a therapist's token has both.
-    app.dependency_overrides[get_current_claims] = lambda: {
-        "sub": therapist.keycloak_sub,
-        "realm_access": {"roles": ["therapist", "patient"]},
-    }
     monkeypatch.setattr(
         "app.services.storage.create_video_url",
         lambda key: f"https://videos.test/{key}",

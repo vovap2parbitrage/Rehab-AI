@@ -3,10 +3,10 @@ import { useAuth } from '../../auth/useAuth'
 import { PatientWorkspaceProvider } from '../../lib/patientWorkspace'
 
 export function PatientWorkspaceLayout() {
-  const { tokenParsed } = useAuth()
+  const { user } = useAuth()
 
   return (
-    <PatientWorkspaceProvider key={tokenParsed?.sub}>
+    <PatientWorkspaceProvider key={user?.id}>
       <div className="patient-workspace">
         <Outlet />
       </div>

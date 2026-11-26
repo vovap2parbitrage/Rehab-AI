@@ -16,9 +16,9 @@ from app.models.user import User
 from app.schemas.comparison import MAX_TOLERANCE_DEG
 from app.schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate, ScoringOptions
 from app.schemas.pagination import Page
+from app.services import storage
 from app.services.comparison.angles import BODY_PARTS
 from app.services.comparison.scoring import DEFAULT_TOLERANCE
-from app.services import storage
 from app.services.patient_access import get_patient_profile
 
 # What a video analysis is scored against. A change to any of these makes a new version.
@@ -132,15 +132,12 @@ def _prune_unused_versions(db: Session, exercise: Exercise, keep: ExerciseVersio
     return keys
 
 
-def _check_video_key(key: str | None, user: User, roles: set[str]) -> None:
+def _check_video_key(key: str | None, user: User) -> None:
     if key is None:
         raise HTTPException(status_code=422, detail="A reference video is required")
     if not storage.is_valid_key(key):
         raise HTTPException(status_code=422, detail="Invalid reference video key")
-    if (
-        Role.ADMIN.value not in roles
-        and not storage.is_owned_key(key, str(user.id))
-    ):
+    if not storage.is_owned_key(key, str(user.id)):
         raise HTTPException(status_code=403, detail="Video does not belong to you")
 
 
@@ -161,7 +158,6 @@ def _delete_video_if_unreferenced(db: Session, key: str | None) -> None:
 def list_exercises(
     db: Session,
     user: User,
-    roles: set[str],
     *,
     q: str | None = None,
     hidden: bool = False,
@@ -169,9 +165,7 @@ def list_exercises(
     offset: int = 0,
 ) -> Page[ExerciseRead]:
     """The library, or with ``hidden=True`` the exercises the therapist has hidden."""
-    query = db.query(Exercise)
-    if Role.ADMIN.value not in roles:
-        query = query.filter(Exercise.created_by == user.id)
+    query = db.query(Exercise).filter(Exercise.created_by == user.id)
     query = query.filter(
         Exercise.hidden_at.is_not(None) if hidden else Exercise.hidden_at.is_(None)
     )
@@ -196,9 +190,8 @@ def create_exercise(
     db: Session,
     payload: ExerciseCreate,
     user: User,
-    roles: set[str],
 ) -> ExerciseRead:
-    _check_video_key(payload.reference_video_key, user, roles)
+    _check_video_key(payload.reference_video_key, user)
     exercise = Exercise(created_by=user.id, **payload.model_dump())
     db.add(exercise)
     db.flush()
@@ -212,13 +205,12 @@ def get_exercise(
     db: Session,
     exercise_id: UUID,
     user: User,
-    roles: set[str],
 ) -> ExerciseRead:
     exercise = db.get(Exercise, exercise_id)
-    
+
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+    if exercise.created_by != user.id:
         raise HTTPException(status_code=403, detail="You can see only your exercises")
 
     return _read_one(db, exercise)
@@ -228,17 +220,16 @@ def update_exercise(
     exercise_id: UUID,
     payload: ExerciseUpdate,
     user: User,
-    roles: set[str],
 ) -> ExerciseRead:
     exercise = db.get(Exercise, exercise_id)
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+    if exercise.created_by != user.id:
         raise HTTPException(status_code=403, detail="You can edit only your exercises")
     if payload.reference_video_key is None:
         raise HTTPException(status_code=422, detail="A reference video is required")
     if payload.reference_video_key != exercise.reference_video_key:
-        _check_video_key(payload.reference_video_key, user, roles)
+        _check_video_key(payload.reference_video_key, user)
 
     latest = current_version(db, exercise)  # the state before this edit
     old_video_key = exercise.reference_video_key
@@ -265,25 +256,25 @@ def update_exercise(
     return _read_one(db, exercise)
 
 
-def _own_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> Exercise:
+def _own_exercise(db: Session, exercise_id: UUID, user: User) -> Exercise:
     exercise = db.get(Exercise, exercise_id)
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
-    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+    if exercise.created_by != user.id:
         raise HTTPException(status_code=403, detail="You can change only your exercises")
     return exercise
 
 
-def hide_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> None:
+def hide_exercise(db: Session, exercise_id: UUID, user: User) -> None:
     """Take the exercise out of the library. Existing assignments keep working."""
-    exercise = _own_exercise(db, exercise_id, user, roles)
+    exercise = _own_exercise(db, exercise_id, user)
     if exercise.hidden_at is None:
         exercise.hidden_at = datetime.now(UTC)
         db.commit()
 
 
-def restore_exercise(db: Session, exercise_id: UUID, user: User, roles: set[str]) -> None:
-    exercise = _own_exercise(db, exercise_id, user, roles)
+def restore_exercise(db: Session, exercise_id: UUID, user: User) -> None:
+    exercise = _own_exercise(db, exercise_id, user)
     if exercise.hidden_at is not None:
         exercise.hidden_at = None
         db.commit()
@@ -301,13 +292,12 @@ def delete_exercise(
     db: Session,
     exercise_id: UUID,
     user: User,
-    roles: set[str],
 ) -> None:
     exercise = db.get(Exercise, exercise_id)
     if exercise is None:
         raise HTTPException(status_code=404, detail="Exercise not found")
 
-    if Role.ADMIN.value not in roles and exercise.created_by != user.id:
+    if exercise.created_by != user.id:
         raise HTTPException(status_code=403, detail="You can delete only your exercises")
 
     if (
@@ -332,7 +322,6 @@ def get_exercise_video_url(
     db: Session,
     exercise_id: UUID,
     user: User,
-    roles: set[str],
 ) -> str:
     exercise = db.get(Exercise, exercise_id)
 
@@ -340,34 +329,31 @@ def get_exercise_video_url(
         raise HTTPException(status_code=404, detail="Exercise not found")
 
     video_key = exercise.reference_video_key
-    if Role.ADMIN.value not in roles:
-        # Keycloak gives every account the default "patient" role, so a therapist's
-        # token carries both roles. Check the higher role first, like login does.
-        if Role.THERAPIST.value in roles:
-            if exercise.created_by != user.id:
-                raise HTTPException(status_code=403, detail="You cannot view this exercise")
-        else:
-            patient = get_patient_profile(db, user)
-            # The patient sees the video their own assignment is scored against: the
-            # active one if there is one, otherwise the most recent.
-            assigned = (
-                db.query(Assignment)
-                .filter(
-                    Assignment.patient_id == patient.id,
-                    Assignment.exercise_id == exercise.id,
-                )
-                .order_by(
-                    (Assignment.status == AssignmentStatus.ACTIVE.value).desc(),
-                    Assignment.starts_on.desc(),
-                )
-                .first()
+    if user.role == Role.THERAPIST.value:
+        if exercise.created_by != user.id:
+            raise HTTPException(status_code=403, detail="You cannot view this exercise")
+    else:
+        patient = get_patient_profile(db, user)
+        # The patient sees the video their own assignment is scored against: the
+        # active one if there is one, otherwise the most recent.
+        assigned = (
+            db.query(Assignment)
+            .filter(
+                Assignment.patient_id == patient.id,
+                Assignment.exercise_id == exercise.id,
             )
-            if assigned is None:
-                raise HTTPException(
-                    status_code=403,
-                    detail="You can view only exercises assigned to you",
-                )
-            video_key = assigned.exercise_version.reference_video_key
+            .order_by(
+                (Assignment.status == AssignmentStatus.ACTIVE.value).desc(),
+                Assignment.starts_on.desc(),
+            )
+            .first()
+        )
+        if assigned is None:
+            raise HTTPException(
+                status_code=403,
+                detail="You can view only exercises assigned to you",
+            )
+        video_key = assigned.exercise_version.reference_video_key
 
     if not video_key:
         raise HTTPException(status_code=404, detail="Video not found")

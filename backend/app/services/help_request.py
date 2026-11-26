@@ -5,7 +5,6 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session, joinedload
 
-from app.core.roles import Role
 from app.models.assignment import Assignment
 from app.models.help_request import HelpRequest
 from app.models.patient import Patient
@@ -36,8 +35,6 @@ def _for_therapist(query: Query, user: User, *, active_only: bool = True) -> Que
 
     With ``active_only=False`` archived patients are included, so history stays readable.
     """
-    if user.role == Role.ADMIN.value:
-        return query
     query = query.filter(Assignment.therapist_id == user.id)
     if active_only:
         query = query.filter(HelpRequest.patient.has(treated_by(user.id)))
@@ -128,7 +125,7 @@ def list_needs_attention(
     limit: int = 20,
     offset: int = 0,
 ) -> Page[HelpRequestRead]:
-    """Unanswered questions addressed to this therapist (all of them for an admin)."""
+    """Unanswered questions addressed to this therapist."""
     query = _search_questions(
         _for_therapist(_query(db).filter(HelpRequest.reply.is_(None)), user), q
     )
@@ -187,10 +184,7 @@ def reply_to_help_request(
     if help_request is None:
         raise HTTPException(status_code=404, detail="Help request not found")
     get_patient_for_therapist(help_request.patient_id, user, db)
-    if (
-        user.role != Role.ADMIN.value
-        and help_request.session.assignment.therapist_id != user.id
-    ):
+    if help_request.session.assignment.therapist_id != user.id:
         raise HTTPException(
             status_code=403,
             detail="Only the therapist who assigned the exercise can reply",

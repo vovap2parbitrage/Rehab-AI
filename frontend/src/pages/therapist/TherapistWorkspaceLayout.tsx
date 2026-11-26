@@ -11,8 +11,8 @@ export interface TherapistWorkspaceResources {
 }
 
 export function TherapistWorkspaceLayout() {
-  const { tokenParsed, role } = useAuth()
-  return <TherapistWorkspace key={`${tokenParsed?.sub}:${role}`} />
+  const { user } = useAuth()
+  return <TherapistWorkspace key={user?.id} />
 }
 
 function TherapistWorkspace() {

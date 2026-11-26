@@ -1,29 +1,21 @@
-import { Link, useSearchParams } from 'react-router-dom'
-import { describeAuthErrorCode } from '../auth/errors'
+import { Link } from 'react-router-dom'
 import { ShieldCheckIcon } from '../components/Icons'
 
 interface ErrorPageProps {
   title?: string
   message?: string
-  code?: string
   notFound?: boolean
   onRetry?: () => void
 }
 
-export function ErrorPage({ title, message, code, notFound = false, onRetry }: ErrorPageProps) {
-  const [searchParams] = useSearchParams()
-  const errorCode = code ?? searchParams.get('error') ?? searchParams.get('code')
-  const description = errorCode ? describeAuthErrorCode(errorCode) : null
-
-  const heading =
-    title ??
-    (notFound ? 'Сторінку не знайдено' : (description?.title ?? 'Не вдалося завершити дію'))
+export function ErrorPage({ title, message, notFound = false, onRetry }: ErrorPageProps) {
+  const heading = title ?? (notFound ? 'Сторінку не знайдено' : 'Не вдалося завершити дію')
 
   const text =
     message ??
     (notFound
       ? 'Можливо, сторінку переміщено або адресу введено з помилкою. Скористайтеся навігацією, щоб продовжити.'
-      : (description?.message ?? 'Спробуйте ще раз'))
+      : 'Спробуйте ще раз')
 
   return (
     <section className="error-page" aria-labelledby="error-page-title">
@@ -35,12 +27,6 @@ export function ErrorPage({ title, message, code, notFound = false, onRetry }: E
         <p className="eyebrow">AIRehab · безпека</p>
         <h1 id="error-page-title">{heading}</h1>
         <p className="error-card__text">{text}</p>
-
-        {errorCode && !notFound && (
-          <p className="error-card__code">
-            Технічний код: <code>{errorCode}</code>
-          </p>
-        )}
 
         <div className="error-card__actions">
           <Link to="/" className="button button--primary">

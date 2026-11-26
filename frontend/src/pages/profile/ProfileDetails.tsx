@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { UserProfile } from '../../api/auth'
 import { CalendarIcon, LockIcon, MailIcon, UserIcon } from '../../components/Icons'
 import { RoleBadge } from '../../components/RoleBadge'
+import { getFirstName, getLastName } from '../../lib/profile'
 
 function Detail({
   label,
@@ -33,12 +34,9 @@ function valueOrFallback(value: string): string {
 
 interface ProfileDetailsProps {
   profile: UserProfile
-  firstName: string
-  lastName: string
-  username: string
 }
 
-export function ProfileDetails({ profile, firstName, lastName, username }: ProfileDetailsProps) {
+export function ProfileDetails({ profile }: ProfileDetailsProps) {
   return (
     <>
       <section className="card" aria-labelledby="personal-title">
@@ -52,12 +50,11 @@ export function ProfileDetails({ profile, firstName, lastName, username }: Profi
         </div>
 
         <dl className="details-grid">
-          <Detail label="Ім’я">{valueOrFallback(firstName)}</Detail>
-          <Detail label="Прізвище">{valueOrFallback(lastName)}</Detail>
+          <Detail label="Ім’я">{valueOrFallback(getFirstName(profile))}</Detail>
+          <Detail label="Прізвище">{valueOrFallback(getLastName(profile))}</Detail>
           <Detail label="Email" icon={<MailIcon />}>
             {profile.email}
           </Detail>
-          <Detail label="Ім’я користувача">{username ? `@${username}` : 'Не вказано'}</Detail>
         </dl>
       </section>
 
@@ -98,9 +95,6 @@ export function ProfileDetails({ profile, firstName, lastName, username }: Profi
             <Detail label="ID профілю AIRehab">
               <code>{profile.id}</code>
             </Detail>
-            <Detail label="Keycloak sub">
-              {profile.keycloak_sub ? <code>{profile.keycloak_sub}</code> : 'Не пов’язано'}
-            </Detail>
           </dl>
         </details>
       </section>
@@ -118,8 +112,8 @@ export function ProfileDataAccess({ role }: { role: UserProfile['role'] }) {
         <h2 id="meta-title">Доступ до даних</h2>
         <p>
           {role === 'therapist'
-            ? 'Ваші реабілітаційні дані доступні лише вам та адміністраторам відповідно до ролі. Для зміни ролі зверніться до адміністратора закладу.'
-            : 'Ваші реабілітаційні дані доступні лише вам, призначеному терапевту та адміністраторам відповідно до ролі. Для зміни ролі зверніться до адміністратора закладу.'}
+            ? 'Ви бачите лише дані своїх пацієнтів і свої вправи.'
+            : 'Ваші реабілітаційні дані доступні лише вам і лікарям, яких ви прийняли.'}
         </p>
       </div>
     </section>

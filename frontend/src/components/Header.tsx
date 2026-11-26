@@ -9,19 +9,10 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export function Header() {
-  const {
-    initialized,
-    authenticated,
-    tokenParsed,
-    initError,
-    role,
-    userLoading,
-    userError,
-    refreshUser,
-  } = useAuth()
-  const displayName = getDisplayName(tokenParsed)
+  const { initialized, authenticated, user, initError, role } = useAuth()
+  const displayName = getDisplayName(user)
   const initials = getInitials(displayName)
-  const isTherapist = role === 'therapist' || role === 'admin'
+  const isTherapist = role === 'therapist'
   const isPatient = role === 'patient'
   const { data: questions } = useTherapistQuestions()
   const openQuestions = questions?.total ?? 0
@@ -94,7 +85,7 @@ export function Header() {
               <span className="user-chip__name">{displayName}</span>
             </Link>
           ) : initError ? (
-            <Link to="/error" className="button button--ghost button--sm">
+            <Link to="/login" className="button button--ghost button--sm">
               Проблема з входом
             </Link>
           ) : (
@@ -109,24 +100,6 @@ export function Header() {
           )}
         </div>
       </div>
-      {role === null && userLoading && (
-        <div className="site-header__feedback">
-          <span className="header-status" role="status">
-            <span className="spinner spinner--sm" aria-hidden="true" />
-            Завантажуємо меню…
-          </span>
-        </div>
-      )}
-      {role === null && userError && (
-        <div className="site-header__feedback">
-          <span className="header-status header-status--error" role="alert">
-            Не вдалося завантажити меню.
-          </span>
-          <button type="button" className="button button--ghost button--sm" onClick={refreshUser}>
-            Спробувати ще раз
-          </button>
-        </div>
-      )}
     </header>
   )
 }

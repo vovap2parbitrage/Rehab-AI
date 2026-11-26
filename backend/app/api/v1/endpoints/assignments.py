@@ -1,4 +1,3 @@
-from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -21,8 +20,7 @@ router = APIRouter()
 
 @router.get("/mine", response_model=list[PatientAssignmentRead])
 def list_patient_assignments(
-    _claims: dict[str, Any] = Depends(require_roles(Role.PATIENT)),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(Role.PATIENT)),
     db: Session = Depends(get_db),
 ) -> list[PatientAssignmentRead]:
     return assignment.list_patient_assignments(db, user)
@@ -31,9 +29,6 @@ def list_patient_assignments(
 @router.get("/", response_model=list[AssignmentRead])
 def list_assignments(
     patient_id: UUID | None = None,
-    _claims: dict[str, Any] = Depends(
-        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
-    ),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> list[AssignmentRead]:
@@ -43,8 +38,7 @@ def list_assignments(
 @router.post("/", response_model=AssignmentRead, status_code=201)
 def create_assignment(
     payload: AssignmentCreate,
-    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(Role.THERAPIST)),
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
     return assignment.create_assignment(db, payload, user)
@@ -53,9 +47,6 @@ def create_assignment(
 @router.get("/{assignment_id}", response_model=AssignmentRead)
 def get_assignment(
     assignment_id: UUID,
-    _claims: dict[str, Any] = Depends(
-        require_roles(Role.ADMIN, Role.THERAPIST, Role.PATIENT)
-    ),
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
@@ -65,10 +56,7 @@ def get_assignment(
 @router.post("/{assignment_id}/cancel", status_code=204)
 def cancel_assignment(
     assignment_id: UUID,
-    _claims: dict[str, Any] = Depends(
-        require_roles(Role.ADMIN, Role.THERAPIST)
-    ),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(Role.THERAPIST)),
     db: Session = Depends(get_db),
 ) -> None:
     assignment.cancel_assignment(db, assignment_id, user)
@@ -78,8 +66,7 @@ def cancel_assignment(
 def update_assignment(
     assignment_id: UUID,
     payload: AssignmentUpdate,
-    _claims: dict[str, Any] = Depends(require_roles(Role.ADMIN, Role.THERAPIST)),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(Role.THERAPIST)),
     db: Session = Depends(get_db),
 ) -> AssignmentRead:
     return assignment.update_assignment(db, assignment_id, payload, user)

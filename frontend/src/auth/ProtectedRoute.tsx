@@ -20,13 +20,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <ErrorPage title="Сервіс авторизації недоступний" message={initError} />
   }
 
-  const searchParams = new URLSearchParams(location.search)
-  const oauthError = searchParams.get('error')
-
-  if (oauthError) {
-    return <Navigate to={`/error?error=${encodeURIComponent(oauthError)}`} replace />
-  }
-
   if (!authenticated) {
     const from = `${location.pathname}${location.search}`
     return <Navigate to="/login" replace state={{ from }} />

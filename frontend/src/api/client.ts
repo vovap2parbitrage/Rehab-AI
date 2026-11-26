@@ -1,5 +1,5 @@
 import { AuthSessionError } from '../auth/errors'
-import { getValidAccessToken } from '../auth/keycloak'
+import { clearSession, getValidAccessToken, refreshSession } from '../auth/session'
 import { appConfig } from '../config/appConfig'
 
 export interface RequestOptions {
@@ -114,45 +114,35 @@ async function readErrorBody(response: Response): Promise<{ detail?: string; cod
   return {}
 }
 
-export function isPatientLimitError(error: unknown): boolean {
-  return error instanceof ApiError && error.code === PATIENT_LIMIT_REACHED
+const NETWORK_MESSAGE =
+  'Не вдалося з’єднатися з сервером AIRehab. Перевірте, чи backend запущений і доступний.'
+const SESSION_MESSAGE = 'Сесія завершилася. Увійдіть знову, щоб отримати доступ до профілю.'
+
+async function withAccessToken(headers: Headers): Promise<void> {
+  try {
+    headers.set('Authorization', `Bearer ${await getValidAccessToken()}`)
+  } catch (error) {
+    if (error instanceof AuthSessionError) {
+      throw error.reason === 'unavailable'
+        ? new ApiError(NETWORK_MESSAGE, 'network', 0)
+        : new ApiError(SESSION_MESSAGE, 'session', 401)
+    }
+
+    throw error
+  }
 }
 
-export async function apiRequest<T>(
+async function send(
   path: string,
-  init: RequestInit = {},
-  { authenticated = true }: { authenticated?: boolean } = {},
-): Promise<T> {
-  const headers = new Headers(init.headers)
-  headers.set('Accept', 'application/json')
-
-  if (authenticated) {
-    try {
-      headers.set('Authorization', `Bearer ${await getValidAccessToken()}`)
-    } catch (error) {
-      if (error instanceof AuthSessionError) {
-        throw new ApiError(
-          'Сесія завершилася. Увійдіть знову, щоб отримати доступ до профілю.',
-          'session',
-          401,
-        )
-      }
-
-      throw error
-    }
-  }
-
-  if (init.body !== undefined && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  let response: Response
-
+  init: RequestInit,
+  headers: Headers,
+  credentials: RequestCredentials,
+): Promise<Response> {
   try {
-    response = await fetch(`${appConfig.apiBaseUrl}${path}`, {
+    return await fetch(`${appConfig.apiBaseUrl}${path}`, {
       ...init,
       headers,
-      credentials: 'omit',
+      credentials,
       cache: init.cache ?? 'no-store',
     })
   } catch (error) {
@@ -160,11 +150,48 @@ export async function apiRequest<T>(
       throw error
     }
 
-    throw new ApiError(
-      'Не вдалося з’єднатися з сервером AIRehab. Перевірте, чи backend запущений і доступний.',
-      'network',
-      0,
-    )
+    throw new ApiError(NETWORK_MESSAGE, 'network', 0)
+  }
+}
+
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  {
+    authenticated = true,
+    credentials = 'omit',
+  }: { authenticated?: boolean; credentials?: RequestCredentials } = {},
+): Promise<T> {
+  const headers = new Headers(init.headers)
+  headers.set('Accept', 'application/json')
+
+  if (authenticated) {
+    await withAccessToken(headers)
+  }
+
+  if (init.body !== undefined && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  let response = await send(path, init, headers, credentials)
+
+  // The access token may have been revoked (for example by a password change on
+  // another device). Renew it once with the refresh cookie and repeat the request.
+  if (authenticated && response.status === 401) {
+    let renewed = null
+    try {
+      renewed = await refreshSession()
+    } catch {
+      throw new ApiError(NETWORK_MESSAGE, 'network', 0)
+    }
+
+    if (!renewed) {
+      clearSession()
+      throw new ApiError(SESSION_MESSAGE, 'session', 401)
+    }
+
+    headers.set('Authorization', `Bearer ${renewed.access_token}`)
+    response = await send(path, init, headers, credentials)
   }
 
   if (!response.ok) {

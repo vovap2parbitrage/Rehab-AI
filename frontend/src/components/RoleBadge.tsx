@@ -6,7 +6,7 @@ interface RoleBadgeProps {
 }
 
 export function RoleBadge({ role, size = 'md' }: RoleBadgeProps) {
-  const modifier = ['patient', 'therapist', 'admin'].includes(role) ? role : 'unknown'
+  const modifier = ['patient', 'therapist'].includes(role) ? role : 'unknown'
 
   return (
     <span className={`role-badge role-badge--${modifier} role-badge--${size}`}>

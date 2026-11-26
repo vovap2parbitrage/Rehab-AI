@@ -89,17 +89,6 @@ def require_free_slot(
         )
 
 
-def assign_plan(db: Session, user_id: UUID, plan_code: str) -> TherapistPlanRead:
-    """Set a user's plan by hand (admin); never forces patients out when the limit shrinks."""
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.plan_code = _get_plan(db, plan_code).code
-    db.commit()
-    db.refresh(user)
-    return get_usage(db, user)
-
-
 def purchase_plan(db: Session, user: User, plan_code: str) -> PlanPurchaseRead:
     """Buy (or switch to) a plan. Free plans cost nothing, so no payment is taken."""
     plan = _get_plan(db, plan_code)
